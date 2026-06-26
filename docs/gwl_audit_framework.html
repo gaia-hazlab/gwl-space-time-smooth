@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GWL Modeling Audit &amp; Framework Revision</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ground:   #1C2B36;
+    --water:    #267B8C;
+    --water-lt: #D4EDF2;
+    --amber:    #C07830;
+    --amber-lt: #FDF0E0;
+    --green:    #3A7A5A;
+    --green-lt: #DFF0E8;
+    --red:      #A84035;
+    --red-lt:   #F5E0DE;
+    --bg:       #EDF3F5;
+    --surface:  #FFFFFF;
+    --sand:     #E8E0D4;
+    --border:   #BECDD3;
+    --text:     #1C2B36;
+    --muted:    #5A7280;
+    --mono:     'Courier New', 'Lucida Console', Courier, monospace;
+    --sans:     -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+
+  html { font-size: 16px; scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--ground);
+    border-bottom: 2px solid var(--water);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  nav a {
+    color: #8BBAC6;
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+    transition: color 0.15s;
+    border-bottom: 2px solid transparent;
+  }
+  nav a:hover { color: #FFFFFF; border-bottom-color: var(--water); }
+  .nav-title {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: bold;
+    color: var(--water);
+    margin-right: 1.5rem;
+    white-space: nowrap;
+    padding: 0.75rem 0;
+    flex-shrink: 0;
+  }
+  .nav-sep { width: 1px; height: 1.2rem; background: #2E4555; flex-shrink: 0; }
+
+  main {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 3rem 2rem 5rem;
+  }
+
+  .hero {
+    margin-bottom: 3.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--water);
+    margin-bottom: 0.75rem;
+  }
+  .hero h1 {
+    font-family: var(--mono);
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    font-weight: bold;
+    color: var(--ground);
+    line-height: 1.25;
+    text-wrap: balance;
+    margin-bottom: 1rem;
+  }
+  .hero-meta {
+    font-size: 0.85rem;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+  }
+  .hero-meta span { font-family: var(--mono); font-size: 0.8rem; }
+
+  section {
+    margin-bottom: 3rem;
+    padding-left: 1.25rem;
+    border-left: 3px solid var(--water);
+  }
+  section.warn-border { border-left-color: var(--amber); }
+  section.red-border  { border-left-color: var(--red); }
+  section.green-border { border-left-color: var(--green); }
+
+  h2 {
+    font-family: var(--mono);
+    font-size: 1rem;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--water);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  h2 .section-num {
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-weight: normal;
+  }
+  h3 {
+    font-family: var(--sans);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--ground);
+    margin: 1.5rem 0 0.5rem;
+  }
+  h4 {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    font-weight: bold;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 1.25rem 0 0.4rem;
+  }
+
+  p { margin-bottom: 0.9rem; font-size: 0.95rem; }
+  p:last-child { margin-bottom: 0; }
+
+  .callout {
+    border-radius: 4px;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    font-size: 0.9rem;
+  }
+  .callout-water  { background: var(--water-lt); border-left: 3px solid var(--water); }
+  .callout-amber  { background: var(--amber-lt); border-left: 3px solid var(--amber); }
+  .callout-green  { background: var(--green-lt); border-left: 3px solid var(--green); }
+  .callout-red    { background: var(--red-lt);   border-left: 3px solid var(--red);   }
+  .callout-sand   { background: var(--sand);     border-left: 3px solid var(--border);}
+  .callout strong { display: block; margin-bottom: 0.35rem; font-size: 0.8rem; font-family: var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+  .callout-water strong { color: var(--water); }
+  .callout-amber  strong { color: var(--amber); }
+  .callout-green  strong { color: var(--green); }
+  .callout-red    strong { color: var(--red);   }
+
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.15em 0.55em;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-left: 0.4em;
+  }
+  .chip-red    { background: var(--red-lt);   color: var(--red);   }
+  .chip-amber  { background: var(--amber-lt); color: var(--amber); }
+  .chip-green  { background: var(--green-lt); color: var(--green); }
+  .chip-water  { background: var(--water-lt); color: var(--water); }
+  .chip-gray   { background: #E5EAF0;         color: var(--muted); }
+
+  .table-wrap { overflow-x: auto; margin: 1.25rem 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+  }
+  thead tr { background: var(--ground); color: #FFFFFF; }
+  thead th {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:nth-child(even) { background: #F5F9FA; }
+  td { padding: 0.55rem 0.8rem; vertical-align: top; line-height: 1.45; }
+  td:first-child { font-family: var(--mono); font-size: 0.8rem; white-space: nowrap; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--water-lt);
+    color: var(--water);
+    padding: 0.1em 0.35em;
+    border-radius: 2px;
+  }
+
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+  }
+  .diagram-title {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1.25rem;
+  }
+  .pipeline { display: flex; flex-direction: column; gap: 0; }
+  .pipeline-stage {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 0 1rem;
+    align-items: stretch;
+  }
+  .pipeline-label {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-align: right;
+    padding: 0.75rem 0;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+  .pipeline-label .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .pipeline-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding-left: 0.75rem;
+    border-left: 2px solid var(--border);
+    position: relative;
+  }
+  .pipeline-connector::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+  .stage-box {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.65rem 0.9rem;
+    margin: 0.5rem 0;
+    font-size: 0.85rem;
+    width: 100%;
+  }
+  .stage-box strong { display: block; margin-bottom: 0.2rem; font-size: 0.88rem; }
+  .stage-box small { font-size: 0.78rem; color: var(--muted); font-family: var(--mono); }
+  .stage-water  { background: var(--water-lt); border-color: var(--water); }
+  .stage-green  { background: var(--green-lt); border-color: var(--green); }
+  .stage-amber  { background: var(--amber-lt); border-color: var(--amber); }
+  .stage-sand   { background: var(--sand);     border-color: var(--border); }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1.25rem 0;
+  }
+  @media (max-width: 600px) { .compare { grid-template-columns: 1fr; } }
+  .compare-box {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem;
+    font-size: 0.85rem;
+  }
+  .compare-box h4 { margin-top: 0; }
+  .compare-box ul { padding-left: 1.2em; margin-top: 0.4rem; }
+  .compare-box li { margin-bottom: 0.3rem; }
+  .compare-now  { background: #F8F6F3; }
+  .compare-new  { background: var(--water-lt); border-color: var(--water); }
+
+  .covariate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    margin: 1rem 0;
+  }
+  .cov-card {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.75rem;
+    font-size: 0.82rem;
+  }
+  .cov-card .cov-name { font-family: var(--mono); font-weight: bold; font-size: 0.8rem; color: var(--ground); margin-bottom: 0.25rem; }
+  .cov-card .cov-source { color: var(--muted); font-size: 0.75rem; }
+  .cov-priority-1 { border-color: var(--water); background: var(--water-lt); }
+  .cov-priority-2 { border-color: var(--amber); background: var(--amber-lt); }
+  .cov-priority-3 { background: #F5F9FA; }
+
+  .eq {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem 1.25rem;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    line-height: 2;
+    color: var(--ground);
+    margin: 1.25rem 0;
+    overflow-x: auto;
+  }
+  .eq-comment { color: var(--muted); }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+
+  .roadmap { display: flex; flex-direction: column; gap: 0; margin: 1rem 0; }
+  .roadmap-item {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 0 1.25rem;
+    min-height: 60px;
+  }
+  .roadmap-phase {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-align: right;
+    padding-top: 0.7rem;
+    color: var(--muted);
+    position: relative;
+  }
+  .roadmap-phase::after {
+    content: '';
+    position: absolute;
+    right: -1.45rem;
+    top: 0.9rem;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--water);
+    border: 2px solid var(--bg);
+  }
+  .roadmap-body {
+    padding: 0.5rem 0 1rem 0.5rem;
+    border-left: 2px solid var(--border);
+    font-size: 0.88rem;
+  }
+  .roadmap-body strong { display: block; color: var(--ground); margin-bottom: 0.2rem; }
+  .roadmap-body ul { padding-left: 1.2em; color: var(--muted); margin-top: 0.25rem; }
+  .roadmap-body li { margin-bottom: 0.2rem; font-size: 0.82rem; }
+
+  .footnotes { font-size: 0.78rem; color: var(--muted); margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  .footnotes p { margin-bottom: 0.4rem; }
+
+  ul, ol { padding-left: 1.4em; margin-bottom: 0.9rem; }
+  li { margin-bottom: 0.3rem; font-size: 0.92rem; }
+  a { color: var(--water); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  @media (max-width: 600px) {
+    main { padding: 1.5rem 1rem 4rem; }
+    nav { padding: 0 1rem; }
+    .pipeline-stage { grid-template-columns: 100px 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="nav-title">GWL AUDIT</span>
+  <div class="nav-sep"></div>
+  <a href="#status">Current State</a>
+  <a href="#critique">Framework Critique</a>
+  <a href="#proposed">Proposed Framework</a>
+  <a href="#covariates">Data Needs</a>
+  <a href="#integration">Integration</a>
+  <a href="#roadmap">Roadmap</a>
+  <a href="#gaia">GAIA Ecosystem</a>
+</nav>
+
+<main>
+
+  <div class="hero">
+    <div class="hero-eyebrow">Project Audit · gwl-space-time-smooth · June 2026</div>
+    <h1>Groundwater Level Modeling:<br>Audit &amp; Framework Revision for PNW Geohazard Applications</h1>
+    <div class="hero-meta">
+      <span>Scope: Pacific Northwest</span>
+      <span>·</span>
+      <span>Applications: Sanger et al. liquefaction · LandLab landslide</span>
+      <span>·</span>
+      <span>Target: 1 km monthly GWL, 2000–present</span>
+    </div>
+  </div>
+
+  <section id="status" class="green-border">
+    <h2><span class="section-num">§1</span> Current State Assessment</h2>
+    <p>
+      The existing pipeline is thoughtfully engineered. The NWIS download is checkpointed,
+      the 8-step QC chain is explicit and auditable, and the two-stage spatial baseline + monthly
+      anomaly architecture is architecturally sound. The foundation does not need to be discarded —
+      it needs specific targeted revisions to serve the geohazard applications.
+    </p>
+    <div class="callout callout-green">
+      <strong>Strengths — keep these</strong>
+      NWIS-anchored predictions (every grid cell traces to real well data) ·
+      No gap-filling (honest sparse months) · Well-density mask (explicit low-confidence flagging) ·
+      QC-rejected datum correction deferred but documented (NGVD29/VERTCON) ·
+      Two-stage model architecture (static baseline + monthly anomaly) is the correct decomposition ·
+      HUC-2 partitioned variograms handle spatial non-stationarity across CONUS ·
+      pixi.toml reproducibility
+    </div>
+
+    <h3>Key Metrics from the PNW Pilot</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Component</th><th>Metric</th><th>Value</th><th>Assessment</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>HydroGEN prior</td>
+            <td>Bias vs. NWIS</td>
+            <td>+7.17 m (runs too deep)</td>
+            <td><span class="chip chip-red">Critical</span></td>
+          </tr>
+          <tr>
+            <td>HydroGEN prior</td>
+            <td>RMSE</td>
+            <td>20.46 m</td>
+            <td><span class="chip chip-red">Unusable as-is</span></td>
+          </tr>
+          <tr>
+            <td>HydroGEN prior</td>
+            <td>R²</td>
+            <td>0.341</td>
+            <td><span class="chip chip-amber">Weak</span></td>
+          </tr>
+          <tr>
+            <td>Anomaly variogram range</td>
+            <td>Spatial correlation</td>
+            <td>~100–150 km</td>
+            <td><span class="chip chip-green">Reasonable</span></td>
+          </tr>
+          <tr>
+            <td>Temporal coverage</td>
+            <td>Usable WA+OR sites</td>
+            <td>863 sites, median 69 months</td>
+            <td><span class="chip chip-water">Sufficient for pilot</span></td>
+          </tr>
+          <tr>
+            <td>Datum exclusion</td>
+            <td>NGVD29 sites removed</td>
+            <td>61.9% of raw sites</td>
+            <td><span class="chip chip-amber">Significant loss</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-amber">
+      <strong>The HydroGEN problem</strong>
+      A 20 m RMSE prior for a model targeting coastal zones where 0.5 m matters for liquefaction
+      triggering is not salvageable as a raw prior. The EDK (External Drift Kriging) residual
+      correction mitigates this, but the 7 m mean bias means the drift function is largely
+      carrying the signal. Consider HydroGEN as a spatial pattern guide only, not a magnitude anchor.
+    </div>
+  </section>
+
+  <section id="critique" class="warn-border">
+    <h2><span class="section-num">§2</span> Scientific Critique of Existing Framework</h2>
+    <p>
+      The current architecture handles the spatial baseline and temporal anomaly interpolation
+      correctly in method, but is missing the physical covariates that would make predictions
+      scientifically grounded, temporally extrapolatable, and embeddable in geohazard models.
+      Four specific gaps drive this assessment.
+    </p>
+
+    <h3>Gap 1 — DEM is the wrong spatial predictor</h3>
+    <p>
+      Co-kriging with DEM as the secondary variable introduces topographic elevation as the
+      spatial control on groundwater depth. But elevation alone conflates ridges and valley
+      floors at the same altitude. The physically correct terrain predictor is
+      <strong>HAND (Height Above Nearest Drainage)</strong> — the vertical distance from each
+      cell to the nearest stream channel at the same contributing area. HAND = 0 in valley
+      floors (water table near surface), HAND large on ridge crests (deep water table).
+      MERIT Hydro, already downloaded, contains everything needed to compute HAND.
+      Fan et al. (2013) used a similar landscape-position index as their primary global predictor.
+    </p>
+    <div class="eq">
+      DTW ≈ f(HAND, TWI, slope, contributing area, soil K_sat, geology)
+      <br>
+      <span class="eq-comment">-- not f(elevation) --</span>
+      <br><br>
+      TWI = ln(α / tan(β)) &nbsp;&nbsp;&nbsp; <span class="eq-comment">-- Beven &amp; Kirkby 1979 topographic wetness index --</span>
+    </div>
+
+    <h3>Gap 2 — Temporal anomalies have no climate backbone</h3>
+    <p>
+      Kriging monthly anomalies at each time step is a spatial interpolation of what was
+      observed — it cannot extrapolate to months/seasons with sparse data, and it cannot
+      encode <em>why</em> GWL varies: snowmelt, atmospheric rivers, ENSO. For embedding in
+      geohazard scenarios ("what is GWL during a La Niña winter?"), the model needs to be
+      driven by climate indices, not just interpolated from point observations.
+    </p>
+    <p>
+      The current approach also cannot distinguish the snowmelt-recharge signal in the Cascades
+      from the direct-precipitation response in the lowlands — both appear as a spring GWL rise
+      but with different lag structures and spatial patterns.
+    </p>
+
+    <h3>Gap 3 — No coastal boundary condition</h3>
+    <p>
+      The SoDo/Duwamish use case involves groundwater within tidal influence: minimum GWL is
+      bounded below by mean sea level plus any tide or surge. Secular sea-level rise
+      (~1.8 mm/yr at Seattle tide gauge) and vertical land motion from post-glacial rebound
+      and engineered fill subsidence (South Lake Union, Harbor Island) create a rising
+      effective baseline that a kriging model cannot capture without an explicit coastal
+      boundary constraint.
+    </p>
+
+    <h3>Gap 4 — Kriging-only predictions are not smooth at scale</h3>
+    <p>
+      Ordinary kriging with a 300 km search radius produces a smooth field within training data
+      but can introduce bulls-eye artifacts around individual wells with anomalous records, and
+      is discontinuous at HUC-2 boundaries where variogram parameters change. This is precisely
+      the "tiling problem" noted for HydroFrame. The spatial baseline must come from a
+      smoothly-varying regression model, with kriging applied only to residuals.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Issue</th><th>Consequence for Liquefaction (Sanger)</th><th>Consequence for Landslide (LandLab)</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>DEM not HAND</td>
+            <td>Valleys systematically biased — exactly where liquefaction risk is highest</td>
+            <td>Ridgeline GWT overestimated; slope saturation fraction wrong</td>
+          </tr>
+          <tr>
+            <td>No SWE covariate</td>
+            <td>Spring recharge timing in Cascades foothills (Auburn, Kent) missed</td>
+            <td>Snowmelt-triggered landslide season (Apr–Jun) not encoded</td>
+          </tr>
+          <tr>
+            <td>No ENSO/PDO signal</td>
+            <td>Multi-year wet/dry cycles (La Niña 2010–12 vs. 2020–22) not captured</td>
+            <td>Cannot simulate climate-conditional scenarios for probabilistic hazard</td>
+          </tr>
+          <tr>
+            <td>No coastal constraint</td>
+            <td>SoDo GWL floor not bounded by tidal/SLR — can produce physically impossible DTW &lt; 0</td>
+            <td>Not applicable (inland slopes)</td>
+          </tr>
+          <tr>
+            <td>Kriging-only baseline</td>
+            <td>HUC-2 boundary artifacts → discontinuous liquefaction maps</td>
+            <td>Sub-km ridge-to-valley transitions smoothed over; saturation zone wrong</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="proposed">
+    <h2><span class="section-num">§3</span> Proposed Revised Framework</h2>
+    <p>
+      Four stages replace or augment the current three. Stages 1 and 2 are substantial
+      revisions. Stage 3 (kriging of residuals) is unchanged. Stage 4 is new for coastal zones.
+      No numerical flow equations are solved at any stage — this is a simulation driven
+      by observations and climate indices.
+    </p>
+
+    <div class="diagram">
+      <div class="diagram-title">Revised Model Architecture — GWL(x, y, t)</div>
+      <div class="pipeline">
+
+        <div class="pipeline-stage">
+          <div class="pipeline-label">
+            <div class="dot" style="background:var(--water)"></div>STAGE 0
+          </div>
+          <div class="pipeline-connector">
+            <div class="stage-box stage-water">
+              <strong>Terrain Derivatives (static, from MERIT Hydro already downloaded)</strong>
+              <small>HAND · TWI · slope gradient · contributing area · aspect · stream distance</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-stage">
+          <div class="pipeline-label">
+            <div class="dot" style="background:var(--green)"></div>STAGE 1
+          </div>
+          <div class="pipeline-connector">
+            <div class="stage-box stage-green">
+              <strong>Spatial Baseline — Gradient Boosting on Physical Covariates</strong>
+              <small>Target: long-term median DTW per well · Features: HAND, TWI, soil Ksat, geology, mean P, mean PET, aridity · Spatial block CV (200 km) · Predict on 1 km grid</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-stage">
+          <div class="pipeline-label">
+            <div class="dot" style="background:var(--amber)"></div>STAGE 2
+          </div>
+          <div class="pipeline-connector">
+            <div class="stage-box stage-amber">
+              <strong>Climate Response Functions — Temporal Signal</strong>
+              <small>Per-site OLS: anomaly = β₁·SPI3 + β₂·SWE_anom + β₃·PDO + β₄·AR_count + ε · Interpolate β coefficients spatially · Reconstruct monthly GWL from climate indices at every grid cell</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-stage">
+          <div class="pipeline-label">
+            <div class="dot" style="background:var(--water)"></div>STAGE 3
+          </div>
+          <div class="pipeline-connector">
+            <div class="stage-box stage-water">
+              <strong>Residual Kriging — Local Correction (unchanged method)</strong>
+              <small>Monthly kriging of (obs − Stage 2 prediction) · Captures local effects not explained by climate drivers · Same variogram approach, HUC-2 partitioned</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="pipeline-stage">
+          <div class="pipeline-label">
+            <div class="dot" style="background:var(--border)"></div>STAGE 4
+          </div>
+          <div class="pipeline-connector">
+            <div class="stage-box stage-sand">
+              <strong>Coastal Boundary Condition (coastal cells only, elev &lt; 10 m NAVD88)</strong>
+              <small>GWL_min = MHHW + VLM_rate × Δt + SLR_trend × Δt · Sources: PANGA GPS (VLM), Seattle/Tacoma tide gauge (SLR) · Clamp DTW to never exceed this minimum</small>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <h3>Stage 0: Terrain Derivatives</h3>
+    <p>Compute from the MERIT Hydro DEM already in <code>data/raw/dem/</code>. No new downloads needed.</p>
+    <div class="eq">
+      HAND(x,y)  = elevation(x,y) − elevation(nearest_stream_cell(x,y))
+      <br>
+      TWI(x,y)   = ln(α / tan(β)) &nbsp; <span class="eq-comment">-- α = upslope contributing area, β = slope --</span>
+      <br>
+      slope(x,y) = |∇DEM| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span class="eq-comment">-- from MERIT Hydro native 90 m --</span>
+    </div>
+    <p>
+      HAND is the dominant physical predictor of GWL depth across all landscape types.
+      TWI adds the convergence/divergence signal. Both are derivable with <code>richdem</code>
+      (already in <code>pixi.toml</code>) or <code>pysheds</code>.
+    </p>
+
+    <h3>Stage 1: Spatial Baseline via Regression</h3>
+    <p>
+      Replace co-kriging with DEM as a gradient-boosted regression trained on well-observed
+      long-term median DTW. The regression is smooth by construction — no tiling artifacts,
+      no variogram boundary effects. Apply a <strong>200 km spatial block CV</strong> (already in
+      the project's modeling reference) to get honest validation metrics.
+    </p>
+
+    <div class="compare">
+      <div class="compare-box compare-now">
+        <h4>Current: Co-Kriging (DEM secondary)</h4>
+        <ul>
+          <li>HUC-2 boundary artifacts</li>
+          <li>DEM elevation ≠ landscape position</li>
+          <li>No soil, geology, or climate covariates</li>
+          <li>Bulls-eye artifacts near anomalous wells</li>
+          <li>Cannot extrapolate to data-sparse regions</li>
+        </ul>
+      </div>
+      <div class="compare-box compare-new">
+        <h4>Revised: Gradient Boosting (HAND + covariates)</h4>
+        <ul>
+          <li>Smooth prediction, no boundary effects</li>
+          <li>HAND correctly places valleys and ridges</li>
+          <li>Soil Ksat controls drainage rate</li>
+          <li>Geology type handles karst, alluvial fans</li>
+          <li>Extrapolates via learned physical relationships</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>
+      Keep kriging — but apply it only to the <em>residuals</em> of the Stage 1 prediction,
+      not to raw WTE. This is regression kriging, which is both smoother and more physically
+      interpretable than co-kriging. The well-density mask still applies.
+    </p>
+
+    <h3>Stage 2: Climate Response Functions</h3>
+    <p>
+      At each well with ≥ 36 months of record, fit a linear response model relating
+      GWL anomaly to concurrent and lagged climate indices:
+    </p>
+    <div class="eq">
+      ΔDTW(site, t) = β₀
+      <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ β₁·SPI3(t) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="eq-comment">-- 3-month standardized precip: drought/flood signal --</span>
+      <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ β₂·ΔSWE(t−1) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="eq-comment">-- 1-month lag snowpack anomaly: mountain recharge --</span>
+      <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ β₃·PDO(t) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="eq-comment">-- Pacific Decadal Oscillation: multi-year signal --</span>
+      <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ β₄·AR_count(t) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="eq-comment">-- monthly AR landfalls: extreme event pulse --</span>
+      <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ β₅·SPI3(t)×HAND &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="eq-comment">-- terrain × climate interaction (optional Stage 2b) --</span>
+      <br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+ ε(t) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="eq-comment">-- local residual → passed to Stage 3 kriging --</span>
+    </div>
+    <p>
+      Each β coefficient is a site-specific scalar. After fitting at all wells,
+      spatially interpolate (kriging or distance-weighted) the β maps to every grid cell.
+      The final prediction for any cell at any time is then computed analytically
+      from the climate indices — no data needed at inference time beyond the index values.
+    </p>
+
+    <div class="callout callout-water">
+      <strong>Why this captures all four PNW phenomena</strong>
+      <ul style="margin-top:0.4rem;padding-left:1.2em;">
+        <li><strong>Seasonal (fall storms, spring snowmelt):</strong> SPI3 captures the precipitation cycle; ΔSWE at 1-month lag captures the delayed snowmelt recharge in Cascades — β₂ will be large at mountain sites, near-zero in coastal lowlands</li>
+        <li><strong>Extreme events (atmospheric rivers):</strong> AR_count is a monthly count of AR landfalls; wells near the coast and river valleys have large β₄, allowing pulse simulation</li>
+        <li><strong>La Niña / El Niño (multi-year):</strong> PDO index is the best multi-year predictor for PNW GWL; β₃ captures the wet La Niña / dry El Niño asymmetry observed in NWIS records</li>
+        <li><strong>Coastal SoDo subsidence / SLR:</strong> Handled separately in Stage 4 — VLM from PANGA GPS, SLR from Seattle tide gauge</li>
+      </ul>
+    </div>
+
+    <h4>Spatial interpolation of β coefficients</h4>
+    <p>
+      The β maps will be smooth because the underlying physical sensitivity varies slowly
+      with landscape type: mountain wells have high β₂ (snowmelt-sensitive), coastal wells
+      high β₄ (AR-sensitive), valley wells high β₁ (precipitation-responsive).
+      Kriging or IDW of the β values will naturally produce a smooth spatial field —
+      which is precisely what Sanger et al. need for embedding.
+    </p>
+
+    <h3>Stage 4: Coastal Boundary Condition (SoDo-specific)</h3>
+    <p>
+      For cells where land-surface elevation (NAVD88) &lt; 10 m, constrain the predicted
+      GWL minimum to the local equivalent freshwater head of mean higher-high water (MHHW),
+      adjusted for vertical land motion and sea-level rise:
+    </p>
+    <div class="eq">
+      GWL_min(x,y,t) = MHHW(x,y) + VLM(x,y) × (t − t₀) + SLR × (t − t₀)
+      <br><br>
+      VLM(x,y): kriged from PANGA GPS station velocities (mm/yr, ITRF2020)
+      <br>
+      SLR: +1.8 mm/yr at Seattle (NOAA CO-OPS 9447130) + acceleration term after 2020
+    </div>
+  </section>
+
+  <section id="covariates" class="green-border">
+    <h2><span class="section-num">§4</span> Data Requirements for Revised Framework</h2>
+    <p>Priority 1 items are needed for the PNW pilot. Priority 2 for CONUS scale. Priority 3 are improvements.</p>
+
+    <div class="covariate-grid">
+      <div class="cov-card cov-priority-1">
+        <div class="cov-name">HAND + TWI</div>
+        <div>Terrain position &amp; wetness</div>
+        <div class="cov-source">Derivable from MERIT Hydro already in data/raw/dem/ via richdem (in pixi.toml)</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-water">Priority 1</span> <span class="chip chip-green">No new download</span></div>
+      </div>
+      <div class="cov-card cov-priority-1">
+        <div class="cov-name">SNODAS SWE</div>
+        <div>Snow water equivalent, monthly</div>
+        <div class="cov-source">NOAA NSIDC · 1 km · 2003–present · nsidc.org/data/G02158</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-water">Priority 1</span></div>
+      </div>
+      <div class="cov-card cov-priority-1">
+        <div class="cov-name">PDO Index</div>
+        <div>Pacific Decadal Oscillation (scalar time series)</div>
+        <div class="cov-source">NOAA PSL · monthly · 1900–present · tiny CSV</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-water">Priority 1</span> <span class="chip chip-green">Trivial download</span></div>
+      </div>
+      <div class="cov-card cov-priority-1">
+        <div class="cov-name">SPI-3</div>
+        <div>3-month standardized precipitation index</div>
+        <div class="cov-source">Derived from PRISM monthly precip (already planned) or GRIDMET</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-water">Priority 1</span></div>
+      </div>
+      <div class="cov-card cov-priority-1">
+        <div class="cov-name">AR Catalog</div>
+        <div>Atmospheric river landfalls, monthly count</div>
+        <div class="cov-source">Gershunov et al. (2017) UCSD catalog · WA/OR coastal grid cells</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-water">Priority 1</span></div>
+      </div>
+      <div class="cov-card cov-priority-1">
+        <div class="cov-name">PANGA GPS VLM</div>
+        <div>Vertical land motion at PNW stations</div>
+        <div class="cov-source">UNAVCO PANGA network · geodesy.unr.edu · ~40 stations in PNW</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-water">Priority 1</span> <span class="chip chip-amber">Coastal cells only</span></div>
+      </div>
+      <div class="cov-card cov-priority-2">
+        <div class="cov-name">PRISM Precip</div>
+        <div>Monthly precipitation, 800 m</div>
+        <div class="cov-source">prism.oregonstate.edu · Already planned in modeling-approaches.md</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-amber">Priority 2</span></div>
+      </div>
+      <div class="cov-card cov-priority-2">
+        <div class="cov-name">gSSURGO Soil Ksat</div>
+        <div>Saturated hydraulic conductivity</div>
+        <div class="cov-source">USDA NRCS · Already planned · Critical for lowland vs. mountain drainage contrast</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-amber">Priority 2</span></div>
+      </div>
+      <div class="cov-card cov-priority-2">
+        <div class="cov-name">GLHYMPS Geology</div>
+        <div>Permeability + porosity by lithology</div>
+        <div class="cov-source">Gleeson et al. (2014) · 1:1M scale · Replaces simple geology class codes</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-amber">Priority 2</span></div>
+      </div>
+      <div class="cov-card cov-priority-3">
+        <div class="cov-name">GRACE-FO TWSA</div>
+        <div>Total water storage anomaly</div>
+        <div class="cov-source">~300 km resolution — useful as basin-scale trend signal, not local predictor</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-gray">Priority 3</span></div>
+      </div>
+      <div class="cov-card cov-priority-3">
+        <div class="cov-name">NLCD Land Cover</div>
+        <div>Urban, forest, agriculture fractions</div>
+        <div class="cov-source">Already planned · Urban extraction proxy · Impervious surface for recharge reduction</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-gray">Priority 3</span></div>
+      </div>
+      <div class="cov-card cov-priority-3">
+        <div class="cov-name">NHDPlus Distance</div>
+        <div>Distance to nearest perennial stream</div>
+        <div class="cov-source">USGS NHDPlus HR · Alluvial aquifer connectivity proxy</div>
+        <div style="margin-top:0.4rem"><span class="chip chip-gray">Priority 3</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="integration">
+    <h2><span class="section-num">§5</span> Downstream Integration: Sanger et al. &amp; LandLab</h2>
+
+    <h3>Liquefaction (Sanger et al.) — Basin and Valley Focus</h3>
+    <ul>
+      <li><strong>Output variable:</strong> DTW (m below surface) at the engineering event time — e.g., "GWL in SoDo during a La Niña November with an atmospheric river"</li>
+      <li><strong>Spatial smoothness:</strong> apply a Gaussian spatial filter (σ = 500 m) to the Stage 1 prediction before passing to Sanger et al. This removes sub-km kriging artifacts while preserving basin-scale variation. Do not smooth the coastal boundary condition.</li>
+      <li><strong>Uncertainty:</strong> deliver σ_total = √(σ_kriging² + σ_response²) where σ_response is the residual variance from the climate response fit. Both components needed for probabilistic liquefaction triggering.</li>
+      <li><strong>Scenario generation:</strong> the β coefficient maps allow direct scenario generation — feed in a La Niña PDO index, high AR count, and peak SWE to get the "worst case winter" GWL without re-running kriging.</li>
+    </ul>
+
+    <div class="callout callout-amber">
+      <strong>Critical: DTW &lt; 0 check</strong>
+      In SoDo specifically, the Stage 4 coastal constraint will physically prevent DTW &lt; 0.
+      For valley floors elsewhere (Duwamish, Puyallup, Snohomish), add an explicit assertion:
+      if Stage 1 + Stage 2 predicts GWL above land surface, clamp to DTW = 0 and flag the cell
+      as "surface-saturated" — that information is itself geotechnically important.
+    </div>
+
+    <h3>Landslide Hydrology (LandLab) — Mountain Slope Focus</h3>
+    <ul>
+      <li><strong>Input to LandLab:</strong> DTW(x,y,t) passed as <code>water_table__depth</code> on a LandLab RasterModelGrid. LandLab's grid can be upsampled from the 1 km model to whatever resolution the morphodynamic model needs.</li>
+      <li><strong>Saturated fraction:</strong> h/H = max(0, (H − DTW)) / H where H comes from a soil depth model (POLARIS dataset, 1 km resolution). Deliver this derived field alongside DTW.</li>
+      <li><strong>Temporal forcing:</strong> for LandLab transient stability runs, use monthly GWL time series. The climate response model allows generation of synthetic 50-year scenarios by replaying historical climate indices — needed for probabilistic return-period analysis.</li>
+      <li><strong>Mountain-specific note:</strong> the β₂ (SWE) coefficient will be large in Cascade montane zones. The April snowmelt pulse will appear as a sharp DTW decrease in mountain soils — exactly the seasonal saturation that triggers spring landslides. Validate this signal against documented PNW landslide inventories (WA DNR).</li>
+    </ul>
+
+    <div class="callout callout-sand">
+      <strong>Note on LandLab grid compatibility</strong>
+      LandLab uses RasterModelGrid (uniform spacing). The 1 km EPSG:5070 output is a uniform raster
+      and can be loaded directly via
+      <code>xarray.open_zarr → numpy array → RasterModelGrid.at_node["variable"]</code>.
+      Ensure the CRS transformation from EPSG:5070 to LandLab's internal Cartesian meters is
+      applied before loading.
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <h2><span class="section-num">§6</span> Prioritized Implementation Roadmap</h2>
+
+    <div class="roadmap">
+      <div class="roadmap-item">
+        <div class="roadmap-phase">WEEK 1–2</div>
+        <div class="roadmap-body">
+          <strong>Compute terrain derivatives from existing MERIT Hydro</strong>
+          <ul>
+            <li>Add <code>src/features/compute_terrain.py</code>: HAND + TWI + slope + contributing area at 1 km EPSG:5070</li>
+            <li>Use richdem (already in pixi.toml) for flow direction and accumulation</li>
+            <li>Validate HAND against known valley locations in WA (Green River Valley, Duwamish, Puyallup) — HAND should be near zero there</li>
+            <li>Add <code>make terrain</code> Makefile target</li>
+          </ul>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-phase">WEEK 2–3</div>
+        <div class="roadmap-body">
+          <strong>Download climate index time series (trivial, high value)</strong>
+          <ul>
+            <li>PDO monthly index from NOAA PSL — a single CSV download, add to MANIFEST.md</li>
+            <li>SNODAS SWE monthly means for WA+OR (2003–present) from NSIDC, clip to PNW bbox</li>
+            <li>AR catalog from Gershunov UCSD or West et al. (2023) — monthly landfall counts by WA coast grid cell</li>
+            <li>SPI-3 derived from PRISM monthly precip (download PRISM for WA+OR)</li>
+          </ul>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-phase">WEEK 3–5</div>
+        <div class="roadmap-body">
+          <strong>Fit climate response functions at WA+OR wells</strong>
+          <ul>
+            <li>Add <code>src/models/climate_response.py</code>: per-site OLS fit of ΔDTW ~ SPI3 + ΔSWE + PDO + AR_count</li>
+            <li>Compute lag-correlation analysis (1–6 months) to determine optimal lag per climate driver per terrain zone</li>
+            <li>Assess R² per site — sites with R² &gt; 0.4 are "climate-responsive"; flag others as "unresponsive" (confined or data issues)</li>
+            <li>Interpolate β coefficient maps via kriging to PNW 1 km grid</li>
+            <li>Compare reconstructed anomaly vs. pure kriging anomaly on held-out wells</li>
+          </ul>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-phase">WEEK 4–6</div>
+        <div class="roadmap-body">
+          <strong>Replace co-kriging baseline with HAND regression kriging</strong>
+          <ul>
+            <li>Add <code>src/models/baseline_regression.py</code>: LightGBM on HAND + TWI + Ksat (gSSURGO) + aridity + geology</li>
+            <li>Apply 200 km spatial block CV (verde.BlockShuffleSplit, already in reference docs)</li>
+            <li>Krige residuals only — write combined prediction to same <code>baseline_wte_m.tif</code> output format</li>
+            <li>Compare spatial RMSE against current co-kriging approach on held-out 20% of wells</li>
+          </ul>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-phase">WEEK 6–7</div>
+        <div class="roadmap-body">
+          <strong>Coastal boundary condition for SoDo / tidal zones</strong>
+          <ul>
+            <li>Download PANGA GPS velocities for PNW stations (geodesy.unr.edu)</li>
+            <li>Krige VLM to 1 km coastal mask (cells with DEM &lt; 10 m NAVD88 within 5 km of tidal water)</li>
+            <li>Pull Seattle tide gauge SLR trend from NOAA CO-OPS 9447130</li>
+            <li>Add coastal clamping post-processing step in <code>interpolate_anomalies.py</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <div class="roadmap-phase">WEEK 7–9</div>
+        <div class="roadmap-body">
+          <strong>Validation and geohazard output formats</strong>
+          <ul>
+            <li>Held-out spatial block CV across WA+OR — report RMSE by terrain zone (HAND &lt; 5 m, 5–20 m, &gt; 20 m)</li>
+            <li>Seasonal validation: compare model seasonal cycle against documented PNW GWL seasonality</li>
+            <li>Produce scenario outputs: La Niña baseline, atmospheric river pulse, summer drought — one Zarr per scenario</li>
+            <li>Test LandLab grid load: load gwl_dtw.zarr slice into RasterModelGrid, compute h/H with POLARIS soil depth</li>
+            <li>Coordinate with Sanger et al. on DTW uncertainty format (do they need per-cell σ or ensemble realisations?)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-water">
+      <strong>What does NOT need to change</strong>
+      The NWIS download pipeline · QC chain (all 8 steps remain correct) ·
+      HUC-2 variogram partitioning · Well-density mask · pixi environment ·
+      Zarr output format · EPSG:5070 1 km grid definition ·
+      Spatial block CV protocol (verde.BlockShuffleSplit)
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="section-num">§7</span> Fan 2013 Comparison and Departure</h2>
+    <p>
+      Fan, Li &amp; Miguez-Macho (2013) modeled global water table depth by solving the
+      steady-state Boussinesq equation on a 1 km grid, using topography as the primary
+      boundary condition. The result is physically consistent but static, observation-free,
+      and produces known tiling artifacts — the same problem noted for HydroFrame.
+    </p>
+    <p>
+      The proposed framework borrows Fan's insight that topographic relief drives GWL patterns
+      (HAND is the same physical principle as the Boussinesq topographic boundary condition)
+      but makes it observation-anchored and temporally resolved:
+      <em>agree with Fan's spatial logic; replace Fan's static solution with a data-driven dynamic one</em>.
+    </p>
+    <div class="callout callout-sand">
+      <strong>Benchmark against Fan 2013</strong>
+      HydroGEN (Ma 2025) is the modern successor to Fan 2013.
+      Both should be kept as spatial pattern benchmarks for the static baseline,
+      but neither should be used as a magnitude prior without EDK bias correction.
+      The 7 m bias in HydroGEN (RMSE 20 m) at PNW wells confirms this.
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <section id="gaia">
+    <h2><span class="section-num">§8</span> GAIA Ecosystem Integration</h2>
+
+    <p>
+      The GAIA HazLab data hub (<a href="https://gaia-hazlab.github.io/book/datahub-inventory/" target="_blank">datahub-inventory</a>)
+      already stages or produces most of the Priority 1 covariates identified in §4,
+      and contains an existing water-table product (Pillar 1) that partially overlaps
+      with gwl-space-time-smooth's goals. Understanding what already exists avoids
+      redundant downloads, aligns on shared formats, and opens the door to
+      Earth2Studio-driven GWL scenario generation.
+    </p>
+
+    <div class="callout callout-water">
+      <strong>Positioning: two complementary products, not one</strong>
+      Pillar 1 (Soil Reanalysis) provides <strong>vadose-zone physics top-down</strong>:
+      Richards equation, sub-daily, 30–100 m, fusing DAS seismic dv/v + GNSS + InSAR
+      into a hydromechanical column. gwl-space-time-smooth provides
+      <strong>regional GWT observation-anchored bottom-up</strong>: NWIS wells, monthly,
+      1 km, back to 2000. They are complementary — Pillar 1 for daily event-scale vadose
+      dynamics; gwl-space-time-smooth for the decadal GWT signal that sets the initial
+      condition. The two products should cross-validate at the water-table surface.
+    </div>
+
+    <h3>What GAIA Already Has — Direct Substitutions</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>GWL Need (§4)</th><th>GAIA Asset</th><th>Location</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>HAND + TWI</td>
+            <td>USGS 3DEP 10 m DEM (better than MERIT Hydro 90 m for PNW)</td>
+            <td>OpenTopography API; already in GAIA pipeline</td>
+            <td><span class="chip chip-green">Upgrade</span> Switch to 3DEP for PNW HAND computation — 9× finer than MERIT</td>
+          </tr>
+          <tr>
+            <td>Soil Ksat, clay, porosity (Stage 1 features)</td>
+            <td>SOLUS100 (100 m, EPSG:5070, 18 props × 7 depths) + POLARIS (30 m)</td>
+            <td><code>s3://cresst</code> public via <code>solus-stac</code>; no download needed</td>
+            <td><span class="chip chip-green">Use directly</span> Load via <code>odc.stac.load()</code></td>
+          </tr>
+          <tr>
+            <td>PRISM monthly precipitation (→ SPI-3)</td>
+            <td>PRISM staged as COG on <code>s3://cresst</code></td>
+            <td><code>prism-stac</code> repo; <code>gaia-cli stage prism</code></td>
+            <td><span class="chip chip-green">Use directly</span> Derive SPI-3 from staged PRISM — no new download</td>
+          </tr>
+          <tr>
+            <td>ERA5-Land SWE (→ snowmelt covariate)</td>
+            <td>ERA5/ERA5-Land SWE already in GAIA calibration stack</td>
+            <td>CDS account; staged for landslide model</td>
+            <td><span class="chip chip-water">Share</span> Pull from shared GAIA staging rather than independent download</td>
+          </tr>
+          <tr>
+            <td>NLCD land cover</td>
+            <td>NLCD 30 m in GAIA inventory</td>
+            <td>MRLC; staged for landslide workflow</td>
+            <td><span class="chip chip-water">Share</span> Reuse landslide-workflow landcover layer</td>
+          </tr>
+          <tr>
+            <td>Geology / permeability</td>
+            <td>Surficial geology from state surveys (in GAIA seismic/liquefaction stack)</td>
+            <td>USGS + state surveys</td>
+            <td><span class="chip chip-water">Share</span> Same geology layer used by Sanger et al. GLM</td>
+          </tr>
+          <tr>
+            <td>In-situ met stations (validation)</td>
+            <td>Synoptic Data API; already wired into GAIA pipeline</td>
+            <td><code>gaia-cli stage synoptic</code></td>
+            <td><span class="chip chip-water">Share</span> Use Synoptic for precipitation validation</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Stage IV and the Precipitation Intercomparison</h3>
+    <p>
+      The convective-thunderstorms use case (Anderson-Frey, Kharita, Denolle) is building a
+      precipitation product intercomparison that includes Stage IV radar-gauge analysis.
+      This work is directly actionable for the GWL climate response functions (Stage 2):
+    </p>
+    <ul>
+      <li><strong>Stage IV (4 km, hourly, 2002–present)</strong> captures atmospheric river events at
+        sub-daily resolution — PRISM cannot. Stage IV is the correct precipitation product for
+        fitting the β₄ (AR_count) response coefficient, because the AR signal is sub-daily
+        while PRISM is monthly-averaged.</li>
+      <li><strong>Product intercomparison value:</strong> the intercomparison will reveal which
+        product (Stage IV, PRISM, HRRR, CONUS404, ERA5) best predicts GWL anomaly response
+        per terrain zone — use RMSE of {precipitation → observed NWIS anomaly} as the
+        scoring metric. This directly answers which precip product should drive Stage 2.</li>
+      <li><strong>CONUS404</strong> (NCAR 4 km WRF reanalysis, 2000–present) is superior to PRISM
+        for orographic precipitation in the Cascades and Olympics. It is already mentioned in
+        the GAIA pipeline as a soil moisture source — its precipitation field should be
+        evaluated as the primary SPI-3 driver for mountain GWT.</li>
+    </ul>
+
+    <div class="callout callout-amber">
+      <strong>Recommended hand-off</strong>
+      The Stage IV intercomparison should produce a ranked table: for each terrain zone
+      (coast · valley · Cascade foothills · mountain), which precipitation product best
+      predicts NWIS GWL anomaly at 1-month lag? Use that ranking to select the Stage 2
+      precipitation driver per zone — not one product for all of PNW.
+    </div>
+
+    <h3>Earth2Studio — From Hindcast to Scenario</h3>
+    <p>
+      GAIA already integrates Earth2Studio (GraphCast / AIFS / StormCast 3 km) as the
+      forecast precipitation provider for both the landslide and liquefaction workflows.
+      The GWL climate response functions (§3 Stage 2) make Earth2Studio directly usable
+      for GWL scenario generation without any additional model:
+    </p>
+
+    <div class="eq">
+      <span class="eq-comment">-- Forecast workflow --</span>
+      <br>
+      1. Earth2Studio (GraphCast/AIFS) → tp field at 0.25° or StormCast 3 km
+      <br>
+      2. Downscale tp → SPI3(x,y,t_forecast) [PRISM climatology as reference period]
+      <br>
+      3. Apply β maps: ΔDTW(x,y,t) = β₁·SPI3 + β₂·ΔSWE + β₃·PDO + β₄·AR_count
+      <br>
+      4. Add Stage 1 baseline + Stage 3 kriging residual (time-invariant at forecast horizon)
+      <br>
+      5. → GWL forecast (x,y,t+1…+4 weeks) with ensemble spread from Earth2Studio members
+      <br><br>
+      <span class="eq-comment">-- Same β maps, same pipeline — no new model training required --</span>
+    </div>
+
+    <p>
+      Concretely: run Earth2Studio with 50 ensemble members over a La Niña winter forcing,
+      push the precipitation ensemble through the β maps, and read out an ensemble of GWL
+      fields directly embeddable in Sanger et al. or LandLab for probabilistic hazard assessment.
+      The β-map approach is computationally trivial at inference time — matrix multiply,
+      not kriging — making real-time coupling feasible.
+    </p>
+
+    <h3>Pillar 1 as Cross-Validation Target</h3>
+    <p>
+      Pillar 1's water-table depth output <code>d_wt(x,t)</code> (sub-daily, 30–100 m,
+      from vadose-zone physics) should be compared against gwl-space-time-smooth's
+      monthly 1 km GWT at shared validation sites. This cross-validation:
+    </p>
+    <ul>
+      <li>Reveals where the physics model and the observation-anchored model agree
+        (high confidence) vs. disagree (flag for investigation)</li>
+      <li>Identifies wells where Pillar 1's seismic/GNSS signal can correct the NWIS
+        observation (e.g., pumping-influenced wells that kriging incorrectly interpolates)</li>
+      <li>Grounds Pillar 1's absolute depth — it uses Richards equation which requires
+        a lower boundary condition; the NWIS-anchored GWT surface is exactly that boundary</li>
+    </ul>
+
+    <div class="callout callout-green">
+      <strong>Integration checklist — immediate actions</strong>
+      <ul style="margin-top:0.4rem;padding-left:1.2em;">
+        <li>Replace MERIT Hydro DEM with 3DEP 10 m for PNW HAND computation (OpenTopography API key already in GAIA)</li>
+        <li>Load SOLUS100 soil properties from <code>s3://cresst/solus-stac</code> instead of gSSURGO download</li>
+        <li>Pull staged PRISM from <code>prism-stac</code> for SPI-3 derivation — <code>gaia-cli stage prism -i PNW_bbox</code></li>
+        <li>Coordinate with Anderson-Frey/Kharita on Stage IV intercomparison outputs: request per-terrain-zone precipitation product rankings</li>
+        <li>Align output format to GAIA standard: COG/Zarr on <code>s3://cresst</code> with STAC provenance, EPSG:5070, source/measurement/resolution/uncertainty four-part statement</li>
+        <li>Add <code>d_wt</code> from Pillar 1 as cross-validation target in validation notebook — compare at 863 WA+OR NWIS sites</li>
+        <li>Wire gwl-space-time-smooth GWT output as the lower boundary condition for Pillar 1's Richards solver</li>
+        <li>Prototype Earth2Studio → SPI3 → β-map → GWL forecast for one AR event (e.g., November 2021 PNW AR) as proof-of-concept</li>
+      </ul>
+    </div>
+
+    <h3>Revised Data Priority Table (with GAIA sources)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Covariate</th><th>Best Source</th><th>Access via GAIA</th><th>Priority</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>HAND + TWI</td>
+            <td>3DEP 10 m (not MERIT 90 m)</td>
+            <td>OpenTopography key (GAIA already has it)</td>
+            <td><span class="chip chip-water">1 — no download</span></td>
+          </tr>
+          <tr>
+            <td>Soil Ksat, clay, porosity</td>
+            <td>SOLUS100 100 m</td>
+            <td><code>s3://cresst</code> public, <code>solus-stac</code></td>
+            <td><span class="chip chip-water">1 — already staged</span></td>
+          </tr>
+          <tr>
+            <td>Monthly precip → SPI-3</td>
+            <td>PRISM 4 km (or CONUS404 4 km for mountains)</td>
+            <td><code>prism-stac</code>; <code>gaia-cli stage prism</code></td>
+            <td><span class="chip chip-water">1 — already staged</span></td>
+          </tr>
+          <tr>
+            <td>SWE anomaly</td>
+            <td>ERA5-Land 9 km OR SNODAS 1 km (prefer SNODAS for PNW mountains)</td>
+            <td>ERA5 in GAIA calibration stack; SNODAS needs new download</td>
+            <td><span class="chip chip-water">1</span></td>
+          </tr>
+          <tr>
+            <td>PDO index</td>
+            <td>NOAA PSL CSV</td>
+            <td>Not in GAIA — trivial 5-minute download</td>
+            <td><span class="chip chip-water">1 — trivial</span></td>
+          </tr>
+          <tr>
+            <td>AR event forcing</td>
+            <td>Stage IV 4 km (for fitting β₄); Earth2Studio (for forecasting)</td>
+            <td>Stage IV from convective-thunderstorms intercomparison; Earth2Studio in GAIA</td>
+            <td><span class="chip chip-water">1 — coordinate</span></td>
+          </tr>
+          <tr>
+            <td>Coastal VLM</td>
+            <td>PANGA GPS</td>
+            <td>Not in GAIA — download from geodesy.unr.edu</td>
+            <td><span class="chip chip-amber">1 — coastal only</span></td>
+          </tr>
+          <tr>
+            <td>Geology permeability</td>
+            <td>GLHYMPS or state surveys (already in GAIA liquefaction stack)</td>
+            <td>Reuse from Sanger et al. GLM inputs</td>
+            <td><span class="chip chip-amber">2</span></td>
+          </tr>
+          <tr>
+            <td>Forecast precipitation</td>
+            <td>Earth2Studio (GraphCast 0.25° → StormCast 3 km)</td>
+            <td>Already integrated in GAIA landslide/liquefaction workflow</td>
+            <td><span class="chip chip-gray">Scenario generation</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <div class="footnotes">
+    <p><strong>Literature:</strong> Fan, Li &amp; Miguez-Macho (2013) Science 339:1084 · Ma et al. (2025) HydroGEN ERL ·
+    Beven &amp; Kirkby (1979) TWI · Nobre et al. (2011) HAND doi:10.1016/j.jhydrol.2011.02.051 ·
+    Gershunov et al. (2017) AR catalog · Hobley et al. (2017) LandLab Earth Surf. Dyn. ·
+    Iverson (2000) shallow landslide model WRR · Gleeson et al. (2014) GLHYMPS ·
+    Strauch et al. (2018) LandslideProbability esurf-6-49 · Sanger et al. (2025) JGGEFK liquefaction GLM</p>
+    <p><strong>Data:</strong> USGS NWIS OGC API v0 · MERIT Hydro Yamazaki 2019 · USGS 3DEP (OpenTopography) ·
+    SOLUS100 s3://cresst/solus-stac · PRISM prism-stac · SNODAS NSIDC G02158 ·
+    NOAA PSL PDO · PANGA GPS geodesy.unr.edu · NOAA CO-OPS 9447130 Seattle ·
+    POLARIS Chaney et al. 2019 · CONUS404 NCAR · Earth2Studio NVIDIA</p>
+    <p>Audit date: 2026-06-25 · Repo: gwl-space-time-smooth · Branch: main · Contact: mdenolle@uw.edu</p>
+  </div>
+
+</main>
+</body>
+</html>

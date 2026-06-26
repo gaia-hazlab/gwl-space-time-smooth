@@ -22,18 +22,28 @@ pixi shell            # activate environment in terminal
 
 ## Build & Pipeline
 
+Primary pipeline (GAIA-integrated, PNW pilot scope):
 ```bash
-make data       # Download raw NWIS GW levels (state-by-state, checkpointed)
-make qc         # QC + monthly aggregation → data/processed/
-make dem        # Download MERIT Hydro DEM → data/raw/dem/merit_hydro_1km_5070.tif
-make grid       # Build canonical 1 km CONUS grid → data/processed/conus_grid_1km.nc
-make baseline   # Co-krige WTE baseline (MM1 + DEM) → data/processed/baseline_*.tif
-make anomalies  # Krige monthly anomaly fields → data/processed/gwl_*.zarr
-make eda        # Execute EDA notebook → HTML
-make train      # Placeholder: model training
-make validate   # Placeholder: validation pipeline
-make clean      # Remove processed outputs (keeps raw downloads)
-make clean-all  # Remove everything including raw downloads
+make data              # Download NWIS GW levels (state-by-state, checkpointed)
+make qc                # QC + monthly aggregation → data/processed/
+make 3dep              # Download 3DEP 10 m DEM via py3dep → data/raw/dem/3dep_10m_5070.tif
+make gaia-data         # Fetch SOLUS100 + PRISM from s3://cresst via odc.stac
+make climate           # Fetch PDO, SNODAS SWE; derive SPI-3
+make terrain           # Compute HAND, TWI, slope → data/processed/terrain_*.tif
+make grid              # Build canonical 1 km PNW grid → data/processed/
+make baseline          # LightGBM + regression kriging → data/processed/baseline_*.tif
+make climate-response  # β-map OLS fitting → data/processed/beta_*.tif + gwl_climate_response.zarr
+make residuals         # Stage 3 kriging + final assembly → data/processed/gwl_*.zarr
+make eda               # Execute EDA notebook → HTML
+make clean             # Remove processed outputs (keeps raw downloads)
+make clean-all         # Remove everything including raw downloads
+```
+
+Legacy targets (kept for comparison only):
+```bash
+make baseline-legacy   # Old co-kriging MM1
+make anomalies-legacy  # Old ordinary kriging of anomalies
+make dem               # Old MERIT Hydro DEM download (deprecated)
 ```
 
 ## Data Layout & Provenance
@@ -68,17 +78,49 @@ Update `data/raw/MANIFEST.md` after adding any new dataset.
 7. Aggregate to monthly medians per site
 8. Compute per-site temporal coverage statistics (`coverage_fraction`, `max_gap_months`); flag sparse sites (`is_sparse_timeseries`) and sites with long gaps (`has_long_gap`) — **no gap filling, no interpolation**
 
-**Modeling**
-- Interpolation: GStatSim co-kriging MM1 (DEM as secondary variable) for the spatial baseline;
-  ordinary kriging for monthly anomaly fields. See `src/models/interpolate_baseline.py` and
-  `src/models/interpolate_anomalies.py`.
-- NST (Normal Score Transform via `QuantileTransformer`) is applied before any kriging step;
-  inverse NST applied to all outputs.
-- Variograms fitted per HUC-2 region (18 regions) using `scikit-gstat`; params saved to
-  `data/processed/variogram_params_huc2.json`.
-- Use well-density confidence mask alongside predictions; flag cells >50 km from nearest well.
-- Karst (Edwards Plateau, Ozarks, Florida), urban, and permafrost fringe regions need explicit flags — see `docs/limitations.md`.
-- Ensemble uncertainty estimates underestimate error in extrapolation regions (L13).
+**Modeling — three-stage pipeline**
+
+Stage 0 — Terrain covariates (`src/features/compute_terrain.py`):
+- Primary spatial predictor is HAND (Height Above Nearest Drainage), not raw DEM elevation.
+  HAND = 0 in valley floors (highest liquefaction risk), large on ridge crests.
+- TWI = ln(contributing_area / tan(slope)) per Beven & Kirkby (1979).
+- Computed from 3DEP 10 m DEM via richdem; resampled to 1 km for model inputs.
+
+Stage 1 — Regression kriging baseline (`src/models/baseline_regression.py`):
+- LightGBMRegressor on [HAND, TWI, slope, SOLUS100 Ksat, clay%, mean_ppt, aridity_idx, lat, lon]
+  → long-term median DTW per well. Replaces GStatSim co-kriging MM1.
+- Conformal PIs via MapieRegressor(method="plus", cv=spatial_splitter).
+- Kriging of LightGBM residuals via pykrige.OrdinaryKriging (exponential model, per HUC-2).
+- NST (QuantileTransformer) applied before residual kriging; inverse-NST on output.
+- Spatial block CV via verde.BlockShuffleSplit(spacing=200_000, n_splits=5) — never random CV.
+- Outputs: baseline_dtw_m.tif, baseline_wte_m.tif, baseline_lgbm_std_m.tif, baseline_kriging_std_m.tif
+
+Stage 2 — Climate response functions (`src/models/climate_response.py`):
+- Per-site OLS: ΔDTW(t) = β₀ + β₁·SPI3(t) + β₂·ΔSWE(t−lag) + β₃·PDO(t) + ε
+- SWE lag optimized per terrain zone (valley/transition/upland) via AIC.
+- β maps kriged to 1 km grid; reconstruct monthly anomaly as β(x,y)·climate_index(t).
+- AR term (β₄) placeholder = 0 until Stage IV intercomparison delivers ranked precipitation product.
+- Outputs: beta_spi3_1km.tif, beta_swe_1km.tif, beta_pdo_1km.tif, gwl_climate_response.zarr
+
+Stage 3 — Residual kriging + final assembly (`src/models/interpolate_residuals.py`):
+- Ordinary kriging of (obs_anomaly − climate_response) residuals per HUC-2 and calendar month.
+- Final: DTW = baseline_dtw + climate_response_anom + kriged_residual
+- Outputs: gwl_dtw.zarr, gwl_wte.zarr (same filenames as before — backward compat)
+
+Legacy modules (use for comparison only, do not modify):
+- `src/models/interpolate_baseline.py` — GStatSim co-kriging MM1 (original Stage 1)
+- `src/models/interpolate_anomalies.py` — ordinary kriging of anomaly fields (original Stage 2)
+
+Uncertainty stack (`src/evaluation/uncertainty_stack.py`):
+- σ_total = sqrt(σ_lgbm² + σ_kriging_baseline² + σ_response² + σ_residual_krige²)
+- Use well-density confidence mask alongside predictions; flag cells > 50 km from nearest well.
+
+**GAIA ecosystem integration**
+- SOLUS100 soil properties: loaded from s3://cresst via odc.stac (see `src/data/fetch_gaia.py`)
+- PRISM precipitation: from prism-stac, same pattern
+- Outputs: xarray.DataTree (see DataTree schema in `docs/gaia-conventions.md`)
+- STAC provenance JSON generated per product via `src/io/stac_publish.py`
+- Four-part provenance on every variable: gaia:source, gaia:measurement, gaia:resolution_m, gaia:uncertainty_path
 
 ## Coding Conventions
 
