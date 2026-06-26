@@ -119,27 +119,44 @@ Store in `data/comparison/` and never mix with `data/processed/`.
 
 See `references/modeling-approaches.md` for the full decision tree.
 
-### Recommended: Hierarchical Space-Time Model
+### GAIA-integrated three-stage pipeline (current implementation)
 
-**Stage 1 — Spatial baseline (climatological WTE map)**:
-- Random Forest or XGBoost/LightGBM (both in `pixi.toml`) trained on long-term median WTE per site
-- Features: `elevation, TWI, precip, ET, soil_K, geology, dist_to_stream, lat, lon`
-- Evaluate with **spatial block CV** — never random CV for spatial data (it wildly inflates R²)
+**Stage 0 — Terrain covariates** (`src/features/compute_terrain.py`):
+- HAND (Height Above Nearest Drainage) is the primary spatial predictor.
+  HAND=0 in valley floors (highest liquefaction/flood risk); large on ridges.
+  Compute from 3DEP 10 m DEM via richdem D8 flow directions and stream initiation threshold.
+- TWI = ln(α / tan(β)) per Beven & Kirkby 1979. Complements HAND in upland areas.
+- Do NOT use raw DEM elevation as primary predictor — causes HUC-2 tiling artifacts.
 
-**Stage 2 — Temporal anomalies**:
-- `WTE_anomaly(site, month) = WTE_obs − WTE_spatial_baseline`
-- Covariates: monthly precip anomaly, GRACE TWSA, PDSI
-- Options: GP regression per cluster, LSTM, or linear mixed model with site-level random intercepts
-- Spatially interpolate the anomaly field (kriging via `pykrige`, or `verde`) at each time step
+**Stage 1 — Regression kriging baseline** (`src/models/baseline_regression.py`):
+- LightGBMRegressor on [HAND, TWI, slope, SOLUS100 Ksat, clay%, mean_ppt, aridity_idx, lat, lon]
+  → long-term median DTW per well.
+- Spatial block CV: verde.BlockShuffleSplit(spacing=200_000, n_splits=5). Never random CV.
+- Conformal prediction intervals: MapieRegressor(method="plus", cv=spatial_splitter).
+- Kriging of LightGBM residuals: pykrige.OrdinaryKriging with NST (QuantileTransformer).
+- Final DTW = LightGBM pred + kriged residual.
 
-**Final prediction**: `WTE_predicted(x, y, t) = WTE_spatial(x, y) + WTE_anomaly(x, y, t)`
+**Stage 2 — Climate response functions** (`src/models/climate_response.py`):
+- Per-site OLS: ΔDTW(t) = β₀ + β₁·SPI3(t) + β₂·ΔSWE(t−lag*) + β₃·PDO(t)
+- SWE lag* optimised per terrain zone (valley / transition / upland) by AIC.
+- β maps kriged to 1 km grid; monthly anomaly = β(x,y)·climate_index(t).
+- AR term (β₄) = 0 until Stage IV intercomparison delivers a ranked product.
 
-### Why Not End-to-End Deep Learning?
+**Stage 3 — Residual kriging + assembly** (`src/models/interpolate_residuals.py`):
+- Ordinary kriging of (obs_anomaly − climate_response) per HUC-2, per month.
+- Final: DTW = baseline + climate_anom + kriged_residual.
 
-Pure ML on gridded covariates tends to reproduce gridding artifacts, overfit dense regions,
-produce discontinuities at tile boundaries, and lack calibrated uncertainty. If deep learning is
-required, use PINNs or neural operators that embed the groundwater flow equation as a soft
-constraint. See `references/modeling-approaches.md §Deep Learning`.
+**Legacy (comparison only)**:
+- `src/models/interpolate_baseline.py` — GStatSim co-kriging MM1 (original Stage 1)
+- `src/models/interpolate_anomalies.py` — pure kriging of anomalies (original Stage 2)
+
+### Why HAND instead of DEM elevation?
+
+DEM elevation causes HUC-2 tiling artifacts in co-kriging because elevation varies
+hugely between adjacent HUC-2 regions (mountains vs. valleys). HAND removes this
+artifact by normalising to the local stream network. HAND=0 exactly where liquefaction
+risk is highest (low-lying valley floors), making it the physically correct predictor
+for the Sanger et al. and LandLab target applications.
 
 ### Uncertainty Quantification
 
@@ -221,15 +238,26 @@ Never add `richdem` to `[pypi-dependencies]` — it fails to compile from source
 
 ---
 
-## Quick-Start Checklist
+## Quick-Start Checklist (GAIA-integrated pipeline)
 
-- [ ] Document scope (`README.md`) and assumptions (`docs/assumptions.md`)
-- [ ] `make data` — download NWIS levels (checkpointed, resumable)
-- [ ] `make qc` — QC + monthly aggregation → `data/processed/`
-- [ ] Download covariates (`make covariates`) and add to `data/raw/MANIFEST.md`
-- [ ] `make eda` — run EDA notebook
-- [ ] Train spatial baseline model with spatial block CV
-- [ ] Evaluate on held-out wells; run artifact checklist
+```bash
+make data              # Download NWIS GW levels (checkpointed)
+make qc                # QC + monthly aggregation
+make 3dep              # 3DEP 10 m DEM for PNW
+make gaia-data         # SOLUS100 + PRISM from s3://cresst
+make climate           # PDO, SNODAS SWE, SPI-3
+make terrain           # HAND, TWI, slope (from 3DEP)
+make grid              # 1 km EPSG:5070 grid
+make baseline          # LightGBM + regression kriging
+make climate-response  # β-map OLS
+make residuals         # Stage 3 + final assembly
+make eda               # EDA notebook
+```
+
+Validation targets before publishing:
+- [ ] HAND < 5 m at Duwamish / Puyallup valley cells
+- [ ] Spatial CV RMSE < co-kriging legacy baseline
+- [ ] Seasonal GWL cycle peaks Feb–Mar, troughs Aug–Sep
+- [ ] DTW < 0 in < 0.1% of final grid cells
 - [ ] Write `docs/validation_report.md`
-- [ ] Scan key papers (`references/literature-review-protocol.md`)
-- [ ] Package with HydroShare
+- [ ] Run `src/evaluation/pillar1_compare.py` for Pillar 1 cross-validation
