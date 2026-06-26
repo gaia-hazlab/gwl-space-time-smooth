@@ -30,7 +30,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install Python dependencies for figures
-        run: pip install matplotlib numpy scipy
+        run: pip install jupyter matplotlib numpy scipy
 
       - name: Render Quarto paper
         # self-contained: true → single .html, no companion _files/ directory
