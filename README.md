@@ -1,5 +1,9 @@
 # gwl-space-time-smooth — GAIA HazLab
 
+[![Render & Publish Quarto Site](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml/badge.svg)](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml)
+
+**[📄 Read the technical paper →](https://gaia-hazlab.github.io/gwl-space-time-smooth/)**
+
 Observation-anchored monthly groundwater level (GWL) product for the Pacific Northwest,
 integrated with the [GAIA HazLab](https://gaia-hazlab.github.io) ecosystem. Outputs
 support Sanger et al. liquefaction models (valleys/basins) and LandLab landslide
@@ -8,8 +12,6 @@ modeling (mountain slopes).
 > **Core philosophy**: Real wells first. HAND-based terrain physics second. Climate
 > response functions third. Never trust a gridded product until validated against
 > held-out observations.
-
-**Target org**: `gaia-hazlab/gwl-space-time-smooth`
 
 ---
 
