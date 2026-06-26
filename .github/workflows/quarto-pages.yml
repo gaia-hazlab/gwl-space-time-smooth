@@ -32,9 +32,8 @@ jobs:
       - name: Install Python dependencies for figures
         run: pip install jupyter matplotlib numpy scipy
 
-      - name: Render Quarto paper
-        # self-contained: true → single .html, no companion _files/ directory
-        run: quarto render docs/gwl_hybrid_framework.qmd
+      - name: Render Quarto paper (HTML only — PDF skipped; no LaTeX on runner)
+        run: quarto render docs/gwl_hybrid_framework.qmd --to html
 
       - name: Stage for Pages
         run: |
