@@ -388,6 +388,14 @@ data-loading block. The calls below mirror the synthetic stack variable-for-vari
 #  Replace the synthetic stack with the real GAIA DataHub layers.
 #  Each block writes the SAME variable name used above, regridded to the 90 m
 #  AOI grid (EPSG:5070), so every downstream stage runs unchanged.
+#
+#  In the repo this is wrapped by the GAIA downloader CLI — one call per layer,
+#  each writing a 90 m EPSG:5070 product to data/processed/:
+#      python -m src.data.fetch_gaia solus   --bbox -122.42 47.38 -122.12 47.62
+#      python -m src.data.fetch_gaia vs30    --bbox -122.42 47.38 -122.12 47.62
+#      python -m src.data.fetch_gaia polaris --bbox -122.42 47.38 -122.12 47.62
+#      python -m src.data.fetch_gaia dtb     --bbox -122.42 47.38 -122.12 47.62
+#  (or simply `make gaia-data`).  The inline calls below show what each wraps.
 # ════════════════════════════════════════════════════════════════════════════
 import odc.stac, pystac_client, xarray as xr
 import numpy as np

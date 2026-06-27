@@ -1,6 +1,6 @@
 .PHONY: data qc dem grid baseline anomalies covariates eda train validate clean clean-all all \
         pilot pilot-qc pilot-grid pilot-eda hydrogen pilot-baseline uncertainty-stack \
-        3dep terrain gaia-data climate baseline-regression climate-response residuals \
+        3dep terrain gaia-data polaris climate baseline-regression climate-response residuals \
         baseline-legacy anomalies-legacy
 
 # === Configuration ===
@@ -62,12 +62,24 @@ terrain: $(DEM_3DEP)
 		--dem $(DEM_3DEP) \
 		--output-dir $(PROCESSED_DIR)
 
-## Fetch SOLUS100 soil properties + PRISM precipitation from s3://cresst via odc.stac
+## Fetch SOLUS100, PRISM, Vs30, depth-to-bedrock from s3://cresst via the GAIA downloader
 gaia-data:
 	pixi run python -m src.data.fetch_gaia solus \
 		--bbox $(PNW_BBOX_WGS84) \
 		--output-dir $(PROCESSED_DIR)
 	pixi run python -m src.data.fetch_gaia prism \
+		--bbox $(PNW_BBOX_WGS84) \
+		--output-dir $(PROCESSED_DIR)
+	pixi run python -m src.data.fetch_gaia vs30 \
+		--bbox $(PNW_BBOX_WGS84) \
+		--output-dir $(PROCESSED_DIR)
+	pixi run python -m src.data.fetch_gaia dtb \
+		--bbox $(PNW_BBOX_WGS84) \
+		--output-dir $(PROCESSED_DIR)
+
+## Optional: POLARIS 30 m soil hydraulics (drop-in for --solus, finer than SOLUS100)
+polaris:
+	pixi run python -m src.data.fetch_gaia polaris \
 		--bbox $(PNW_BBOX_WGS84) \
 		--output-dir $(PROCESSED_DIR)
 
@@ -95,6 +107,7 @@ grid: $(DEM_3DEP)
 		--output-dir $(PROCESSED_DIR)
 
 ## Observation-anchored random forest + kriging spatial baseline (replaces co-kriging MM1)
+## Vs30 and depth-to-bedrock are optional covariates: used automatically if present.
 baseline: $(SITES_PARQUET) $(HAND_TIF) $(SOLUS_ZARR)
 	pixi run python -m src.models.baseline_regression \
 		--sites $(SITES_PARQUET) \
@@ -103,6 +116,8 @@ baseline: $(SITES_PARQUET) $(HAND_TIF) $(SOLUS_ZARR)
 		--slope $(PROCESSED_DIR)/terrain_slope_90m.tif \
 		--solus $(SOLUS_ZARR) \
 		--prism-ppt $(PROCESSED_DIR)/prism_mean_annual_ppt_wa.tif \
+		--vs30 $(PROCESSED_DIR)/vs30_90m.tif \
+		--dtb $(PROCESSED_DIR)/depth_to_bedrock_90m.tif \
 		--dem $(RAW_DEM_DIR)/3dep_90m_5070.tif \
 		--output-dir $(PROCESSED_DIR)
 
