@@ -1,10 +1,10 @@
 """Compute HAND, TWI, slope, and contributing area from a 3DEP DEM.
 
-Outputs (all at 1 km EPSG:5070, float32, nodata=-9999):
-  data/processed/terrain_hand_1km.tif          — Height Above Nearest Drainage (m)
-  data/processed/terrain_twi_1km.tif           — Topographic Wetness Index (dimensionless)
-  data/processed/terrain_slope_1km.tif         — slope (degrees)
-  data/processed/terrain_contrib_area_1km.tif  — contributing area (m²)
+Outputs (all at 90 m EPSG:5070, float32, nodata=-9999):
+  data/processed/terrain_hand_90m.tif          — Height Above Nearest Drainage (m)
+  data/processed/terrain_twi_90m.tif           — Topographic Wetness Index (dimensionless)
+  data/processed/terrain_slope_90m.tif         — slope (degrees)
+  data/processed/terrain_contrib_area_90m.tif  — contributing area (m²)
 
 Physical basis:
   HAND=0 in valley floors (highest liquefaction risk), large on ridge crests.
@@ -28,7 +28,7 @@ from rasterio.warp import calculate_default_transform, reproject
 logger = logging.getLogger(__name__)
 
 NODATA = -9999.0
-TARGET_RES_1KM = 1000.0
+TARGET_RES_90M = 90.0
 
 # Stream initiation threshold: cells with contributing area > this (m²) are streams.
 # 1e6 m² = 1 km² — appropriate for PNW drainage network at 10 m resolution.
@@ -191,13 +191,13 @@ def compute_twi(contrib_area_m2: np.ndarray, slope_deg: np.ndarray) -> np.ndarra
     return twi.astype(np.float32)
 
 
-def _resample_to_1km(
+def _resample_to_90m(
     arr: np.ndarray,
     src_profile: dict,
     dst_path: Path,
     resampling_method: Resampling = Resampling.average,
 ) -> None:
-    """Write a float32 array at native resolution then resample to 1 km."""
+    """Write a float32 array at native resolution then resample to 90 m."""
     import tempfile
     import os
 
@@ -216,7 +216,7 @@ def _resample_to_1km(
         with rasterio.open(tmp_path) as src:
             dst_transform, dst_width, dst_height = calculate_default_transform(
                 src.crs, src.crs, src.width, src.height, *src.bounds,
-                resolution=TARGET_RES_1KM,
+                resolution=TARGET_RES_90M,
             )
             dst_profile = src.profile.copy()
             dst_profile.update({
@@ -291,12 +291,12 @@ def main() -> None:
     logger.info("Computing HAND (stream threshold = %.0f m²)...", args.stream_threshold)
     hand = compute_hand(dem_arr, contrib_area, stream_threshold_m2=args.stream_threshold)
 
-    logger.info("Resampling to 1 km and writing outputs...")
-    _resample_to_1km(hand, profile, out_dir / "terrain_hand_1km.tif", Resampling.average)
-    _resample_to_1km(twi, profile, out_dir / "terrain_twi_1km.tif", Resampling.average)
-    _resample_to_1km(slope, profile, out_dir / "terrain_slope_1km.tif", Resampling.average)
-    _resample_to_1km(
-        contrib_area, profile, out_dir / "terrain_contrib_area_1km.tif", Resampling.max
+    logger.info("Resampling to 90 m and writing outputs...")
+    _resample_to_90m(hand, profile, out_dir / "terrain_hand_90m.tif", Resampling.average)
+    _resample_to_90m(twi, profile, out_dir / "terrain_twi_90m.tif", Resampling.average)
+    _resample_to_90m(slope, profile, out_dir / "terrain_slope_90m.tif", Resampling.average)
+    _resample_to_90m(
+        contrib_area, profile, out_dir / "terrain_contrib_area_90m.tif", Resampling.max
     )
 
     logger.info("Terrain computation complete.")

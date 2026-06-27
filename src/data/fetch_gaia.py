@@ -105,7 +105,7 @@ def fetch_solus100(
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / "solus100_pnw.zarr"
+    out_path = output_dir / "solus100_wa.zarr"
     logger.info("Writing SOLUS100 → %s", out_path)
     ds.to_zarr(out_path, mode="w", consolidated=True)
     logger.info("SOLUS100 written: %s", out_path)
@@ -120,8 +120,8 @@ def fetch_prism(
 ) -> Path:
     """Load PRISM monthly precipitation from s3://cresst and write to Zarr.
 
-    Also writes prism_mean_annual_ppt_pnw.tif (long-term mean annual precipitation,
-    resampled to 1 km EPSG:5070) as a static covariate for LightGBM.
+    Also writes prism_mean_annual_ppt_wa.tif (long-term mean annual precipitation,
+    resampled to 90 m EPSG:5070) as a static covariate for the random forest.
 
     Parameters
     ----------
@@ -193,12 +193,12 @@ def fetch_prism(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Write monthly Zarr
-    out_monthly = output_dir / "prism_monthly_pnw.zarr"
+    out_monthly = output_dir / "prism_monthly_wa.zarr"
     logger.info("Writing PRISM monthly → %s", out_monthly)
     ds.to_zarr(out_monthly, mode="w", consolidated=True)
 
     # Write long-term mean annual GeoTIFF as static covariate
-    _write_mean_annual_ppt(ds, output_dir / "prism_mean_annual_ppt_pnw.tif")
+    _write_mean_annual_ppt(ds, output_dir / "prism_mean_annual_ppt_wa.tif")
 
     return out_monthly
 
@@ -214,7 +214,7 @@ def _write_mean_annual_ppt(ds: xr.Dataset, output_path: Path) -> None:
     annual = ppt.resample(time="YE").sum("time")
     mean_annual = annual.mean("time").values.astype(np.float32)
 
-    # Write at native resolution then resample to 1 km
+    # Write at native resolution then resample to 90 m
     import tempfile, os
     y_vals = ds["y"].values if "y" in ds.coords else ds.coords[list(ds.coords)[0]].values
     x_vals = ds["x"].values if "x" in ds.coords else ds.coords[list(ds.coords)[1]].values

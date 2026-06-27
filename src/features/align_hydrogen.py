@@ -1,6 +1,6 @@
 """
 Reproject and align the Ma 2025 HydroGEN water table depth rasters to the
-canonical PNW 1 km analysis grid (EPSG:5070).
+canonical PNW 90 m analysis grid (EPSG:5070).
 
 Two input rasters (WGS84) are expected in ``data/comparison/``:
 
@@ -9,8 +9,8 @@ Two input rasters (WGS84) are expected in ``data/comparison/``:
 
 Outputs are written to ``data/processed/``:
 
-    hydrogen_wtd_prior_1km.tif       — median WTD on the PNW 1 km grid, EPSG:5070
-    hydrogen_wtd_uncertainty_1km.tif — uncertainty on same grid
+    hydrogen_wtd_prior_90m.tif       — median WTD on the PNW 90 m grid, EPSG:5070
+    hydrogen_wtd_uncertainty_90m.tif — uncertainty on same grid
 
 Both outputs are float32, nodata = -9999.0, CRS = EPSG:5070.
 
@@ -18,7 +18,7 @@ Usage:
     python -m src.features.align_hydrogen \\
         --wtd    data/comparison/WT2-ma_wtd_50.tif \\
         --unc    data/comparison/wtd_uncertainty_mosaic_wgs84.tif \\
-        --grid   data/processed/bbox_grid_1km.nc \\
+        --grid   data/processed/bbox_grid_90m.nc \\
         --output-dir data/processed
 
 If ``--grid`` is not supplied, ``--dem`` can be used instead to derive the grid
@@ -237,7 +237,7 @@ def align_hydrogen(
         wtd_path, dst_transform, dst_width, dst_height,
         clamp_negative=True, scale=1.0,
     )
-    wtd_out = output_dir / "hydrogen_wtd_prior_1km.tif"
+    wtd_out = output_dir / "hydrogen_wtd_prior_90m.tif"
     save_aligned_tif(wtd_arr, dst_transform, wtd_out)
 
     unc_scale = IQR_TO_SIGMA if scale_uncertainty else 1.0
@@ -249,7 +249,7 @@ def align_hydrogen(
         unc_path, dst_transform, dst_width, dst_height,
         clamp_negative=True, scale=unc_scale,
     )
-    unc_out = output_dir / "hydrogen_wtd_uncertainty_1km.tif"
+    unc_out = output_dir / "hydrogen_wtd_uncertainty_90m.tif"
     save_aligned_tif(unc_arr, dst_transform, unc_out)
 
     return {"wtd": wtd_out, "unc": unc_out}
@@ -257,7 +257,7 @@ def align_hydrogen(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Align HydroGEN Ma 2025 WTD rasters to the PNW 1 km EPSG:5070 grid",
+        description="Align HydroGEN Ma 2025 WTD rasters to the PNW 90 m EPSG:5070 grid",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -277,13 +277,13 @@ def main() -> None:
         "--grid",
         type=Path,
         default=None,
-        help="bbox_grid_1km.nc or conus_grid_1km.nc from compute_grid",
+        help="bbox_grid_90m.nc or conus_grid_90m.nc from compute_grid",
     )
     grid_group.add_argument(
         "--dem",
         type=Path,
         default=None,
-        help="MERIT Hydro 1 km EPSG:5070 DEM (alternative to --grid)",
+        help="MERIT Hydro 90 m EPSG:5070 DEM (alternative to --grid)",
     )
     parser.add_argument(
         "--output-dir",

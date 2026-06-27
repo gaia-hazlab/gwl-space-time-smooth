@@ -39,14 +39,14 @@ Pipeline steps
 Usage (EDK):
     python -m src.models.interpolate_baseline \\
         --sites data/processed/nwis_sites_clean.parquet \\
-        --dem data/raw/dem/merit_hydro_1km_5070.tif \\
-        --hydrogen-wtd data/processed/hydrogen_wtd_prior_1km.tif \\
+        --dem data/raw/dem/merit_hydro_90m_5070.tif \\
+        --hydrogen-wtd data/processed/hydrogen_wtd_prior_90m.tif \\
         --output-dir data/processed
 
 Usage (DEM-only, original mode):
     python -m src.models.interpolate_baseline \\
         --sites data/processed/nwis_sites_clean.parquet \\
-        --dem data/raw/dem/merit_hydro_1km_5070.tif \\
+        --dem data/raw/dem/merit_hydro_90m_5070.tif \\
         --output-dir data/processed
 
 Assumptions and limitations: docs/assumptions.md (A-series) / docs/limitations.md (L-series).
@@ -318,7 +318,7 @@ def compute_edk_residuals(
     if n_valid < n_total * 0.5:
         logger.warning(
             f"Only {n_valid}/{n_total} wells overlap with the HydroGEN grid — "
-            "check that hydrogen_wtd_prior_1km.tif covers the study region."
+            "check that hydrogen_wtd_prior_90m.tif covers the study region."
         )
     return wte_prior, residual
 
@@ -496,13 +496,13 @@ def main() -> None:  # noqa: C901 (complexity OK for pipeline entry point)
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--sites", type=Path, default=Path("data/processed/nwis_sites_clean.parquet"))
-    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/merit_hydro_1km_5070.tif"))
+    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/merit_hydro_90m_5070.tif"))
     parser.add_argument(
         "--hydrogen-wtd",
         type=Path,
         default=None,
         help=(
-            "Path to hydrogen_wtd_prior_1km.tif (Ma 2025 WTD, EPSG:5070). "
+            "Path to hydrogen_wtd_prior_90m.tif (Ma 2025 WTD, EPSG:5070). "
             "When supplied, runs EDK mode: co-krige residuals = obs_WTE − WTE_prior. "
             "When absent, falls back to DEM-only co-kriging of raw WTE (original mode)."
         ),

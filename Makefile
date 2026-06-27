@@ -11,14 +11,14 @@ PROCESSED_DIR := data/processed
 MONTHLY_PARQUET := $(PROCESSED_DIR)/nwis_gwlevels_monthly.parquet
 SITES_PARQUET := $(PROCESSED_DIR)/nwis_sites_clean.parquet
 # 3DEP replaces MERIT Hydro; legacy var kept for backward compat
-DEM_TIF := $(RAW_DEM_DIR)/merit_hydro_1km_5070.tif
+DEM_TIF := $(RAW_DEM_DIR)/merit_hydro_90m_5070.tif
 DEM_3DEP := $(RAW_DEM_DIR)/3dep_10m_5070.tif
-HAND_TIF := $(PROCESSED_DIR)/terrain_hand_1km.tif
-SPI3_ZARR := $(PROCESSED_DIR)/spi3_monthly_pnw.zarr
-SWE_ZARR  := data/raw/climate/snodas_swe_monthly_pnw.zarr
+HAND_TIF := $(PROCESSED_DIR)/terrain_hand_90m.tif
+SPI3_ZARR := $(PROCESSED_DIR)/spi3_monthly_wa.zarr
+SWE_ZARR  := data/raw/climate/snodas_swe_monthly_wa.zarr
 PDO_CSV   := data/raw/climate/pdo_monthly.csv
-SOLUS_ZARR := $(PROCESSED_DIR)/solus100_pnw.zarr
-GRID_NC := $(PROCESSED_DIR)/conus_grid_1km.nc
+SOLUS_ZARR := $(PROCESSED_DIR)/solus100_wa.zarr
+GRID_NC := $(PROCESSED_DIR)/conus_grid_90m.nc
 BASELINE_WTE := $(PROCESSED_DIR)/baseline_wte_m.tif
 
 # Pacific Northwest pilot scope
@@ -27,9 +27,9 @@ PILOT_STATES := WA OR ID
 PNW_BBOX := -2300000 2200000 -1400000 3300000
 # WGS84 bbox (for py3dep and odc.stac): west south east north
 PNW_BBOX_WGS84 := -124.9 42.0 -116.5 49.0
-PILOT_GRID_NC := $(PROCESSED_DIR)/bbox_grid_1km.nc
-HYDROGEN_WTD := $(PROCESSED_DIR)/hydrogen_wtd_prior_1km.tif
-HYDROGEN_UNC := $(PROCESSED_DIR)/hydrogen_wtd_uncertainty_1km.tif
+PILOT_GRID_NC := $(PROCESSED_DIR)/bbox_grid_90m.nc
+HYDROGEN_WTD := $(PROCESSED_DIR)/hydrogen_wtd_prior_90m.tif
+HYDROGEN_UNC := $(PROCESSED_DIR)/hydrogen_wtd_uncertainty_90m.tif
 PILOT_BASELINE_WTE := $(PROCESSED_DIR)/baseline_wte_m.tif
 PILOT_BASELINE_STD := $(PROCESSED_DIR)/baseline_kriging_std_m.tif
 
@@ -79,7 +79,7 @@ climate:
 		--bbox $(PNW_BBOX_WGS84) \
 		--output-dir data/raw/climate
 	pixi run python -m src.data.fetch_climate spi3 \
-		--prism $(PROCESSED_DIR)/prism_monthly_pnw.zarr \
+		--prism $(PROCESSED_DIR)/prism_monthly_wa.zarr \
 		--output-dir $(PROCESSED_DIR)
 
 ## Download MERIT Hydro DEM (DEPRECATED — use 3dep instead)
@@ -99,11 +99,11 @@ baseline: $(SITES_PARQUET) $(HAND_TIF) $(SOLUS_ZARR)
 	pixi run python -m src.models.baseline_regression \
 		--sites $(SITES_PARQUET) \
 		--hand $(HAND_TIF) \
-		--twi $(PROCESSED_DIR)/terrain_twi_1km.tif \
-		--slope $(PROCESSED_DIR)/terrain_slope_1km.tif \
+		--twi $(PROCESSED_DIR)/terrain_twi_90m.tif \
+		--slope $(PROCESSED_DIR)/terrain_slope_90m.tif \
 		--solus $(SOLUS_ZARR) \
-		--prism-ppt $(PROCESSED_DIR)/prism_mean_annual_ppt_pnw.tif \
-		--dem $(RAW_DEM_DIR)/3dep_1km_5070.tif \
+		--prism-ppt $(PROCESSED_DIR)/prism_mean_annual_ppt_wa.tif \
+		--dem $(RAW_DEM_DIR)/3dep_90m_5070.tif \
 		--output-dir $(PROCESSED_DIR)
 
 ## Per-site OLS β-map climate response functions (Stage 2)

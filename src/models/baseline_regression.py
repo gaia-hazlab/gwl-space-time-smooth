@@ -1,26 +1,36 @@
-"""Stage 1: LightGBM regression kriging spatial baseline.
+"""Stage 1: observation-anchored random-forest regression kriging baseline.
 
-Replaces src/models/interpolate_baseline.py (GStatSim co-kriging MM1).
+Replaces the LightGBM + conformal variant (and the legacy GStatSim co-kriging MM1
+in src/models/interpolate_baseline.py).
+
+Design (mirrors docs/gwl_hybrid_framework.qmd, Stage 1):
+  * Trains **directly on NWIS well observations** — the wells anchor the model.
+  * Predictors are **physically meaningful** DataHub covariates only; absolute
+    coordinates (easting/northing) are deliberately excluded, because coordinate
+    features let the model memorise where the training wells are and fail at
+    ungauged locations. Position enters physically through HAND and the drainage
+    network, and through the shared Vs30 field used by the Sanger & Maurer
+    liquefaction model.
+  * Uncertainty comes from the **random-forest tree ensemble spread** (per-cell σ),
+    not a conformal wrapper.
 
 Pipeline:
   1. Load well sites (median DTW per site from QC-passed wells).
-  2. Sample terrain (HAND, TWI, slope) + soil (SOLUS100 Ksat, clay%) + climate
-     (mean annual ppt) at each well location.
-  3. Spatial block CV (verde.BlockShuffleSplit, 200 km blocks) → RMSE, R².
-  4. Fit LGBMRegressor on all usable sites.
-  5. Conformal prediction intervals via MapieRegressor.
-  6. Predict DTW on the 1 km grid.
-  7. Compute residuals at wells; krige residuals via pykrige.OrdinaryKriging.
-  8. Final DTW = LightGBM prediction + kriged residuals.
-     Final WTE = DEM_1km − Final DTW.
+  2. Sample terrain (HAND, TWI, slope) + soil (SOLUS100 Ksat, clay%, sand%) +
+     stiffness (Vs30) + depth-to-bedrock + climate (mean annual ppt) at each well.
+  3. Spatial block CV (verde.BlockShuffleSplit) → RMSE, R².
+  4. Fit RandomForestRegressor on all usable sites (OOB score reported).
+  5. Predict DTW on the target grid; per-cell σ from the tree ensemble.
+  6. Compute residuals at wells; krige residuals via pykrige.OrdinaryKriging.
+  7. Final DTW = RF prediction + kriged residuals;  Final WTE = DEM − Final DTW.
 
 Outputs (data/processed/):
   baseline_dtw_m.tif          — median DTW (m, positive = below surface)
   baseline_wte_m.tif          — median WTE = DEM − DTW (m NAVD88)
-  baseline_lgbm_std_m.tif     — conformal PI half-width (90% PI / 2)
+  baseline_rf_std_m.tif       — random-forest tree-ensemble σ (m)
   baseline_kriging_std_m.tif  — kriging σ on residuals (m)
   well_density_mask.tif       — 1 where nearest well ≤ 50 km, 0 elsewhere
-  lgbm_feature_importance.json
+  rf_feature_importance.json
   block_cv_metrics.json
 """
 
@@ -39,19 +49,23 @@ from scipy.spatial import cKDTree
 
 logger = logging.getLogger(__name__)
 
-# Feature set: (column_name, source)
-# Columns produced by _build_feature_matrix()
-FEATURE_COLS = [
+# Always-available physical predictors (no coordinates).
+BASE_FEATURE_COLS = [
     "hand_m",          # terrain: Height Above Nearest Drainage
     "twi",             # terrain: Topographic Wetness Index
     "slope_deg",       # terrain: slope in degrees
-    "ksat_cm_hr",      # soil: saturated hydraulic conductivity (SOLUS100)
+    "ksat_cm_hr",      # soil: saturated hydraulic conductivity (SOLUS100/POLARIS)
     "clay_pct",        # soil: clay fraction 0-5 cm (SOLUS100)
+    "sand_pct",        # soil: sand fraction 0-5 cm (SOLUS100)
     "mean_ppt_mm",     # climate: mean annual precipitation (PRISM)
-    "aridity_idx",     # climate: mean_ppt / (PET proxy) — computed as lat-adjusted
-    "easting_km",      # location: EPSG:5070 easting / 1000
-    "northing_km",     # location: EPSG:5070 northing / 1000
+    "aridity_idx",     # climate: mean_ppt / (PET proxy)
 ]
+# Optional predictors, included only when the corresponding raster is provided.
+# name -> CLI arg attribute holding its raster path.
+OPTIONAL_FEATURE_RASTERS = {
+    "vs30_ms": "vs30",   # near-surface stiffness (Sanger & Maurer 2025) — shared with liquefaction GLM
+    "dtb_m":   "dtb",    # depth to bedrock
+}
 TARGET_COL = "median_dtw_m"
 
 NODATA = -9999.0
@@ -60,13 +74,26 @@ WELL_DENSITY_RADIUS_M = 50_000  # 50 km mask threshold
 # Kriging parameters (same as legacy interpolate_baseline.py for consistency)
 K_NEIGHBOURS = 100
 SEARCH_RADIUS_M = 300_000
-N_SGS_REALISATIONS = 0  # deterministic kriging (regression kriging handles uncertainty)
+
+# Random-forest hyperparameters (match the qmd demo).
+RF_KWARGS = dict(n_estimators=300, min_samples_leaf=2, random_state=0, n_jobs=-1)
+
+
+def _active_feature_cols(args) -> list[str]:
+    """Base predictors plus any optional rasters that actually exist on disk."""
+    cols = list(BASE_FEATURE_COLS)
+    for name, arg in OPTIONAL_FEATURE_RASTERS.items():
+        path = getattr(args, arg, None)
+        if path is not None and Path(path).exists():
+            cols.append(name)
+        else:
+            logger.info("Optional predictor %s skipped (no raster at %s).", name, path)
+    return cols
 
 
 def _load_sites(sites_parquet: Path) -> pd.DataFrame:
     """Load QC-passed sites with usable long-term median DTW."""
     df = pd.read_parquet(sites_parquet)
-    # Only use sites with reliable median
     mask = (
         (~df.get("is_sparse_timeseries", pd.Series(False, index=df.index)))
         & (~df.get("is_deep_well", pd.Series(False, index=df.index)))
@@ -82,7 +109,6 @@ def _sample_raster_at_points(
     raster_path: Path, x_5070: np.ndarray, y_5070: np.ndarray
 ) -> np.ndarray:
     """Sample a raster at (x, y) point coordinates in EPSG:5070."""
-    import rasterio
     coords = list(zip(x_5070.tolist(), y_5070.tolist()))
     with rasterio.open(raster_path) as src:
         values = np.array([v[0] for v in src.sample(coords)], dtype=np.float32)
@@ -100,11 +126,9 @@ def _load_solus_at_points(
     rows = []
     for xi, yi in zip(x_5070, y_5070):
         row = {}
-        for var in ("ksat_cm_hr", "clay_pct"):
+        for var in ("ksat_cm_hr", "clay_pct", "sand_pct"):
             if var in ds:
-                row[var] = float(
-                    ds[var].sel(x=xi, y=yi, method="nearest").values
-                )
+                row[var] = float(ds[var].sel(x=xi, y=yi, method="nearest").values)
             else:
                 row[var] = np.nan
         rows.append(row)
@@ -113,13 +137,15 @@ def _load_solus_at_points(
 
 def _build_feature_matrix(
     sites: pd.DataFrame,
+    active_cols: list[str],
     hand_tif: Path,
     twi_tif: Path,
     slope_tif: Path,
     solus_zarr: Path,
     prism_ppt_tif: Path,
+    optional_rasters: dict[str, Path],
 ) -> pd.DataFrame:
-    """Build the LightGBM feature matrix for all usable sites."""
+    """Build the random-forest feature matrix for all usable sites."""
     x = sites["x_5070"].values
     y = sites["y_5070"].values
 
@@ -133,25 +159,25 @@ def _build_feature_matrix(
     soil.index = sites.index
     feats["ksat_cm_hr"] = soil["ksat_cm_hr"]
     feats["clay_pct"] = soil["clay_pct"]
+    feats["sand_pct"] = soil["sand_pct"]
 
-    # Aridity index: precipitation / (potential evapotranspiration proxy)
-    # Proxy: Thornthwaite PET ≈ 1200 mm/yr at PNW latitudes as first approximation
+    # Aridity index: precipitation / (PET proxy ≈ 1200 mm/yr at PNW latitudes).
     feats["aridity_idx"] = feats["mean_ppt_mm"] / 1200.0
 
-    feats["easting_km"] = x / 1000.0
-    feats["northing_km"] = y / 1000.0
+    # Optional physical predictors.
+    for name, path in optional_rasters.items():
+        feats[name] = _sample_raster_at_points(path, x, y)
 
-    return feats
+    return feats[active_cols]
 
 
 def _read_grid(dem_tif: Path) -> tuple[np.ndarray, np.ndarray, rasterio.profiles.Profile]:
-    """Return (x_grid, y_grid) flat arrays and profile from the 1 km DEM."""
+    """Return (x_grid, y_grid) flat arrays and profile from the target-grid DEM."""
     with rasterio.open(dem_tif) as src:
         profile = src.profile.copy()
         rows, cols = np.meshgrid(
             np.arange(src.height), np.arange(src.width), indexing="ij"
         )
-        # Centre of each pixel
         xs, ys = rasterio.transform.xy(src.transform, rows.ravel(), cols.ravel())
     return np.array(xs, dtype=np.float64), np.array(ys, dtype=np.float64), profile
 
@@ -170,126 +196,136 @@ def _write_tif(
     logger.info("Written: %s", path)
 
 
+def _tree_ensemble_std(rf, X: np.ndarray) -> np.ndarray:
+    """Per-sample predictive σ from the spread of the random-forest trees."""
+    per_tree = np.stack([est.predict(X) for est in rf.estimators_])
+    return per_tree.std(axis=0)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="LightGBM regression kriging spatial GWL baseline."
+        description="Observation-anchored random-forest regression kriging GWL baseline."
     )
     parser.add_argument("--sites", type=Path, default=Path("data/processed/nwis_sites_clean.parquet"))
-    parser.add_argument("--hand", type=Path, default=Path("data/processed/terrain_hand_1km.tif"))
-    parser.add_argument("--twi", type=Path, default=Path("data/processed/terrain_twi_1km.tif"))
-    parser.add_argument("--slope", type=Path, default=Path("data/processed/terrain_slope_1km.tif"))
-    parser.add_argument("--solus", type=Path, default=Path("data/processed/solus100_pnw.zarr"))
-    parser.add_argument("--prism-ppt", type=Path, default=Path("data/processed/prism_mean_annual_ppt_pnw.tif"))
-    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/3dep_1km_5070.tif"))
+    parser.add_argument("--hand", type=Path, default=Path("data/processed/terrain_hand_90m.tif"))
+    parser.add_argument("--twi", type=Path, default=Path("data/processed/terrain_twi_90m.tif"))
+    parser.add_argument("--slope", type=Path, default=Path("data/processed/terrain_slope_90m.tif"))
+    parser.add_argument("--solus", type=Path, default=Path("data/processed/solus100_wa.zarr"))
+    parser.add_argument("--prism-ppt", type=Path, default=Path("data/processed/prism_mean_annual_ppt_wa.tif"))
+    parser.add_argument("--vs30", type=Path, default=Path("data/processed/vs30_90m.tif"),
+                        help="Vs30 raster (Sanger & Maurer 2025); optional, used if present.")
+    parser.add_argument("--dtb", type=Path, default=Path("data/processed/depth_to_bedrock_90m.tif"),
+                        help="Depth-to-bedrock raster; optional, used if present.")
+    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/3dep_90m_5070.tif"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/processed"))
     parser.add_argument("--n-cv-splits", type=int, default=5)
+    parser.add_argument("--cv-block-km", type=float, default=200.0,
+                        help="Spatial block-CV block size in km (Roberts et al. 2017).")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    from lightgbm import LGBMRegressor
-    from mapie.regression import MapieRegressor
-    from pykrige.ok import OrdinaryKriging
+    from sklearn.ensemble import RandomForestRegressor
     from sklearn.preprocessing import QuantileTransformer
-    from src.evaluation.cross_validate import spatial_block_cv, run_cv_metrics
+    from pykrige.ok import OrdinaryKriging
+    from src.evaluation.cross_validate import run_cv_metrics
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load sites
+    active_cols = _active_feature_cols(args)
+    optional_rasters = {
+        name: getattr(args, arg)
+        for name, arg in OPTIONAL_FEATURE_RASTERS.items()
+        if name in active_cols
+    }
+    logger.info("Active predictors (%d, no coordinates): %s", len(active_cols), active_cols)
+
+    # Load sites + features
     sites = _load_sites(args.sites)
     feats = _build_feature_matrix(
-        sites, args.hand, args.twi, args.slope, args.solus, args.prism_ppt
+        sites, active_cols, args.hand, args.twi, args.slope, args.solus,
+        args.prism_ppt, optional_rasters,
     )
 
-    # Drop sites with any missing feature
-    valid = feats[FEATURE_COLS].notna().all(axis=1)
+    valid = feats[active_cols].notna().all(axis=1)
     sites = sites[valid]
     feats = feats[valid]
     y = sites[TARGET_COL].values.astype(np.float64)
-    X = feats[FEATURE_COLS].values.astype(np.float64)
+    X = feats[active_cols].values.astype(np.float64)
     coords = np.column_stack([sites["x_5070"].values, sites["y_5070"].values])
 
     logger.info("Fitting baseline on %d wells with %d features.", len(y), X.shape[1])
 
-    # Spatial block CV
-    lgbm = LGBMRegressor(n_estimators=500, learning_rate=0.05, num_leaves=63,
-                          random_state=0, n_jobs=-1)
-    cv_metrics = run_cv_metrics(lgbm, X, y, coords, n_splits=args.n_cv_splits)
+    # Spatial block CV (model-agnostic helper).
+    rf = RandomForestRegressor(**RF_KWARGS)
+    cv_metrics = run_cv_metrics(
+        rf, X, y, coords, spacing_m=args.cv_block_km * 1000.0, n_splits=args.n_cv_splits
+    )
     with open(out_dir / "block_cv_metrics.json", "w") as fh:
         json.dump(cv_metrics, fh, indent=2)
     logger.info("CV: RMSE=%.2f m  R²=%.3f", cv_metrics["rmse_mean"], cv_metrics["r2_mean"])
 
-    # Final fit on all usable sites
-    lgbm.fit(X, y)
+    # Final fit on all usable sites (with OOB estimate).
+    rf = RandomForestRegressor(oob_score=True, **RF_KWARGS)
+    rf.fit(X, y)
+    logger.info("OOB R²=%.3f", rf.oob_score_)
 
-    # Feature importance
-    importance = dict(zip(FEATURE_COLS, lgbm.feature_importances_.tolist()))
-    with open(out_dir / "lgbm_feature_importance.json", "w") as fh:
+    importance = dict(zip(active_cols, rf.feature_importances_.tolist()))
+    with open(out_dir / "rf_feature_importance.json", "w") as fh:
         json.dump(importance, fh, indent=2)
 
-    # Conformal prediction (90% PI)
-    from verde import BlockShuffleSplit
-    spatial_cv = BlockShuffleSplit(spacing=200_000, n_splits=args.n_cv_splits, random_state=0)
-    mapie = MapieRegressor(estimator=LGBMRegressor(n_estimators=500, learning_rate=0.05,
-                                                    num_leaves=63, random_state=0, n_jobs=-1),
-                           method="plus", cv=spatial_cv)
-    mapie.fit(X, y, groups=(coords[:, 0], coords[:, 1]))
-
     # Grid prediction
-    logger.info("Predicting DTW on 1 km grid from %s ...", args.dem)
+    logger.info("Predicting DTW on target grid from %s ...", args.dem)
     x_grid, y_grid, dem_profile = _read_grid(args.dem)
     nrows = dem_profile["height"]
     ncols = dem_profile["width"]
 
-    # Sample terrain features on grid
     def _grid_sample(tif: Path) -> np.ndarray:
         with rasterio.open(tif) as src:
             arr = src.read(1).ravel().astype(np.float32)
         arr[arr == NODATA] = np.nan
         return arr
 
-    hand_g = _grid_sample(args.hand)
-    twi_g = _grid_sample(args.twi)
-    slope_g = _grid_sample(args.slope)
-    ppt_g = _grid_sample(args.prism_ppt)
+    grid_feats: dict[str, np.ndarray] = {
+        "hand_m": _grid_sample(args.hand),
+        "twi": _grid_sample(args.twi),
+        "slope_deg": _grid_sample(args.slope),
+        "mean_ppt_mm": _grid_sample(args.prism_ppt),
+    }
+    grid_feats["aridity_idx"] = grid_feats["mean_ppt_mm"] / 1200.0
 
-    # SOLUS on grid (bilinear-sampled from native 100m Zarr on read)
+    # SOLUS on grid (nearest-sampled from native Zarr).
     import xarray as xr
     solus_ds = xr.open_zarr(args.solus, consolidated=True)
-    ksat_g = np.array(solus_ds["ksat_cm_hr"].sel(
-        x=xr.DataArray(x_grid, dims="pts"),
-        y=xr.DataArray(y_grid, dims="pts"),
-        method="nearest",
-    ).values, dtype=np.float32) if "ksat_cm_hr" in solus_ds else np.full_like(hand_g, np.nan)
-    clay_g = np.array(solus_ds["clay_pct"].sel(
-        x=xr.DataArray(x_grid, dims="pts"),
-        y=xr.DataArray(y_grid, dims="pts"),
-        method="nearest",
-    ).values, dtype=np.float32) if "clay_pct" in solus_ds else np.full_like(hand_g, np.nan)
+    xq = xr.DataArray(x_grid, dims="pts")
+    yq = xr.DataArray(y_grid, dims="pts")
+    for var in ("ksat_cm_hr", "clay_pct", "sand_pct"):
+        if var in solus_ds:
+            grid_feats[var] = np.asarray(
+                solus_ds[var].sel(x=xq, y=yq, method="nearest").values, dtype=np.float32
+            )
+        else:
+            grid_feats[var] = np.full_like(grid_feats["hand_m"], np.nan)
 
-    aridity_g = ppt_g / 1200.0
-    X_grid = np.column_stack([
-        hand_g, twi_g, slope_g, ksat_g, clay_g, ppt_g, aridity_g,
-        x_grid / 1000.0, y_grid / 1000.0,
-    ])
+    for name, path in optional_rasters.items():
+        grid_feats[name] = _grid_sample(path)
 
-    # Mask rows with any NaN feature
+    X_grid = np.column_stack([grid_feats[c] for c in active_cols])
+
     valid_grid = ~np.isnan(X_grid).any(axis=1)
     dtw_grid = np.full(nrows * ncols, np.nan)
-    lgbm_std_grid = np.full(nrows * ncols, np.nan)
+    rf_std_grid = np.full(nrows * ncols, np.nan)
 
-    y_pred, y_pi = mapie.predict(X_grid[valid_grid], alpha=0.10)
-    dtw_grid[valid_grid] = y_pred
-    lgbm_std_grid[valid_grid] = (y_pi[:, 1, 0] - y_pi[:, 0, 0]) / 2.0
+    dtw_grid[valid_grid] = rf.predict(X_grid[valid_grid])
+    rf_std_grid[valid_grid] = _tree_ensemble_std(rf, X_grid[valid_grid])
 
     dtw_grid_2d = dtw_grid.reshape(nrows, ncols)
-    lgbm_std_2d = lgbm_std_grid.reshape(nrows, ncols)
+    rf_std_2d = rf_std_grid.reshape(nrows, ncols)
 
-    # Krige residuals
-    logger.info("Kriging LightGBM residuals at %d well sites...", len(y))
-    resid = y - lgbm.predict(X)
-    # NST before kriging
+    # Krige residuals (normal-score transform first).
+    logger.info("Kriging random-forest residuals at %d well sites...", len(y))
+    resid = y - rf.predict(X)
     qt = QuantileTransformer(n_quantiles=min(500, len(resid)), output_distribution="normal",
                               random_state=0)
     resid_nst = qt.fit_transform(resid.reshape(-1, 1)).ravel()
@@ -310,9 +346,7 @@ def main() -> None:
         backend="loop",
         n_closest_points=K_NEIGHBOURS,
     )
-    z_krige = qt.inverse_transform(
-        np.array(z_krige_nst).reshape(-1, 1)
-    ).ravel()
+    z_krige = qt.inverse_transform(np.array(z_krige_nst).reshape(-1, 1)).ravel()
     krige_std = np.sqrt(np.maximum(ss, 0))
 
     resid_grid = np.full(nrows * ncols, np.nan)
@@ -338,11 +372,11 @@ def main() -> None:
     # Write outputs
     _write_tif(dtw_final_2d, dem_profile, out_dir / "baseline_dtw_m.tif")
     _write_tif(wte_final_2d, dem_profile, out_dir / "baseline_wte_m.tif")
-    _write_tif(lgbm_std_2d, dem_profile, out_dir / "baseline_lgbm_std_m.tif")
+    _write_tif(rf_std_2d, dem_profile, out_dir / "baseline_rf_std_m.tif")
     _write_tif(krige_std_2d, dem_profile, out_dir / "baseline_kriging_std_m.tif")
     _write_tif(mask_2d, dem_profile, out_dir / "well_density_mask.tif")
 
-    logger.info("Baseline regression kriging complete.")
+    logger.info("Observation-anchored random-forest baseline complete.")
 
 
 if __name__ == "__main__":

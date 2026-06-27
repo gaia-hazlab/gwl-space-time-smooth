@@ -3,14 +3,14 @@ Combine four uncertainty layers into an explainable uncertainty stack.
 
 Uncertainty decomposition (updated for GAIA regression-kriging pipeline)
 ------------------------------------------------------------------------
-σ²_total(x, y, t) = σ²_lgbm(x, y)       from baseline_lgbm_std_m.tif
+σ²_total(x, y, t) = σ²_rf(x, y)       from baseline_rf_std_m.tif
                    + σ²_krige_base(x, y)  from baseline_kriging_std_m.tif
-                   + σ²_response(x, y)    from beta_r2_1km.tif (climate response residual std)
+                   + σ²_response(x, y)    from beta_r2_90m.tif (climate response residual std)
                    + σ²_krige_resid(x,y,t) from gwl_kriging_std.zarr (temporal; not combined here)
 
 Static (time-invariant) components written here:
-  σ_lgbm:      LightGBM conformal PI half-width (Stage 1 regression)
-  σ_krige_base: kriging σ on LightGBM residuals (Stage 1)
+  σ_rf:      random-forest tree-ensemble σ (Stage 1 regression)
+  σ_krige_base: kriging σ on random-forest residuals (Stage 1)
   σ_response:  per-cell residual std from climate response OLS (1 − R²) × obs std (Stage 2 proxy)
 
 Temporal component stored separately in gwl_kriging_std.zarr.
@@ -21,25 +21,25 @@ Legacy: σ_physics (HydroGEN) is kept as an optional input for benchmarking;
 Outputs
 -------
 data/processed/baseline_uncertainty_stack.tif   — 4-band GeoTIFF (EPSG:5070)
-    Band 1: σ_lgbm      (m)   — LightGBM conformal PI half-width
-    Band 2: σ_krige_base (m)  — kriging σ on LightGBM residuals
+    Band 1: σ_rf      (m)   — random-forest tree-ensemble σ
+    Band 2: σ_krige_base (m)  — kriging σ on random-forest residuals
     Band 3: σ_response  (m)   — climate response fit residual std proxy
     Band 4: mask_50km   (0/1) — 1 = within 50 km of a well
 
 data/processed/total_uncertainty_m.tif          — 1-band GeoTIFF (EPSG:5070)
-    σ_total = sqrt(σ_lgbm² + σ_krige_base² + σ_response²)  (m)
+    σ_total = sqrt(σ_rf² + σ_krige_base² + σ_response²)  (m)
 
 Usage:
     python -m src.evaluation.uncertainty_stack \\
-        --lgbm-std      data/processed/baseline_lgbm_std_m.tif \\
+        --rf-std      data/processed/baseline_rf_std_m.tif \\
         --krige-std     data/processed/baseline_kriging_std_m.tif \\
-        --beta-r2       data/processed/beta_r2_1km.tif \\
+        --beta-r2       data/processed/beta_r2_90m.tif \\
         --mask          data/processed/well_density_mask.tif \\
         --output-dir    data/processed
 
     # Legacy / comparison:
     python -m src.evaluation.uncertainty_stack \\
-        --physics  data/processed/hydrogen_wtd_uncertainty_1km.tif \\
+        --physics  data/processed/hydrogen_wtd_uncertainty_90m.tif \\
         --edk-std  data/processed/baseline_kriging_std_m.tif \\
         --mask     data/processed/well_density_mask.tif \\
         --output-dir data/processed --legacy
@@ -120,7 +120,7 @@ def _save_single(
 def build_uncertainty_stack(
     mask_path: Path,
     output_dir: Path,
-    lgbm_std_path: Path | None = None,
+    rf_std_path: Path | None = None,
     krige_std_path: Path | None = None,
     beta_r2_path: Path | None = None,
     physics_path: Path | None = None,
@@ -135,10 +135,10 @@ def build_uncertainty_stack(
         Well-density mask (1 = within 50 km of well).
     output_dir:
         Output directory.
-    lgbm_std_path:
-        LightGBM conformal PI half-width (Stage 1, new pipeline).
+    rf_std_path:
+        random-forest tree-ensemble σ (Stage 1, new pipeline).
     krige_std_path:
-        Kriging σ on LightGBM residuals (Stage 1 / legacy EDK).
+        Kriging σ on random-forest residuals (Stage 1 / legacy EDK).
     beta_r2_path:
         β-map OLS R² raster; σ_response ≈ sqrt(1 − R²) × domain_dtw_std.
     physics_path:
@@ -147,7 +147,7 @@ def build_uncertainty_stack(
         Legacy σ_EDK from co-kriging SGS (optional).
     legacy:
         If True, use physics + EDK combination (old pipeline); otherwise use
-        lgbm_std + krige_std + response (new pipeline).
+        rf_std + krige_std + response (new pipeline).
 
     Returns
     -------
@@ -181,7 +181,7 @@ def build_uncertainty_stack(
         ]
     else:
         # ---------- New pipeline mode ----------
-        sigma_lgbm = _read_band(lgbm_std_path)[0] if lgbm_std_path and Path(lgbm_std_path).exists() else np.zeros_like(mask_arr)
+        sigma_rf = _read_band(rf_std_path)[0] if rf_std_path and Path(rf_std_path).exists() else np.zeros_like(mask_arr)
         sigma_krige = _read_band(krige_std_path)[0] if krige_std_path and Path(krige_std_path).exists() else np.zeros_like(mask_arr)
         # σ_response proxy: sqrt(1 − R²) × median_dtw_range
         # where median_dtw_range ≈ 5 m as a domain-wide proxy (conservative)
@@ -193,21 +193,21 @@ def build_uncertainty_stack(
             sigma_response = np.zeros_like(mask_arr)
 
         sigma_total = np.sqrt(
-            np.where(np.isfinite(sigma_lgbm), sigma_lgbm ** 2, 0.0)
+            np.where(np.isfinite(sigma_rf), sigma_rf ** 2, 0.0)
             + np.where(np.isfinite(sigma_krige), sigma_krige ** 2, 0.0)
             + np.where(np.isfinite(sigma_response), sigma_response ** 2, np.nan)
         )
-        bands = [sigma_lgbm, sigma_krige, sigma_response, mask_arr]
+        bands = [sigma_rf, sigma_krige, sigma_response, mask_arr]
         descriptions = [
-            "Band 1: sigma_lgbm (m) — LightGBM conformal PI half-width",
-            "Band 2: sigma_krige_base (m) — kriging σ on LightGBM residuals",
+            "Band 1: sigma_rf (m) — random-forest tree-ensemble σ",
+            "Band 2: sigma_krige_base (m) — kriging σ on random-forest residuals",
             "Band 3: sigma_response (m) — climate response fit uncertainty proxy",
             "Band 4: mask_50km (0/1) — 1=within 50 km of well",
         ]
 
     # Diagnostics
     for name, arr in zip(
-        ["σ_lgbm" if not legacy else "σ_physics",
+        ["σ_rf" if not legacy else "σ_physics",
          "σ_krige" if not legacy else "σ_EDK",
          "σ_total"],
         [bands[0], bands[1], sigma_total],
@@ -234,9 +234,9 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     # New pipeline inputs
-    parser.add_argument("--lgbm-std", type=Path, default=Path("data/processed/baseline_lgbm_std_m.tif"))
+    parser.add_argument("--rf-std", type=Path, default=Path("data/processed/baseline_rf_std_m.tif"))
     parser.add_argument("--krige-std", type=Path, default=Path("data/processed/baseline_kriging_std_m.tif"))
-    parser.add_argument("--beta-r2", type=Path, default=Path("data/processed/beta_r2_1km.tif"))
+    parser.add_argument("--beta-r2", type=Path, default=Path("data/processed/beta_r2_90m.tif"))
     parser.add_argument("--mask", type=Path, default=Path("data/processed/well_density_mask.tif"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/processed"))
     # Legacy / benchmark inputs
@@ -254,7 +254,7 @@ def main() -> None:
     outputs = build_uncertainty_stack(
         mask_path=args.mask,
         output_dir=args.output_dir,
-        lgbm_std_path=args.lgbm_std,
+        rf_std_path=args.rf_std,
         krige_std_path=args.krige_std,
         beta_r2_path=args.beta_r2,
         physics_path=args.physics,

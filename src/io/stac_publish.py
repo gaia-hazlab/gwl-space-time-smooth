@@ -45,13 +45,13 @@ def make_stac_item(
     product_path:
         Path to the GeoTIFF or Zarr output (must exist).
     product_id:
-        Unique STAC item ID (e.g. "gwl_dtw_pnw_2024_01").
+        Unique STAC item ID (e.g. "gwl_dtw_wa_2024_01").
     source:
         GAIA provenance source (e.g. "USGS-NWIS + 3DEP + SOLUS100 + PRISM").
     measurement:
         What is measured (e.g. "depth-to-water (m below surface)").
     resolution_m:
-        Spatial resolution in metres (typically 1000 for 1 km outputs).
+        Spatial resolution in metres (typically 1000 for 90 m outputs).
     uncertainty_path:
         Optional companion uncertainty raster/Zarr.
     datetime_range:

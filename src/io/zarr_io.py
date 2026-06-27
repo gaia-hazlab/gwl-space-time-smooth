@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Standard GWL DataTree node names
 GWL_NODES = (
-    "baseline",   # wte_m, dtw_m, std_m — long-term LightGBM + kriged residual
+    "baseline",   # wte_m, dtw_m, std_m — long-term random forest + kriged residual
     "climate",    # spi3, swe_anom, pdo, ar_count — forcing indices (time, y, x)
     "beta",       # b_spi3, b_swe, b_pdo, b_ar, r2 — static β maps (y, x)
     "anomaly",    # wte_anomaly_m, std_m — climate-response reconstruction (time, y, x)
@@ -136,13 +136,13 @@ def build_gwl_datatree(
 ) -> xr.DataTree:
     """Assemble a GWL DataTree from component datasets.
 
-    All datasets must share the same spatial grid (EPSG:5070, 1 km).
+    All datasets must share the same spatial grid (EPSG:5070, 90 m).
     Pass None for any node not yet computed.
 
     Parameters
     ----------
     baseline:
-        Long-term WTE/DTW from LightGBM + regression kriging.
+        Long-term WTE/DTW from random forest + regression kriging.
     climate:
         Climate forcing index fields (SPI-3, SWE, PDO) on the grid.
     beta:

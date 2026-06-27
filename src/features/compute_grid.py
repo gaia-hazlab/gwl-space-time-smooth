@@ -1,5 +1,5 @@
 """
-Define the canonical 1 km CONUS analysis grid and provide coordinate helpers.
+Define the canonical 90 m WA analysis grid and provide coordinate helpers.
 
 The canonical grid is derived from the MERIT Hydro DEM reprojected to EPSG:5070
 so that the interpolation grid is always pixel-aligned with the DEM secondary
@@ -7,11 +7,11 @@ variable.  All downstream scripts import from this module rather than re-derivin
 the grid independently.
 
 Usage:
-    python -m src.features.compute_grid --dem data/raw/dem/merit_hydro_1km_5070.tif \
+    python -m src.features.compute_grid --dem data/raw/dem/merit_hydro_90m_5070.tif \
         --output-dir data/processed
 
 Outputs:
-    data/processed/conus_grid_1km.nc   ← NetCDF with X/Y coordinate arrays + metadata
+    data/processed/conus_grid_90m.nc   ← NetCDF with X/Y coordinate arrays + metadata
 """
 
 from __future__ import annotations
@@ -34,11 +34,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TARGET_CRS = CRS.from_epsg(5070)
-TARGET_RES_M = 1000.0
+TARGET_RES_M = 90.0
 
 
 class GridSpec(NamedTuple):
-    """Canonical CONUS 1 km grid specification."""
+    """Canonical 90 m WA analysis grid specification (EPSG:5070)."""
 
     transform: rasterio.transform.Affine
     width: int
@@ -82,7 +82,7 @@ def load_grid_spec(dem_path: Path) -> GridSpec:
     Parameters
     ----------
     dem_path:
-        Path to ``merit_hydro_1km_5070.tif``.
+        Path to ``merit_hydro_90m_5070.tif``.
 
     Returns
     -------
@@ -109,7 +109,7 @@ def read_dem_array(dem_path: Path, grid: GridSpec) -> np.ndarray:
     Parameters
     ----------
     dem_path:
-        Path to the 1 km EPSG:5070 DEM GeoTIFF.
+        Path to the 90 m EPSG:5070 DEM GeoTIFF.
     grid:
         GridSpec from :func:`load_grid_spec`.
 
@@ -136,7 +136,7 @@ def sample_dem_at_points(
     Parameters
     ----------
     dem_path:
-        Path to the 1 km EPSG:5070 DEM GeoTIFF.
+        Path to the 90 m EPSG:5070 DEM GeoTIFF.
     x_5070, y_5070:
         1-D arrays of EPSG:5070 coordinates.
 
@@ -167,7 +167,7 @@ def save_grid_nc(grid: GridSpec, output_path: Path) -> None:
     grid:
         Canonical GridSpec.
     output_path:
-        Destination ``conus_grid_1km.nc``.
+        Destination ``conus_grid_90m.nc``.
     """
     ds = xr.Dataset(
         coords={
@@ -175,7 +175,7 @@ def save_grid_nc(grid: GridSpec, output_path: Path) -> None:
             "y": ("y", grid.y_coords.astype(np.float64), {"units": "m", "crs": "EPSG:5070", "axis": "Y"}),
         },
         attrs={
-            "title": "Canonical CONUS 1 km analysis grid",
+            "title": "Canonical CONUS 90 m analysis grid",
             "crs": "EPSG:5070 (NAD83 / Conus Albers)",
             "resolution_m": TARGET_RES_M,
             "width": grid.width,
@@ -206,7 +206,7 @@ def build_grid_from_bbox(
     left, bottom, right, top:
         Bounding box in EPSG:5070 metres (NAD83 CONUS Albers).
     res_m:
-        Pixel resolution in metres (default: 1000 m = 1 km).
+        Pixel resolution in metres (default: 1000 m = 90 m).
 
     Returns
     -------
@@ -228,12 +228,12 @@ def build_grid_from_bbox(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build canonical 1 km grid from MERIT Hydro DEM or a bounding box",
+        description="Build canonical 90 m grid from MERIT Hydro DEM or a bounding box",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
             "  # CONUS grid from DEM\n"
-            "  python -m src.features.compute_grid --dem data/raw/dem/merit_hydro_1km_5070.tif\n\n"
+            "  python -m src.features.compute_grid --dem data/raw/dem/merit_hydro_90m_5070.tif\n\n"
             "  # PNW regional grid from bbox (no DEM needed)\n"
             "  python -m src.features.compute_grid \\\n"
             "    --bbox -2334000 2467000 -1103000 2998000 --output-dir data/processed"
@@ -243,7 +243,7 @@ def main() -> None:
         "--dem",
         type=Path,
         default=None,
-        help="Path to MERIT Hydro 1 km EPSG:5070 DEM. Mutually exclusive with --bbox.",
+        help="Path to MERIT Hydro 90 m EPSG:5070 DEM. Mutually exclusive with --bbox.",
     )
     parser.add_argument(
         "--bbox",
@@ -266,7 +266,7 @@ def main() -> None:
         "--output-name",
         type=str,
         default=None,
-        help="Output filename (default: conus_grid_1km.nc or bbox_grid_1km.nc).",
+        help="Output filename (default: conus_grid_90m.nc or bbox_grid_90m.nc).",
     )
     args = parser.parse_args()
 
@@ -281,11 +281,11 @@ def main() -> None:
         if not args.dem.exists():
             raise FileNotFoundError(f"DEM not found: {args.dem}. Run `make dem` first.")
         grid = load_grid_spec(args.dem)
-        out_name = args.output_name or "conus_grid_1km.nc"
+        out_name = args.output_name or "conus_grid_90m.nc"
     else:
         left, bottom, right, top = args.bbox
         grid = build_grid_from_bbox(left, bottom, right, top)
-        out_name = args.output_name or "bbox_grid_1km.nc"
+        out_name = args.output_name or "bbox_grid_90m.nc"
 
     logger.info(f"Grid: {grid.width} × {grid.height} px at {TARGET_RES_M} m, EPSG:5070")
     save_grid_nc(grid, args.output_dir / out_name)

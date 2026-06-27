@@ -2,7 +2,7 @@
 
 Replaces download_dem.py (MERIT Hydro). Outputs:
   data/raw/dem/3dep_10m_5070.tif  — 10 m, EPSG:5070
-  data/raw/dem/3dep_1km_5070.tif  — resampled 1 km (for LightGBM feature stack)
+  data/raw/dem/3dep_90m_5070.tif  — resampled 90 m (for random-forest feature stack)
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 TARGET_CRS = CRS.from_epsg(5070)
 TARGET_RES_10M = 10.0
-TARGET_RES_1KM = 1000.0
+TARGET_RES_90M = 90.0
 NODATA = -9999.0
 
 # PNW pilot bbox: west, south, east, north (WGS84)
@@ -61,8 +61,8 @@ def _reproject_to_5070(dem_da: "xr.DataArray", output_path: Path) -> None:
     logger.info("Wrote 10 m DEM → %s", output_path)
 
 
-def _resample_to_1km(src_path: Path, dst_path: Path) -> None:
-    """Resample 10 m EPSG:5070 raster to 1 km using bilinear resampling."""
+def _resample_to_90m(src_path: Path, dst_path: Path) -> None:
+    """Resample 10 m EPSG:5070 raster to 90 m using bilinear resampling."""
     with rasterio.open(src_path) as src:
         transform, width, height = calculate_default_transform(
             src.crs,
@@ -70,7 +70,7 @@ def _resample_to_1km(src_path: Path, dst_path: Path) -> None:
             src.width,
             src.height,
             *src.bounds,
-            resolution=TARGET_RES_1KM,
+            resolution=TARGET_RES_90M,
         )
         profile = src.profile.copy()
         profile.update(
@@ -97,7 +97,7 @@ def _resample_to_1km(src_path: Path, dst_path: Path) -> None:
                 dst_crs=src.crs,
                 resampling=Resampling.bilinear,
             )
-    logger.info("Resampled to 1 km → %s", dst_path)
+    logger.info("Resampled to 90 m → %s", dst_path)
 
 
 def main() -> None:
@@ -123,11 +123,11 @@ def main() -> None:
     bbox = tuple(args.bbox)
     output_dir = Path(args.output_dir)
     path_10m = output_dir / "3dep_10m_5070.tif"
-    path_1km = output_dir / "3dep_1km_5070.tif"
+    path_90m = output_dir / "3dep_90m_5070.tif"
 
     dem_da = _download_dem(bbox)
     _reproject_to_5070(dem_da, path_10m)
-    _resample_to_1km(path_10m, path_1km)
+    _resample_to_90m(path_10m, path_90m)
     logger.info("3DEP download complete.")
 
 

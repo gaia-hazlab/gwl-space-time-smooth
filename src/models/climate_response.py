@@ -5,7 +5,7 @@ For each well site, fits:
 
 where lag* is optimized per terrain zone (valley / transition / upland) by AIC.
 
-β coefficients are then kriged to the 1 km grid, and monthly GWL anomalies
+β coefficients are then kriged to the 90 m grid, and monthly GWL anomalies
 are reconstructed as a matrix product:
   anomaly_hat(x,y,t) = β₁(x,y)·SPI3(x,y,t) + β₂(x,y)·ΔSWE(x,y,t−lag) + β₃(x,y)·PDO(t)
 
@@ -13,10 +13,10 @@ AR term (β₄) is set to 0 until the Stage IV intercomparison delivers a ranked
 precipitation product.
 
 Outputs (data/processed/):
-  beta_spi3_1km.tif                — β₁ map (m / unit SPI)
-  beta_swe_1km.tif                 — β₂ map (m / 100 mm SWE)
-  beta_pdo_1km.tif                 — β₃ map (m / unit PDO)
-  beta_r2_1km.tif                  — per-site OLS R²
+  beta_spi3_90m.tif                — β₁ map (m / unit SPI)
+  beta_swe_90m.tif                 — β₂ map (m / 100 mm SWE)
+  beta_pdo_90m.tif                 — β₃ map (m / unit PDO)
+  beta_r2_90m.tif                  — per-site OLS R²
   optimal_swe_lag_zone.json        — best SWE lag per terrain zone
   climate_response_sites.parquet   — per-site β + diagnostics
   gwl_climate_response.zarr        — (time, y, x) Stage 2 anomaly field
@@ -144,7 +144,7 @@ def _krige_beta_map(
     grid_x: np.ndarray,
     grid_y: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Kriging of a β-coefficient to the 1 km grid.
+    """Kriging of a β-coefficient to the 90 m grid.
 
     Returns (kriged_values, kriging_std).
     """
@@ -180,11 +180,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Fit per-site OLS climate response β-maps.")
     parser.add_argument("--monthly", type=Path, default=Path("data/processed/nwis_gwlevels_monthly.parquet"))
     parser.add_argument("--sites", type=Path, default=Path("data/processed/nwis_sites_clean.parquet"))
-    parser.add_argument("--spi3", type=Path, default=Path("data/processed/spi3_monthly_pnw.zarr"))
-    parser.add_argument("--swe", type=Path, default=Path("data/raw/climate/snodas_swe_monthly_pnw.zarr"))
+    parser.add_argument("--spi3", type=Path, default=Path("data/processed/spi3_monthly_wa.zarr"))
+    parser.add_argument("--swe", type=Path, default=Path("data/raw/climate/snodas_swe_monthly_wa.zarr"))
     parser.add_argument("--pdo", type=Path, default=Path("data/raw/climate/pdo_monthly.csv"))
-    parser.add_argument("--hand", type=Path, default=Path("data/processed/terrain_hand_1km.tif"))
-    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/3dep_1km_5070.tif"))
+    parser.add_argument("--hand", type=Path, default=Path("data/processed/terrain_hand_90m.tif"))
+    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/3dep_90m_5070.tif"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/processed"))
     parser.add_argument("--min-months", type=int, default=MIN_OBS_TO_FIT)
     parser.add_argument("--max-lag", type=int, default=MAX_LAG)
@@ -284,8 +284,8 @@ def main() -> None:
     with open(out_dir / "optimal_swe_lag_zone.json", "w") as fh:
         json.dump(optimal_lag, fh, indent=2)
 
-    # Krige β maps to 1 km grid
-    logger.info("Kriging β maps to 1 km grid...")
+    # Krige β maps to 90 m grid
+    logger.info("Kriging β maps to 90 m grid...")
     with rasterio.open(args.dem) as dem_src:
         dem_profile = dem_src.profile.copy()
         nrows, ncols = dem_src.height, dem_src.width
@@ -299,10 +299,10 @@ def main() -> None:
     sy = beta_df["y_5070"].values
 
     beta_keys = {
-        "beta_spi3": "beta_spi3_1km.tif",
-        "beta_swe": "beta_swe_1km.tif",
-        "beta_pdo": "beta_pdo_1km.tif",
-        "r2": "beta_r2_1km.tif",
+        "beta_spi3": "beta_spi3_90m.tif",
+        "beta_swe": "beta_swe_90m.tif",
+        "beta_pdo": "beta_pdo_90m.tif",
+        "r2": "beta_r2_90m.tif",
     }
     kriged_betas = {}
     for col, fname in beta_keys.items():
@@ -333,7 +333,7 @@ def main() -> None:
     swe_var = list(swe_ds.data_vars)[0]
     swe_series_grid: dict = {}  # cached
 
-    # Build time-indexed anomaly cube on the 1 km grid
+    # Build time-indexed anomaly cube on the 90 m grid
     common_times = [
         t for t in spi3_times
         if t in pdo_series.index
@@ -344,7 +344,7 @@ def main() -> None:
     from scipy.ndimage import zoom
 
     for ti, t in enumerate(common_times):
-        # SPI-3 at time t on spi3 native grid → resample to 1 km
+        # SPI-3 at time t on spi3 native grid → resample to 90 m
         t_idx = int(np.where(spi3_times == t)[0][0])
         spi3_slice = spi3_arr[t_idx]  # (ny_spi3, nx_spi3)
         if spi3_slice.shape != (nrows, ncols):

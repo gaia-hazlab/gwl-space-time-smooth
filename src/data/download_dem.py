@@ -3,7 +3,7 @@ Download MERIT Hydro DEM tiles, mosaic, and reproject to the analysis grid.
 
 Downloads the MERIT Hydro hydrologically-conditioned DEM at 3 arcsec (~90 m),
 mosaics all CONUS tiles, reprojects to EPSG:5070 (NAD83 CONUS Albers), and
-resamples to 1 km resolution for use as the co-kriging secondary variable.
+resamples to 90 m resolution for use as the co-kriging secondary variable.
 
 MERIT Hydro is preferred over 3DEP here because it is:
 - Hydrologically conditioned (filled sinks, carved channels)
@@ -18,7 +18,7 @@ Usage:
 
 Outputs:
     data/raw/dem/merit_hydro_raw/     ← per-tile GeoTIFFs (kept for reproducibility)
-    data/raw/dem/merit_hydro_1km_5070.tif  ← final 1 km EPSG:5070 mosaic
+    data/raw/dem/merit_hydro_90m_5070.tif  ← final 90 m EPSG:5070 mosaic
 """
 
 from __future__ import annotations
@@ -126,7 +126,7 @@ def download_tiles(output_dir: Path) -> list[Path]:
 
 def mosaic_and_reproject(tiles: list[Path], output_path: Path) -> None:
     """
-    Mosaic MERIT Hydro tiles and reproject/resample to 1 km EPSG:5070.
+    Mosaic MERIT Hydro tiles and reproject/resample to 90 m EPSG:5070.
 
     Parameters
     ----------
@@ -155,7 +155,7 @@ def mosaic_and_reproject(tiles: list[Path], output_path: Path) -> None:
     src_crs = CRS.from_epsg(4326)
     src_height, src_width = mosaic_array.shape[1], mosaic_array.shape[2]
 
-    logger.info("Reprojecting to EPSG:5070 at 1 km …")
+    logger.info("Reprojecting to EPSG:5070 at 90 m …")
     dst_transform, dst_width, dst_height = calculate_default_transform(
         src_crs,
         TARGET_CRS,
@@ -224,7 +224,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    final_path = args.output_dir / "merit_hydro_1km_5070.tif"
+    final_path = args.output_dir / "merit_hydro_90m_5070.tif"
     if final_path.exists():
         logger.info(f"Final DEM already exists: {final_path}. Use --force to redownload.")
         return

@@ -110,8 +110,8 @@ def run_cv_metrics(
         X_tr, y_tr = X[fold["train_idx"]], y[fold["train_idx"]]
         X_te, y_te = X[fold["test_idx"]], y[fold["test_idx"]]
 
-        import copy
-        est = copy.clone(estimator) if hasattr(estimator, "get_params") else estimator
+        from sklearn.base import clone
+        est = clone(estimator) if hasattr(estimator, "get_params") else estimator
         est.fit(X_tr, y_tr)
         y_pred = est.predict(X_te)
 

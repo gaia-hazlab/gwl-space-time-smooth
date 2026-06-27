@@ -108,7 +108,7 @@ def main() -> None:
     parser.add_argument("--sites", type=Path, default=Path("data/processed/nwis_sites_clean.parquet"))
     parser.add_argument("--climate-response", type=Path, default=Path("data/processed/gwl_climate_response.zarr"))
     parser.add_argument("--baseline-dtw", type=Path, default=Path("data/processed/baseline_dtw_m.tif"))
-    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/3dep_1km_5070.tif"))
+    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/3dep_90m_5070.tif"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/processed"))
     args = parser.parse_args()
 

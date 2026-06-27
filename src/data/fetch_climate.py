@@ -8,7 +8,7 @@ Sub-commands:
 Usage:
   python -m src.data.fetch_climate pdo --output-dir data/raw/climate
   python -m src.data.fetch_climate swe --bbox -124.9 42.0 -116.5 49.0 --output-dir data/raw/climate
-  python -m src.data.fetch_climate spi3 --prism data/processed/prism_monthly_pnw.zarr \
+  python -m src.data.fetch_climate spi3 --prism data/processed/prism_monthly_wa.zarr \
       --output-dir data/processed
 """
 
@@ -106,7 +106,7 @@ def fetch_snodas_swe(
 
     SNODAS is available from 2003-10-01. The masked (filled) version is used.
     Daily files are in NSIDC HTTPS; we download, parse, compute monthly means,
-    and write a Zarr store (time, y, x) on the native SNODAS 1 km grid clipped
+    and write a Zarr store (time, y, x) on the native SNODAS 90 m grid clipped
     to the PNW bbox.
 
     Parameters
@@ -132,7 +132,7 @@ def fetch_snodas_swe(
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / "snodas_swe_monthly_pnw.zarr"
+    out_path = output_dir / "snodas_swe_monthly_wa.zarr"
 
     if end is None:
         end = (pd.Timestamp.today() - pd.DateOffset(months=1)).strftime("%Y-%m-01")
@@ -143,7 +143,7 @@ def fetch_snodas_swe(
     )
 
     # SNODAS masked SWE grid parameters (conus masked product)
-    # Native: ~1 km, EPSG:4326-like (geographic), llcorner = (-124.733_333, 24.9499_583)
+    # Native: ~90 m, EPSG:4326-like (geographic), llcorner = (-124.733_333, 24.9499_583)
     SNODAS_NCOLS = 6935
     SNODAS_NROWS = 3351
     SNODAS_CELLSIZE = 0.00833333  # degrees
@@ -279,7 +279,7 @@ def compute_spi3(prism_zarr: Path, output_dir: Path) -> Path:
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_path = output_dir / "spi3_monthly_pnw.zarr"
+    out_path = output_dir / "spi3_monthly_wa.zarr"
 
     logger.info("Loading PRISM precipitation from %s", prism_zarr)
     ds = xr.open_zarr(prism_zarr, consolidated=True)
@@ -362,7 +362,7 @@ def main() -> None:
     p_spi3.add_argument(
         "--prism",
         type=Path,
-        default=Path("data/processed/prism_monthly_pnw.zarr"),
+        default=Path("data/processed/prism_monthly_wa.zarr"),
         help="PRISM monthly precipitation Zarr",
     )
     p_spi3.add_argument("--output-dir", type=Path, default=Path("data/processed"))

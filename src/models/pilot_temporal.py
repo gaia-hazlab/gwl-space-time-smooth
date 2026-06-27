@@ -2,7 +2,7 @@
 Krige monthly WTE anomaly fields for a regional pilot over a bbox grid.
 
 Does NOT require the DEM or full CONUS baseline TIF.  Uses
-``bbox_grid_1km.nc`` as the output grid and each site's long-term median
+``bbox_grid_90m.nc`` as the output grid and each site's long-term median
 WTE as the spatial reference from which anomalies are computed.
 
 Model
@@ -21,7 +21,7 @@ Usage::
     python -m src.models.pilot_temporal \\
         --monthly  data/processed/nwis_gwlevels_monthly.parquet \\
         --sites    data/processed/nwis_sites_clean.parquet \\
-        --grid     data/processed/bbox_grid_1km.nc \\
+        --grid     data/processed/bbox_grid_90m.nc \\
         --states   WA OR \\
         --output-dir data/processed
 
@@ -307,7 +307,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--grid", type=Path,
-        default=Path("data/processed/bbox_grid_1km.nc"),
+        default=Path("data/processed/bbox_grid_90m.nc"),
     )
     parser.add_argument(
         "--hydrogen-wtd", type=Path, default=None,
@@ -342,7 +342,7 @@ def main() -> None:
     x_coords = ds_grid["x"].values[::step]   # shape (nx//step,)
     y_coords = ds_grid["y"].values[::step]   # shape (ny//step,) — descending
     nx, ny = len(x_coords), len(y_coords)
-    grid_km = step  # nominal resolution in km (input grid is 1 km)
+    grid_km = step  # nominal resolution in km (input grid is 90 m)
     logger.info(f"Grid: {ny} rows × {nx} cols at {grid_km} km resolution (EPSG:5070)")
 
     # Flattened grid coordinates for kriging

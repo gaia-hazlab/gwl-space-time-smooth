@@ -4,7 +4,7 @@ Interpolate monthly WTE anomaly fields via ordinary kriging per HUC-2 region.
 For each calendar month in the NWIS record, computes:
     anomaly_wte_m = obs_wte_m − site_median_wte_m
 
-and then kriging-interpolates the anomaly field onto the 1 km CONUS grid.
+and then kriging-interpolates the anomaly field onto the 90 m CONUS grid.
 
 The result is accumulated into Zarr archives:
     gwl_anomaly.zarr  — (time, y, x) anomaly from site median WTE (m)
@@ -19,7 +19,7 @@ Usage:
         --monthly  data/processed/nwis_gwlevels_monthly.parquet \\
         --sites    data/processed/nwis_sites_clean.parquet \\
         --baseline-wte data/processed/baseline_wte_m.tif \\
-        --dem      data/raw/dem/merit_hydro_1km_5070.tif \\
+        --dem      data/raw/dem/merit_hydro_90m_5070.tif \\
         --output-dir data/processed
 """
 
@@ -288,7 +288,7 @@ def main() -> None:  # noqa: C901
     parser.add_argument("--monthly", type=Path, default=Path("data/processed/nwis_gwlevels_monthly.parquet"))
     parser.add_argument("--sites", type=Path, default=Path("data/processed/nwis_sites_clean.parquet"))
     parser.add_argument("--baseline-wte", type=Path, default=Path("data/processed/baseline_wte_m.tif"))
-    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/merit_hydro_1km_5070.tif"))
+    parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/merit_hydro_90m_5070.tif"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/processed"))
     args = parser.parse_args()
 
