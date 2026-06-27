@@ -16,16 +16,17 @@ date: today
 date-format: long
 abstract: |
   We present a three-stage hybrid framework for modeling monthly groundwater levels (GWL)
-  across the Pacific Northwest at 1 km spatial resolution, without solving the full
+  across the Pacific Northwest at 90 m spatial resolution, without solving the full
   groundwater flow equation. The framework anchors predictions to USGS NWIS well
   observations and derives physical consistency from terrain attributes and climate
   response functions rather than from subsurface parameterization. Stage 1 replaces
-  traditional co-kriging with a LightGBM regression kriging model driven by Height
+  traditional co-kriging with an observation-anchored random-forest regression model
+  driven by Height
   Above Nearest Drainage (HAND) — a terrain attribute that equals zero in valley floors
   where liquefaction risk is highest, and grows monotonically on ridge flanks where
   landslide risk is elevated. Stage 2 fits per-site ordinary least-squares regression to
   SPI-3, snowpack (SWE), and the Pacific Decadal Oscillation index, then interpolates
-  the resulting β-coefficient maps to the full 1 km grid, enabling reconstruction of
+  the resulting β-coefficient maps to the full 90 m grid, enabling reconstruction of
   monthly anomalies as a matrix multiply from climate indices alone. Stage 3 kriging of
   observation residuals closes the gap between the climate reconstruction and the actual
   well record. The framework captures four PNW hydroclimatic signals: seasonal storm
@@ -110,7 +111,7 @@ plt.rcParams.update({
 
 Groundwater level (GWL) is a critical boundary condition for geotechnical hazard
 assessment. In the Pacific Northwest, shallow groundwater controls the susceptibility
-of saturated valley fills to seismic liquefaction [@sanger2022cyclic], and elevated
+of saturated valley fills to seismic liquefaction [@sanger2025liquefaction], and elevated
 pore pressures in hillslope soils are the proximate trigger of many shallow landslides.
 Yet the spatial and temporal variability of GWL in the PNW remains poorly constrained:
 monitoring wells are sparse in mountain terrain, data products derived from global
@@ -121,7 +122,7 @@ for these applications.
 Two canonical approaches exist for producing gridded GWL estimates. The first, full
 numerical flow simulation, solves the three-dimensional groundwater flow equation in
 a discretized subsurface domain using codes such as MODFLOW or ParFlow
-[@maxwell2015connections; @reinecke2019importance]. This approach is physically rigorous
+[@maxwell2015connections; @reinecke2020importance]. This approach is physically rigorous
 but requires subsurface parameterization (hydraulic conductivity, storage coefficients,
 aquifer geometry) that is not available at regional scale with sufficient accuracy,
 and is computationally prohibitive at 1 km resolution over a 25-year record. The
@@ -176,7 +177,7 @@ $$S_s \frac{\partial h}{\partial t} = \nabla \cdot (K \nabla h) + R$$
 where $h$ is hydraulic head, $K$ is hydraulic conductivity, $S_s$ is specific storage,
 and $R$ is a source/sink term. These produce physically consistent outputs but require
 aquifer geometry and hydraulic properties that are poorly known at regional scale.
-@reinecke2019importance showed that global groundwater models at coarse resolution
+@reinecke2020importance showed that global groundwater models at coarse resolution
 (0.5°–5') cannot resolve the water table variability relevant to hazard applications.
 The global models of @degraaf2015global are scientifically valuable but produce
 ~10 km outputs that cannot serve Sanger et al. or LandLab at the spatial resolution
@@ -196,7 +197,7 @@ four documented limitations relevant to our application:
 - **Western US failure**: sparse well density in arid/semi-arid terrain causes
   severe extrapolation errors
 
-@ma2024ensemble (the HydroGEN product) improves on @fan2013global by using an
+@ma2023wtd (the HydroGEN product) improves on @fan2013global by using an
 ensemble of ML models (random forest, gradient boosting, neural network) with a
 richer covariate set, but retains the static, climatological character and shows
 a +7.17 m positive bias and 20.46 m RMSE against held-out USGS wells in the PNW.
@@ -215,10 +216,11 @@ spatial generalization:
   our Stage 2 β-map approach. @kuss2014multi showed that ENSO and PDO are significant
   predictors of GWL variability across the western US, with response lags of 0–6 months
   depending on aquifer depth and soil type.
-- **Random forests for spatial classification** [@marcais2017prospecting]: showed that
-  static RF models trained on terrain + geology covariates can identify groundwater
-  "provinces" with distinct dynamic behaviors, providing a spatial regionalization
-  framework relevant to β-map interpolation.
+- **Machine learning for spatial inference** [@rodriguez2014nitrate; @marcais2017prospecting]:
+  @rodriguez2014nitrate showed that random forests trained on terrain + geology covariates
+  can map groundwater properties and vulnerability across a region, and @marcais2017prospecting
+  argue for the broader interest of data-driven models in hydrological inference — together
+  providing a spatial regionalization framework relevant to β-map interpolation.
 
 ### Category 4: Hybrid approaches (the gap)
 
@@ -230,7 +232,7 @@ precedents are:
   deterministic trend (ML or regression) is first subtracted and then kriging is applied
   to the residuals. This is standard practice in soil property mapping but has been
   rarely applied to GWL.
-- **Conceptual model + ML** [@bittner2020improving; @heudorfer2019groundwater]:
+- **Conceptual model + ML** [@konapala2020hybrid; @heudorfer2019groundwater]:
   uses a process-based model to generate synthetic training data that augments sparse
   well records. Closest in spirit to our approach but focused on streamflow rather
   than GWL.
@@ -245,6 +247,190 @@ geomorphological modeling frameworks. This is the contribution of the present wo
 
 ---
 
+## Demonstration Data: Synthetic Stand-ins for GAIA DataHub Layers {#sec-demodata}
+
+::: {.callout-important}
+## This is a synthetic demonstration
+
+Every covariate used below is a **synthetic array generated on a Washington State
+area of interest at 90 m resolution**. Each one is a deliberate stand-in for a
+specific, *named* layer in the [GAIA HazLab DataHub
+inventory](https://gaia-hazlab.github.io/book/datahub-inventory/), and each carries
+the exact call needed to swap in the real layer (see the GAIA swap block below). The synthetic fields
+are spatially coherent — valley fills are soft, fine-grained, shallow-water-table, and
+densely instrumented; bedrock flanks are stiff, coarse, deep-water-table, and sparsely
+instrumented — so the demonstration exercises the real workflow end-to-end. **Replace
+the synthetic layers with the GAIA loads and the rest of the document runs unchanged.**
+:::
+
+We target a **90 m grid** (EPSG:5070) over a Puget Sound lowland AOI — matching the
+resolution of the downstream Sanger & Maurer liquefaction model
+[@sanger2025liquefaction] rather than the 250 m–1 km global products. The covariate
+stack below replaces absolute coordinates with **physically meaningful predictors**:
+terrain (HAND, slope, TWI from 3DEP), near-surface stiffness (Vs30/Vs(z), the same
+field used by the liquefaction GLM [@sanger2025parametric]), soil texture and hydraulic
+conductivity (SOLUS100/POLARIS-style; cf. @ramcharan2018soil), depth to bedrock, and
+geology. This is the predictor philosophy of the observation-anchored, high-resolution
+US water-table models of @ma2023wtd and @ma2026highres.
+
+| Synthetic variable | Stands in for (GAIA DataHub layer) | Native res. | Real source |
+|---|---|---|---|
+| `hand`, `slope`, `twi` | 3DEP terrain derivatives | 10 m | USGS 3DEP |
+| `vs30`, `vsz` | Parametric Vs profiles [@sanger2025parametric] | ~250 m | Sanger & Maurer (2025) |
+| `clay`, `sand` | SOLUS100 soil texture | 100 m | USDA SOLUS100 (`solus-stac`) |
+| `ksat` | POLARIS soil hydraulic | 30 m | POLARIS |
+| `dtb` | Depth to bedrock | varies | GAIA subsurface reanalysis |
+| `geology` | Surficial geology units | 1:100k | WA DNR |
+| `wells` | USGS NWIS groundwater levels | points | NWIS (`dataretrieval`) |
+
+```{python}
+#| label: fig-datahub-stack
+#| fig-cap: "**Synthetic GAIA DataHub covariate stack (90 m, Puget Sound lowland AOI).** Each panel is a synthetic stand-in for a named DataHub layer (source in parentheses). The fields share one terrain backbone: a sinuous valley axis (the drainage) controls HAND, and HAND in turn drives soft/stiff Vs30, fine/coarse soil texture, deep/shallow bedrock, and the alluvium–drift–bedrock geology split. White points are synthetic USGS NWIS wells, preferentially sited in the instrumented lowlands. These arrays — not coordinates — are the Stage 1 predictors."
+#| fig-width: 12
+#| fig-height: 6.5
+
+from scipy.ndimage import gaussian_filter
+
+rng = np.random.default_rng(7)
+
+# ── AOI: Puget Sound lowland, EPSG:5070, 90 m grid (coords illustrative) ──────
+DX = 90.0                      # m  — matches the liquefaction model grid
+NX = NY = 256                  # 23 km box
+X0, Y0 = -1.97e6, 3.00e6       # EPSG:5070 lower-left (illustrative)
+AOI_BBOX_5070 = [X0, Y0, X0 + NX*DX, Y0 + NY*DX]
+ii, jj = np.meshgrid(np.arange(NY), np.arange(NX), indexing="ij")
+
+# ── Terrain backbone: a sinuous valley axis = the drainage network ───────────
+row = np.arange(NY)                                         # valley axis varies by row only
+axis_col = NX*0.5 + 34*np.sin(2*np.pi*row/NY*1.1) + 12*np.sin(2*np.pi*row/NY*2.7)
+dist_axis = np.abs(jj - axis_col[:, None]) * DX             # m from valley axis
+ridges = gaussian_filter(rng.standard_normal((NY, NX)), 7) * 28
+elev = (2.0                                                  # outlet elevation (m)
+        + 0.013*dist_axis                                    # cross-valley rise
+        + 0.0009*(NY-1-ii)*DX                                # gentle downstream slope
+        + np.clip(ridges, 0, None)*(dist_axis/dist_axis.max()))
+elev = gaussian_filter(elev, 1.2)
+
+# ── HAND = elevation above the drainage cell in the same row ─────────────────
+drain_elev = elev[row, np.clip(axis_col.astype(int), 0, NX-1)][:, None]
+hand = np.clip(elev - drain_elev, 0, None)                  # m, =0 on valley axis
+
+# ── Terrain derivatives ──────────────────────────────────────────────────────
+gy, gx = np.gradient(elev, DX)
+slope = np.degrees(np.arctan(np.hypot(gx, gy)))             # degrees
+accum = 1.0 / (1.0 + dist_axis/DX)                          # proxy contributing area
+twi = np.log(accum / (np.tan(np.radians(slope)) + 1e-3))    # topographic wetness index
+
+# ── Subsurface / soil layers, all keyed to HAND (valley fill vs bedrock) ─────
+vs30 = 180 + 520*(1 - np.exp(-hand/30.0)) + rng.normal(0, 18, hand.shape)   # m/s
+clay = 12 + 25*np.exp(-hand/20.0) + rng.normal(0, 1.5, hand.shape)          # %
+sand = np.clip(82 - 1.4*clay + rng.normal(0, 2.0, hand.shape), 5, 95)       # %
+ksat = np.clip(2 + 30*(1 - np.exp(-hand/40.0)) + rng.normal(0, 1.2, hand.shape), 0.1, None)  # mm/hr
+dtb  = np.clip(1 + 70*np.exp(-hand/25.0) + rng.normal(0, 2.0, hand.shape), 0.5, None)         # m to bedrock
+geology = np.select([hand < 8, hand < 35], [0, 1], default=2)              # 0 alluv,1 drift,2 bedrock
+
+# ── "True" depth-to-water field the demo will try to recover (Stage 1) ───────
+wtd_true = (0.8 + 0.05*hand + 0.0009*hand**2               # deeper on ridges
+            + 0.04*clay - 0.03*ksat                          # soil modulation
+            + gaussian_filter(rng.standard_normal((NY, NX)), 5)*1.2)
+wtd_true = np.clip(wtd_true, 0.3, None)                     # m below surface
+
+# ── Synthetic USGS NWIS wells: clustered in instrumented lowlands ────────────
+p_well = np.exp(-hand/45.0); p_well /= p_well.sum()         # lowland-weighted but spans the gradient
+flat = rng.choice(np.arange(NY*NX), size=120, replace=False, p=p_well.ravel())
+w_i, w_j = np.unravel_index(flat, (NY, NX))
+w_obs = wtd_true[w_i, w_j] + rng.normal(0, 0.3, w_i.size)   # measured DTW (m)
+
+# ── Bundle as the GAIA covariate stack consumed by later stages ──────────────
+gaia = dict(hand=hand, slope=slope, twi=twi, vs30=vs30, clay=clay, sand=sand,
+            ksat=ksat, dtb=dtb, geology=geology, wtd_true=wtd_true,
+            wells=dict(i=w_i, j=w_j, dtw=w_obs))
+PRED_NAMES = ["hand", "slope", "twi", "vs30", "clay", "ksat", "dtb", "geology"]
+
+# ── Visualize the stack ──────────────────────────────────────────────────────
+ext = [0, NX*DX/1000, 0, NY*DX/1000]                       # km
+panels = [
+    ("hand",    "HAND (3DEP)",            "viridis_r", "m"),
+    ("slope",   "Slope (3DEP)",           "cividis",   "°"),
+    ("twi",     "TWI (3DEP)",             "Blues",     ""),
+    ("vs30",    "Vs30 (Sanger & Maurer)", "magma",     "m/s"),
+    ("clay",    "Clay % (SOLUS100)",      "YlOrBr",    "%"),
+    ("ksat",    "Ksat (POLARIS)",         "GnBu",      "mm/hr"),
+    ("dtb",     "Depth to bedrock",       "pink_r",    "m"),
+    ("geology", "Geology (WA DNR)",       "Set2",      ""),
+]
+fig, axes = plt.subplots(2, 4, figsize=(12, 6.5))
+for ax, (key, title, cmap, unit) in zip(axes.ravel(), panels):
+    im = ax.imshow(gaia[key], origin="lower", extent=ext, cmap=cmap, aspect="equal")
+    ax.set_title(title, fontsize=9, fontweight="bold")
+    ax.tick_params(labelsize=6); ax.grid(False)
+    cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
+    cb.ax.tick_params(labelsize=6); cb.set_label(unit, fontsize=6)
+    if key == "hand":
+        ax.scatter(w_j*DX/1000, w_i*DX/1000, s=6, c="white",
+                   edgecolors="k", linewidths=0.3, label="NWIS wells")
+        ax.legend(loc="upper right", fontsize=6, framealpha=0.8)
+axes[1, 0].set_ylabel("northing (km)", fontsize=7)
+fig.suptitle("Synthetic GAIA DataHub Covariate Stack — Puget Sound Lowland, 90 m",
+             fontsize=12, fontweight="bold")
+plt.tight_layout()
+plt.show()
+```
+
+Swapping in the real GAIA layers requires no change to the modeling code — only the
+data-loading block. The calls below mirror the synthetic stack variable-for-variable.
+
+```{python}
+#| label: data-real-swap
+#| eval: false
+
+# ════════════════════════════════════════════════════════════════════════════
+#  Replace the synthetic stack with the real GAIA DataHub layers.
+#  Each block writes the SAME variable name used above, regridded to the 90 m
+#  AOI grid (EPSG:5070), so every downstream stage runs unchanged.
+# ════════════════════════════════════════════════════════════════════════════
+import odc.stac, pystac_client, xarray as xr
+import numpy as np
+from scipy.ndimage import gaussian_filter
+
+GAIA_STAC = "https://gaia-hazlab.github.io/datahub/stac"     # GAIA DataHub STAC root
+cat = pystac_client.Client.open(GAIA_STAC)
+bbox_ll = [-122.42, 47.38, -122.12, 47.62]                   # lon/lat of the AOI
+grid = dict(crs="EPSG:5070", resolution=90, bbox=AOI_BBOX_5070)
+
+def load(collection, bands, resampling="bilinear"):
+    items = cat.search(collections=[collection], bbox=bbox_ll).item_collection()
+    return odc.stac.load(items, bands=bands, resampling=resampling, **grid).squeeze()
+
+# ── 3DEP terrain → HAND / slope / TWI (compute HAND with pysheds or richdem) ──
+dem    = load("usgs-3dep", ["elevation"])                    # native 10 m → 90 m
+# hand, slope, twi = terrain_derivatives(dem)               # e.g. pysheds / xrspatial
+
+# ── Vs30 / Vs(z): Sanger & Maurer (2025) parametric model ────────────────────
+vs30   = load("sanger-maurer-vs", ["vs30"]).values
+# vsz  = load("sanger-maurer-vs", ["vs_profile"]).values    # full Vs(z) if needed
+
+# ── SOLUS100 soil texture (USDA, 100 m) ──────────────────────────────────────
+solus  = load("solus100", ["clay", "sand"])                 # via solus-stac
+clay, sand = solus["clay"].values, solus["sand"].values
+
+# ── POLARIS soil hydraulic (30 m) ────────────────────────────────────────────
+ksat   = load("polaris", ["ksat"]).values
+
+# ── Depth to bedrock + surficial geology ─────────────────────────────────────
+dtb     = load("gaia-depth-to-bedrock", ["dtb"]).values
+geology = load("wa-dnr-surficial-geology", ["unit"]).values
+
+# ── USGS NWIS groundwater levels (the observation anchor) ────────────────────
+import dataretrieval.nwis as nwis
+sites = nwis.get_record(stateCd="WA", bBox=bbox_ll, service="gwlevels")
+# w_i, w_j, w_obs = rasterize_wells_to_grid(sites, grid)
+
+gaia = dict(hand=hand, slope=slope, twi=twi, vs30=vs30, clay=clay, sand=sand,
+            ksat=ksat, dtb=dtb, geology=geology,
+            wells=dict(i=w_i, j=w_j, dtw=w_obs))
+```
+
 ## Framework Description {#sec-framework}
 
 @fig-pipeline shows the three-stage pipeline. The key design principle is that each
@@ -254,7 +440,7 @@ avoid the tiling artifacts of elevation-based products.
 
 ```{python}
 #| label: fig-pipeline
-#| fig-cap: "**Three-stage hybrid GWL framework.** Observations (blue) anchor all three stages. Stage 1 (green) establishes the climatological depth-to-water baseline using HAND-based LightGBM regression and kriging of residuals. Stage 2 (teal) captures interannual and seasonal variability through per-site OLS β-maps. Stage 3 (purple) kriging closes the gap between the climate reconstruction and the well record. GAIA ecosystem data (orange dashed) flows into Stage 1 and Stage 2."
+#| fig-cap: "**Three-stage hybrid GWL framework.** Observations (blue) anchor all three stages. Stage 1 (green) establishes the climatological depth-to-water baseline using an observation-anchored, HAND-based random-forest regression and kriging of residuals. Stage 2 (teal) captures interannual and seasonal variability through per-site OLS β-maps. Stage 3 (purple) kriging closes the gap between the climate reconstruction and the well record. GAIA ecosystem data (orange dashed) flows into Stage 1 and Stage 2."
 #| fig-width: 11
 #| fig-height: 6
 
@@ -293,7 +479,7 @@ ax.text(1.0, 1.95, "← GAIA s3://cresst", fontsize=7.5, color=C_ORANGE,
         ha="center", style="italic")
 
 # ── Stage 1 ─────────────────────────────────────────────────────────────────
-box(ax, (2.4, 3.8), 2.3, 1.5, "Stage 1", "LightGBM regression\n+ kriging of residuals",
+box(ax, (2.4, 3.8), 2.3, 1.5, "Stage 1", "Random forest\n+ kriging of residuals",
     C_GREEN, fs=10)
 ax.text(3.55, 4.0, "→ baseline DTW(x,y)", fontsize=7.5, color="white", ha="center")
 
@@ -313,7 +499,7 @@ box(ax, (5.2, 2.4), 2.0, 1.5,  "Assembly",
 # ── Outputs ─────────────────────────────────────────────────────────────────
 box(ax, (7.7, 4.2), 2.8, 1.1, "gwl_dtw.zarr", "Monthly DTW (m)", C_PURPLE)
 box(ax, (7.7, 2.8), 2.8, 1.1, "β maps (×4)", "SPI-3, SWE, PDO, AR", C_TEAL)
-box(ax, (7.7, 1.5), 2.8, 1.1, "Uncertainty stack", "σ_lgbm+σ_krige+σ_resp", C_GOLD, alpha=0.85)
+box(ax, (7.7, 1.5), 2.8, 1.1, "Uncertainty stack", "σ_rf+σ_krige+σ_resp", C_GOLD, alpha=0.85)
 box(ax, (7.7, 0.3), 2.8, 1.1, "STAC provenance", "DataTree · COG · Zarr", C_BLUE, alpha=0.7)
 
 # ── Arrows ──────────────────────────────────────────────────────────────────
@@ -481,24 +667,113 @@ local slope, provides complementary information: TWI is high in convergent terra
 (hollows, swales) regardless of HAND. Together, HAND and TWI define the primary
 terrain feature matrix for Stage 1.
 
-### Stage 1: LightGBM regression kriging {#sec-stage1}
+### Stage 1: Observation-anchored spatial model {#sec-stage1}
 
-Stage 1 establishes a climatological (time-averaged) estimate of depth to water
-table at each 1 km grid cell. The model follows the **regression kriging**
-[@hengl2007regression] paradigm:
+Stage 1 estimates climatological (time-averaged) depth to water table at each **90 m**
+grid cell by training **directly on USGS NWIS well observations** — the observations
+anchor the model from the outset rather than entering only as a final residual patch.
+This is the philosophy of the observation-anchored, high-resolution US water-table
+models of @ma2023wtd and @ma2026highres, brought to the Washington 90 m grid. The model
+follows the **regression-kriging** [@hengl2007regression] paradigm with a random-forest
+trend:
 
-$$\text{DTW}(x,y) = f_{\text{LGBM}}(\mathbf{X}(x,y)) + \varepsilon(x,y)$$
+$$\text{DTW}(x,y) = f_{\text{RF}}\!\big(\mathbf{X}(x,y)\big) + \varepsilon(x,y)$$
 
-where $f_{\text{LGBM}}$ is a LightGBM gradient boosting model [@ke2017lightgbm]
-trained on the feature matrix:
-$$\mathbf{X} = [\text{HAND}, \text{TWI}, \text{slope}, K_{\text{sat}}, \text{clay\%},
-               \overline{P}, I_{\text{ar}}, \phi_E, \phi_N]$$
+where $f_{\text{RF}}$ is a random forest trained on **physically meaningful predictors**
+drawn from the GAIA DataHub stack (@sec-demodata):
 
-with $\overline{P}$ the long-term mean annual precipitation (PRISM), $I_{\text{ar}}$
-an aridity index, and $(\phi_E, \phi_N)$ the EPSG:5070 coordinates. The residual
-$\varepsilon$ is estimated by ordinary kriging. Critically, **spatial cross-validation
-uses 200 km geographic blocks** [@marcais2017prospecting] rather than random splits,
-which would inflate R² by 0.1–0.3 due to spatial autocorrelation between nearby wells.
+$$\mathbf{X} = [\text{HAND}, \text{slope}, \text{TWI}, V_{s30}, \text{clay\%},
+               \text{sand\%}, K_{\text{sat}}, z_{\text{bedrock}}, \text{geology}]$$
+
+The residual $\varepsilon$ may optionally be closed by ordinary kriging of the
+training residuals (Stage 3). Two design choices follow directly from the intended
+downstream use in the Sanger & Maurer liquefaction model [@sanger2025liquefaction]:
+
+- **No coordinates as predictors.** Absolute northing/easting are deliberately
+  excluded. Coordinate features let a model memorize where the training wells are and
+  fail at ungauged locations — the opposite of what a spatial product must do. Position
+  in the landscape enters *physically*, through HAND and the drainage network, not
+  through $(\phi_E, \phi_N)$. The shared $V_{s30}$ field [@sanger2025parametric] further
+  ties the prediction to the same near-surface state the liquefaction GLM consumes.
+- **Spatial block cross-validation** [@roberts2017crossval] rather than random hold-out,
+  which would inflate $R^2$ by 0.1–0.3 through autocorrelation between nearby wells.
+
+```{python}
+#| label: fig-stage1-rf
+#| fig-cap: "**Observation-anchored Stage 1 on the synthetic AOI.** A random forest is trained on the 120 synthetic NWIS wells using only physical covariates — no coordinates. (A) Predicted depth-to-water over the full 90 m grid, with training wells overlaid. (B) Per-cell predictive uncertainty from the tree-ensemble spread, highest away from wells and on steep flanks — exactly where Stage 3 kriging and new monitoring add the most value. (C) Out-of-bag predictions vs. observations at the wells (1:1 dashed). (D) Feature importances: HAND and the soil/stiffness covariates carry the model; the absence of any coordinate feature is the point."
+#| fig-width: 11
+#| fig-height: 8
+
+from sklearn.ensemble import RandomForestRegressor
+
+FEAT = ["hand", "slope", "twi", "vs30", "clay", "sand", "ksat", "dtb", "geology"]
+F = np.stack([gaia[k] for k in FEAT], axis=-1)             # (NY, NX, n_feat)
+X_all = F.reshape(-1, len(FEAT))
+wi, wj = gaia["wells"]["i"], gaia["wells"]["j"]
+X_tr, y_tr = F[wi, wj, :], gaia["wells"]["dtw"]            # train ONLY on wells
+
+rf = RandomForestRegressor(n_estimators=200, min_samples_leaf=2,
+                           oob_score=True, random_state=0, n_jobs=-1)
+rf.fit(X_tr, y_tr)
+
+pred = rf.predict(X_all).reshape(NY, NX)
+per_tree = np.stack([t.predict(X_all) for t in rf.estimators_])   # tree ensemble
+unc = per_tree.std(axis=0).reshape(NY, NX)                 # predictive spread (m)
+oob = rf.oob_prediction_
+oob_r2 = rf.oob_score_
+oob_rmse = float(np.sqrt(np.mean((oob - y_tr)**2)))
+
+ext = [0, NX*DX/1000, 0, NY*DX/1000]
+fig, ax = plt.subplots(2, 2, figsize=(11, 8))
+
+im0 = ax[0, 0].imshow(pred, origin="lower", extent=ext, cmap="viridis_r", aspect="equal")
+ax[0, 0].scatter(wj*DX/1000, wi*DX/1000, s=8, c="white", edgecolors="k", linewidths=0.3)
+ax[0, 0].set_title("(A) Predicted depth to water (m)", fontsize=10, fontweight="bold")
+fig.colorbar(im0, ax=ax[0, 0], fraction=0.046, pad=0.03, label="m")
+
+im1 = ax[0, 1].imshow(unc, origin="lower", extent=ext, cmap="magma", aspect="equal")
+ax[0, 1].scatter(wj*DX/1000, wi*DX/1000, s=8, c="cyan", edgecolors="k", linewidths=0.3)
+ax[0, 1].set_title("(B) Predictive uncertainty (tree σ, m)", fontsize=10, fontweight="bold")
+fig.colorbar(im1, ax=ax[0, 1], fraction=0.046, pad=0.03, label="m")
+
+ax[1, 0].scatter(y_tr, oob, s=22, c=C_BLUE, edgecolors="k", linewidths=0.3, alpha=0.8)
+lims = [0, max(y_tr.max(), oob.max())*1.05]
+ax[1, 0].plot(lims, lims, "--", c=C_GREY, lw=1)
+ax[1, 0].set(xlim=lims, ylim=lims, xlabel="observed DTW (m)", ylabel="OOB predicted DTW (m)")
+ax[1, 0].set_title("(C) Out-of-bag fit at wells", fontsize=10, fontweight="bold")
+ax[1, 0].text(0.05, 0.92, f"OOB $R^2$ = {oob_r2:.2f}\nRMSE = {oob_rmse:.2f} m",
+              transform=ax[1, 0].transAxes, fontsize=9, va="top",
+              bbox=dict(boxstyle="round", fc="white", ec=C_GREY, alpha=0.85))
+
+order = np.argsort(rf.feature_importances_)
+ax[1, 1].barh(np.array(FEAT)[order], rf.feature_importances_[order], color=C_GREEN)
+ax[1, 1].set_title("(D) Feature importances (no coordinates)", fontsize=10, fontweight="bold")
+ax[1, 1].grid(axis="x", alpha=0.3)
+for a in (ax[0, 0], ax[0, 1]):
+    a.tick_params(labelsize=7); a.grid(False)
+plt.tight_layout()
+plt.show()
+```
+
+#### Alternative: emulating ParFlow instead of regression kriging {#sec-emulator}
+
+The random forest above is a *statistical* spatial model: it has no internal
+representation of subsurface flow, so it cannot extrapolate to climate or pumping
+states absent from the training record. A physically-grounded alternative is to
+**emulate an integrated hydrologic model** rather than fit observations directly. Deep-
+learning emulators of ParFlow now reproduce the water-table and soil-moisture fields of
+the full groundwater–surface-water solver at a fraction of the cost: @tran2021emulator
+(ParFlow-ML) emulate a distributed groundwater–surface-water model, and
+@bennett2024emulator extend spatio-temporal emulation to regional-to-continental scale.
+The companion high-resolution product of @ma2026highres ([HydroFrame
+code](https://github.com/HydroFrame-ML/high-res-WTD-static)) shows the observation-
+anchored and emulator paradigms converging.
+
+For this framework the two paths are complementary: an emulator can supply a
+**physically consistent prior** (capturing recharge, lateral flow, and stream–aquifer
+exchange) that the observation-anchored random forest then **bias-corrects toward the
+NWIS record**. Swapping the Stage 1 trend from `RandomForestRegressor` to a ParFlow-ML
+emulator leaves Stages 2–3 and the output contract unchanged.
 
 ### Stage 2: Climate response functions and β-maps {#sec-stage2}
 
@@ -622,7 +897,7 @@ Following @bloomfield2013analysis, who showed that SPI is the dominant GWL predi
 at most temperate sites, and @kuss2014multi, who demonstrated significant PDO
 teleconnections in western US groundwater, we optimize the SWE lag $\tau^*$ by
 terrain zone (valley / transition / upland) using the Akaike Information Criterion.
-Once per-site β coefficients are estimated, they are kriged to the full 1 km grid
+Once per-site β coefficients are estimated, they are kriged to the full 90 m grid
 as spatially continuous β-maps. This enables **forward GWL estimation from any climate
 scenario** without re-running kriging:
 
@@ -640,7 +915,7 @@ well observations. For each month $t$:
 $$\varepsilon(s,t) = \Delta\text{DTW}_{\text{obs}}(s,t) -
                      \Delta\text{DTW}_{\text{reconstructed}}(s,t)$$
 
-These residuals are interpolated to the 1 km grid using ordinary kriging
+These residuals are interpolated to the 90 m grid using ordinary kriging
 [@hengl2007regression] with per-HUC-2 variograms and a Normal Score Transform to
 handle non-Gaussian residual distributions. The final assembled product is:
 $$\text{DTW}_{\text{final}}(x,y,t) = \underbrace{\hat{\text{DTW}}_{\text{base}}(x,y)}_{\text{Stage 1}} +
@@ -768,7 +1043,7 @@ Four distinct timescales drive PNW GWL variability:
 
 ```{python}
 #| label: fig-uncertainty
-#| fig-cap: "**Uncertainty budget decomposition by terrain zone.** (A) The four-component σ_total = sqrt(σ_lgbm² + σ_krige² + σ_response² + σ_residual²) shown as stacked bars for three terrain zones. Valley floors have low σ_lgbm (HAND is a strong predictor) but high σ_krige (fewer wells) and moderate σ_response (climate forcing is strong but AR is missing). Upland areas have high σ_lgbm (sparse training data at high elevation) and high σ_response (snowmelt lag is uncertain). (B) Well density decays rapidly with elevation in the PNW, motivating the 50 km confidence mask. (C) σ_total contour map schematic showing how uncertainty scales with distance from wells and with terrain zone."
+#| fig-cap: "**Uncertainty budget decomposition by terrain zone.** (A) The four-component σ_total = sqrt(σ_rf² + σ_krige² + σ_response² + σ_residual²) shown as stacked bars for three terrain zones. Valley floors have low σ_rf (HAND is a strong predictor) but high σ_krige (fewer wells) and moderate σ_response (climate forcing is strong but AR is missing). Upland areas have high σ_rf (sparse training data at high elevation) and high σ_response (snowmelt lag is uncertain). (B) Well density decays rapidly with elevation in the PNW, motivating the 50 km confidence mask. (C) σ_total contour map schematic showing how uncertainty scales with distance from wells and with terrain zone."
 #| fig-width: 11
 #| fig-height: 5.5
 
@@ -777,18 +1052,18 @@ fig.subplots_adjust(wspace=0.42)
 
 # ── Panel A: stacked uncertainty bars ─────────────────────────────────────
 zones = ["Valley\n(HAND<5m)", "Transition\n(5-20m)", "Upland\n(>20m)"]
-s_lgbm      = np.array([0.8, 1.8, 3.2])   # m
+s_rf      = np.array([0.8, 1.8, 3.2])   # m
 s_krige     = np.array([1.4, 1.1, 0.9])
 s_response  = np.array([1.1, 1.4, 2.1])
 s_residual  = np.array([0.6, 0.7, 0.8])
-s_total = np.sqrt(s_lgbm**2 + s_krige**2 + s_response**2 + s_residual**2)
+s_total = np.sqrt(s_rf**2 + s_krige**2 + s_response**2 + s_residual**2)
 
 x_pos = np.arange(3)
 w = 0.5
 colors_unc = [C_GREEN, C_TEAL, C_ORANGE, C_GOLD]
-labels_unc = ["σ_lgbm\n(regression)", "σ_krige\n(residual krige)", "σ_response\n(climate OLS)", "σ_residual\n(Stage 3)"]
+labels_unc = ["σ_rf\n(regression)", "σ_krige\n(residual krige)", "σ_response\n(climate OLS)", "σ_residual\n(Stage 3)"]
 bottoms = np.zeros(3)
-for comp, color, label in zip([s_lgbm, s_krige, s_response, s_residual],
+for comp, color, label in zip([s_rf, s_krige, s_response, s_residual],
                                 colors_unc, labels_unc):
     axes[0].bar(x_pos, comp, w, bottom=bottoms, color=color, alpha=0.85, label=label)
     bottoms += comp
@@ -854,19 +1129,20 @@ ax_map.set_yticks([])
 ax_map.set_xlabel("Easting →  (terrain increases right)", fontsize=8)
 ax_map.set_ylabel("Northing →", fontsize=8)
 
-fig.suptitle("Uncertainty Budget: σ_total = sqrt(σ_lgbm² + σ_krige² + σ_response² + σ_residual²)",
+fig.suptitle("Uncertainty Budget: σ_total = sqrt(σ_rf² + σ_krige² + σ_response² + σ_residual²)",
               fontsize=11, fontweight="bold")
 plt.show()
 ```
 
 The total uncertainty is a quadrature sum of four independent components:
 
-$$\sigma_{\text{total}}(x,y,t) = \sqrt{\sigma_{\text{LGBM}}^2 + \sigma_{\text{krige,base}}^2 +
+$$\sigma_{\text{total}}(x,y,t) = \sqrt{\sigma_{\text{RF}}^2 + \sigma_{\text{krige,base}}^2 +
                                        \sigma_{\text{response}}^2 + \sigma_{\text{krige,resid}}^2}$$
 
 where:
-- $\sigma_{\text{LGBM}}$ is the half-width of the conformal prediction interval from
-  `MapieRegressor` (coverage-guaranteed under spatial exchangeability)
+- $\sigma_{\text{RF}}$ is the spread of the random-forest tree ensemble at each cell
+  (the per-cell σ shown in @fig-stage1-rf B), optionally calibrated to a
+  coverage-guaranteed interval via conformal prediction
 - $\sigma_{\text{krige,base}}$ is the kriging standard deviation on Stage 1 residuals
 - $\sigma_{\text{response}} \approx \sqrt{1 - R^2} \cdot \sigma_{\text{obs}}$ is a
   proxy for the unexplained variance in the Stage 2 OLS fit
@@ -997,7 +1273,7 @@ as STAC item metadata. This ensures interoperability with the GAIA CLI
 
 All validation uses **spatially stratified hold-out sets** and **spatial block CV**
 with 200 km blocks. Random hold-out is never used because spatial autocorrelation
-between nearby wells would inflate R² by 0.1–0.3 [@marcais2017prospecting].
+between nearby wells would inflate R² by 0.1–0.3 [@roberts2017crossval].
 
 ### Terrain sanity checks
 - HAND < 5 m at Green River, Duwamish, Puyallup valley cells.
@@ -1131,7 +1407,7 @@ Key files referenced in this document:
 | File | Role |
 |------|------|
 | `src/features/compute_terrain.py` | HAND, TWI computation from 3DEP |
-| `src/models/baseline_regression.py` | Stage 1 LightGBM + regression kriging |
+| `src/models/baseline_regression.py` | Stage 1 random forest + regression kriging |
 | `src/models/climate_response.py` | Stage 2 per-site OLS β-maps |
 | `src/models/interpolate_residuals.py` | Stage 3 kriging + final assembly |
 | `docs/gaia-conventions.md` | DataTree schema, STAC provenance |

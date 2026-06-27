@@ -88,13 +88,13 @@ dem:
 	pixi run python -m src.data.download_dem \
 		--output-dir $(RAW_DEM_DIR)
 
-## Build canonical 1 km CONUS grid definition
+## Build canonical 90 m WA grid definition
 grid: $(DEM_3DEP)
 	pixi run python -m src.features.compute_grid \
 		--dem $(DEM_3DEP) \
 		--output-dir $(PROCESSED_DIR)
 
-## LightGBM regression kriging spatial baseline (replaces co-kriging MM1)
+## Observation-anchored random forest + kriging spatial baseline (replaces co-kriging MM1)
 baseline: $(SITES_PARQUET) $(HAND_TIF) $(SOLUS_ZARR)
 	pixi run python -m src.models.baseline_regression \
 		--sites $(SITES_PARQUET) \
@@ -168,7 +168,7 @@ pilot-qc: $(RAW_DIR)/download_log.json
 		--output $(MONTHLY_PARQUET) \
 		--states $(PILOT_STATES)
 
-## PNW pilot — build regional 1 km grid from bbox (no DEM required)
+## WA pilot — build regional 90 m grid from bbox (no DEM required)
 pilot-grid:
 	pixi run python -m src.features.compute_grid \
 		--bbox $(PNW_BBOX) \
@@ -178,7 +178,7 @@ pilot-grid:
 pilot-eda:
 	pixi run jupyter nbconvert --execute notebooks/01_eda.ipynb --to html
 
-## PNW pilot — align HydroGEN TIFs to the 1 km EPSG:5070 grid
+## WA pilot — align HydroGEN TIFs to the 90 m EPSG:5070 grid
 hydrogen: $(PILOT_GRID_NC)
 	pixi run python -m src.features.align_hydrogen \
 		--wtd data/comparison/WT2-ma_wtd_50.tif \

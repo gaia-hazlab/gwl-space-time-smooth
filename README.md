@@ -4,7 +4,7 @@
 
 **[📄 Read the technical paper →](https://gaia-hazlab.github.io/gwl-space-time-smooth/)**
 
-Observation-anchored monthly groundwater level (GWL) product for the Pacific Northwest,
+Observation-anchored monthly groundwater level (GWL) product for Washington State (Pacific Northwest),
 integrated with the [GAIA HazLab](https://gaia-hazlab.github.io) ecosystem. Outputs
 support Sanger et al. liquefaction models (valleys/basins) and LandLab landslide
 modeling (mountain slopes).
@@ -32,12 +32,12 @@ Four signals modelled:
 
 ## Outputs
 
-- `gwl_wte.zarr` — monthly WTE (m NAVD88), 1 km EPSG:5070
+- `gwl_wte.zarr` — monthly WTE (m NAVD88), 90 m EPSG:5070
 - `gwl_dtw.zarr` — monthly DTW (m below surface)
 - `gwl_climate_response.zarr` — Stage 2 climate-response anomaly
 - `gwl_residual.zarr` — Stage 3 kriged observation residuals
-- `baseline_dtw_m.tif` — long-term median DTW (LightGBM + kriged residuals)
-- `beta_spi3_1km.tif`, `beta_swe_1km.tif`, `beta_pdo_1km.tif` — β-coefficient maps
+- `baseline_dtw_m.tif` — long-term median DTW (random forest + kriged residuals)
+- `beta_spi3_90m.tif`, `beta_swe_90m.tif`, `beta_pdo_90m.tif` — β-coefficient maps
 - `well_density_mask.tif` — 1 = within 50 km of usable well
 
 All outputs are also written as an **xarray.DataTree** Zarr store (`gwl_output.zarr`)
@@ -47,15 +47,15 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 
 | Parameter | Value |
 |-----------|-------|
-| **Spatial domain** | PNW pilot (WA + OR); expandable to CONUS |
+| **Spatial domain** | Washington pilot (Puget Sound lowland); expandable to PNW/CONUS |
 | **Temporal resolution** | Monthly |
 | **Temporal extent** | 2000-01-01 → present |
-| **Output grid** | 1 km, EPSG:5070 (NAD83 CONUS Albers) |
+| **Output grid** | 90 m, EPSG:5070 (NAD83 CONUS Albers) |
 | **Delivery CRS** | EPSG:4326 |
-| **Stage 1 model** | LightGBM + kriged residuals (replaces co-kriging MM1) |
+| **Stage 1 model** | Observation-anchored random forest + kriged residuals (replaces co-kriging MM1) |
 | **Stage 2 model** | Per-site OLS β-maps (SPI-3, SWE, PDO) |
 | **Stage 3 model** | Ordinary kriging of observation residuals |
-| **GAIA data** | SOLUS100, PRISM-stac from s3://cresst; gaia-cli compatible |
+| **GAIA data** | SOLUS100, POLARIS, Vs30 (Sanger & Maurer), PRISM-stac; gaia-cli compatible |
 
 ---
 
@@ -75,10 +75,10 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   │   ├── fetch_gaia.py         ← SOLUS100 + PRISM from s3://cresst via odc.stac
 │   │   └── fetch_climate.py      ← PDO index, SNODAS SWE, SPI-3 derivation
 │   ├── features/
-│   │   ├── compute_grid.py       ← canonical 1 km EPSG:5070 grid definition
+│   │   ├── compute_grid.py       ← canonical 90 m EPSG:5070 grid definition
 │   │   └── compute_terrain.py    ← HAND, TWI, slope, contributing area from 3DEP DEM
 │   ├── models/
-│   │   ├── baseline_regression.py   ← Stage 1: LightGBM + regression kriging
+│   │   ├── baseline_regression.py   ← Stage 1: random forest + regression kriging
 │   │   ├── climate_response.py      ← Stage 2: per-site OLS β-maps
 │   │   ├── interpolate_residuals.py ← Stage 3: krige residuals + final assembly
 │   │   ├── interpolate_baseline.py  ← LEGACY: co-kriging MM1 (comparison only)
@@ -93,7 +93,7 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │
 ├── notebooks/
 │   ├── 01_eda.ipynb              ← well data + HAND vs DTW scatter
-│   ├── 02_hydrogen_eda.ipynb     ← HydroGEN vs LightGBM baseline comparison
+│   ├── 02_hydrogen_eda.ipynb     ← HydroGEN vs random-forest baseline comparison
 │   ├── 03_temporal_model.ipynb   ← climate response + residual kriging
 │   ├── 04_climate_response.ipynb ← β maps, terrain-zone sensitivity
 │   └── 05_gaia_integration.ipynb ← SOLUS100 loading, DataTree output demo
@@ -101,7 +101,7 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 ├── data/                      ← all data files are git-ignored
 │   ├── raw/
 │   │   ├── nwis/              ← one parquet per state + download_log.json
-│   │   ├── dem/               ← 3dep_10m_5070.tif, 3dep_1km_5070.tif
+│   │   ├── dem/               ← 3dep_10m_5070.tif, 3dep_90m_5070.tif
 │   │   ├── climate/           ← pdo_monthly.csv, snodas_swe_monthly_pnw.zarr
 │   │   └── MANIFEST.md        ← dataset registry (git-tracked)
 │   └── processed/             ← QC'd parquets, terrain TIFs, β maps, Zarr archives
@@ -178,8 +178,8 @@ make 3dep              # 3DEP 10 m DEM for PNW (replaces make dem)
 make gaia-data         # SOLUS100 soil properties + PRISM ppt from s3://cresst
 make climate           # PDO index, SNODAS SWE, SPI-3 derivation
 make terrain           # HAND + TWI + slope → data/processed/terrain_*.tif
-make grid              # 1 km EPSG:5070 grid → data/processed/
-make baseline          # LightGBM + regression kriging → baseline_*.tif
+make grid              # 90 m EPSG:5070 grid → data/processed/
+make baseline          # random forest + regression kriging → baseline_*.tif
 make climate-response  # β-map OLS fitting → beta_*.tif + gwl_climate_response.zarr
 make residuals         # Stage 3 kriging + final GWL → gwl_dtw.zarr / gwl_wte.zarr
 make eda               # EDA notebook → HTML
@@ -202,15 +202,15 @@ make anomalies-legacy  # Old ordinary kriging of anomalies
 | `data/processed/nwis_sites_clean.parquet` | QC-passed well sites |
 | `data/processed/nwis_gwlevels_monthly.parquet` | Monthly median WTE/DTW per site |
 | `data/raw/dem/3dep_10m_5070.tif` | 3DEP 10 m DEM, EPSG:5070 |
-| `data/processed/terrain_hand_1km.tif` | HAND (m above nearest drainage) |
-| `data/processed/terrain_twi_1km.tif` | TWI (Beven & Kirkby 1979) |
+| `data/processed/terrain_hand_90m.tif` | HAND (m above nearest drainage) |
+| `data/processed/terrain_twi_90m.tif` | TWI (Beven & Kirkby 1979) |
 | `data/processed/solus100_pnw.zarr` | SOLUS100 soil properties (clay, Ksat, pH) |
-| `data/processed/spi3_monthly_pnw.zarr` | SPI-3 on 1 km grid |
-| `data/processed/baseline_dtw_m.tif` | Long-term median DTW (LightGBM + kriged residual) |
+| `data/processed/spi3_monthly_pnw.zarr` | SPI-3 on 90 m grid |
+| `data/processed/baseline_dtw_m.tif` | Long-term median DTW (random forest + kriged residual) |
 | `data/processed/baseline_wte_m.tif` | Long-term median WTE |
-| `data/processed/beta_spi3_1km.tif` | SPI-3 sensitivity β-map |
-| `data/processed/beta_swe_1km.tif` | SWE sensitivity β-map |
-| `data/processed/beta_pdo_1km.tif` | PDO sensitivity β-map |
+| `data/processed/beta_spi3_90m.tif` | SPI-3 sensitivity β-map |
+| `data/processed/beta_swe_90m.tif` | SWE sensitivity β-map |
+| `data/processed/beta_pdo_90m.tif` | PDO sensitivity β-map |
 | `data/processed/gwl_climate_response.zarr` | Stage 2 climate-response anomaly |
 | `data/processed/gwl_dtw.zarr` | Final monthly DTW (m, positive = below surface) |
 | `data/processed/gwl_wte.zarr` | Final monthly WTE (m NAVD88) |
@@ -321,7 +321,7 @@ If you use outputs from this pipeline, please cite:
 - **3DEP**: USGS 3D Elevation Program, https://www.usgs.gov/3d-elevation-program
 - **SOLUS100**: Ramcharan et al. (2018) + GAIA HazLab staging
 - **SNODAS**: NSIDC G02158, https://doi.org/10.7265/N5TB14TC
-- **LightGBM**: Ke et al. (2017), NeurIPS
+- **scikit-learn (random forest)**: Pedregosa et al. (2011), JMLR
 
 ## License
 

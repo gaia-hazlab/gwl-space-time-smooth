@@ -1,3 +1,12 @@
+% =============================================================================
+%  references.bib — GWL hybrid framework
+%  Every DOI in this file was verified against the Crossref REST API and the
+%  DOI handle registry on 2026-06-27. arXiv entries verified via DataCite.
+%  Entries that could not be verified to a real publication were removed.
+%  Do NOT add a citation without first confirming the DOI resolves to the
+%  paper actually being cited (api.crossref.org/works/{doi}).
+% =============================================================================
+
 @article{fan2013global,
   title={Global patterns of groundwater table depth},
   author={Fan, Ying and Li, Hongyi and Miguez-Macho, Gonzalo},
@@ -34,20 +43,9 @@
   doi={10.5194/hess-17-4769-2013}
 }
 
-@article{bloomfield2015understanding,
-  title={Understanding spatio-temporal variability in the magnitude of observed UK groundwater droughts},
-  author={Bloomfield, JP and Marchant, BP and McKenzie, AA},
-  journal={Hydrological Processes},
-  volume={29},
-  number={10},
-  pages={2276--2287},
-  year={2015},
-  doi={10.1002/hyp.10392}
-}
-
 @article{cuthbert2019global,
   title={Global patterns and dynamics of climate--groundwater interactions},
-  author={Cuthbert, Mark O and Taylor, Richard G and Favreau, Guillaume and Todd, Martin C and Shamsudduha, Mohammad and Villholth, Karen G and MacDonald, Alan M and Scanlon, Bridget R and Kotchoni, Dér{\'o}yal OV and Vouillamoz, Jean-Michel and others},
+  author={Cuthbert, Mark O and Taylor, Richard G and Favreau, Guillaume and Todd, Martin C and Shamsudduha, Mohammad and Villholth, Karen G and MacDonald, Alan M and Scanlon, Bridget R and Kotchoni, D{\'e}royal OV and Vouillamoz, Jean-Michel and others},
   journal={Nature Climate Change},
   volume={9},
   number={2},
@@ -56,14 +54,18 @@
   doi={10.1038/s41558-018-0386-4}
 }
 
+% FIXED 2026-06-27: previous entry had a fabricated title + a DOI that
+% resolved to an unrelated damselfly-ecology paper. This is the real
+% Kuss & Gurdak (2014) paper.
 @article{kuss2014multi,
-  title={Multi-decadal climate variability and the groundwater resources of the United States},
-  author={Kuss, Allison JM and Gurdak, Jason J},
-  journal={Science of the Total Environment},
-  volume={470},
-  pages={148--162},
+  title={Groundwater level response in U.S. principal aquifers to ENSO, NAO, PDO, and AMO},
+  author={Kuss, Amber Jean M and Gurdak, Jason J},
+  journal={Journal of Hydrology},
+  volume={519},
+  pages={1939--1952},
   year={2014},
-  doi={10.1016/j.scitotenv.2013.09.093}
+  publisher={Elsevier},
+  doi={10.1016/j.jhydrol.2014.09.069}
 }
 
 @article{wunsch2021groundwater,
@@ -77,15 +79,19 @@
   doi={10.5194/hess-25-1671-2021}
 }
 
+% FIXED 2026-06-27: previous entry had a fabricated title and a DOI that
+% resolved to an unrelated rainfall paper. This is the real Mar\c{c}ais &
+% de Dreuzy (2017) paper.
 @article{marcais2017prospecting,
-  title={Prospecting for groundwater resources through a random forest approach},
+  title={Prospective Interest of Deep Learning for Hydrological Inference},
   author={Mar{\c{c}}ais, Jean and de Dreuzy, Jean-Raynald},
-  journal={Water Resources Research},
-  volume={53},
-  number={8},
-  pages={6633--6644},
+  journal={Groundwater},
+  volume={55},
+  number={5},
+  pages={688--692},
   year={2017},
-  doi={10.1002/2017WR020442}
+  publisher={Wiley},
+  doi={10.1111/gwat.12557}
 }
 
 @article{taylor2012ground,
@@ -110,15 +116,19 @@
   doi={10.1016/j.jhydrol.2011.03.051}
 }
 
+% FIXED 2026-06-27: previous entry's DOI was unregistered (404). Replaced
+% with the real Gharari et al. (2011) HAND landscape-classification paper,
+% which is the appropriate HAND methodology reference.
 @article{gharari2011toward,
-  title={Toward a consistent set of hydrological concepts and assumptions for future model development and applications: An HESS Opinions article},
-  author={Gharari, Shervan and Hrachowitz, Markus and Fenicia, Fabrizio and Savenije, Hubert HG},
+  title={Hydrological landscape classification: investigating the performance of HAND based landscape classifications in a central European meso-scale catchment},
+  author={Gharari, S and Hrachowitz, M and Fenicia, F and Savenije, HHG},
   journal={Hydrology and Earth System Sciences},
   volume={15},
-  number={1},
-  pages={293--301},
+  number={11},
+  pages={3275--3291},
   year={2011},
-  doi={10.5194/hess-15-293-2011}
+  publisher={Copernicus GmbH},
+  doi={10.5194/hess-15-3275-2011}
 }
 
 @article{beven1979physically,
@@ -132,14 +142,19 @@
   doi={10.1080/02626667909491834}
 }
 
-@article{ma2024ensemble,
-  title={A Comprehensive Dataset of the 50th Percentile Water Table Depth in the Contiguous United States Using An Ensemble Machine Learning Approach},
-  author={Ma, Zheng and Batlle-Aguilar, Jordi and Xie, Yixi and Maxwell, Reed M and Jefferson, Jennifer L},
-  journal={Water Resources Research},
-  volume={60},
+% FIXED 2026-06-27 (key renamed ma2024ensemble -> ma2023wtd): previous DOI
+% resolved to an unrelated channel-network paper. This is the real Ma et al.
+% (2023) random-forest water-table-depth product (HydroGEN/HydroFrame).
+@article{ma2023wtd,
+  title={Water Table Depth Estimates over the Contiguous United States Using a Random Forest Model},
+  author={Ma, Yueling and Leonarduzzi, Elena and Defnet, Amy and Melchior, Peter and Condon, Laura E and Maxwell, Reed M},
+  journal={Groundwater},
+  volume={62},
   number={1},
-  year={2024},
-  doi={10.1029/2023WR034682}
+  pages={34--43},
+  year={2023},
+  publisher={Wiley},
+  doi={10.1111/gwat.13362}
 }
 
 @article{liesch2019aquifer,
@@ -154,7 +169,7 @@
 
 @article{jasechko2023rapid,
   title={Rapid groundwater decline and some cases of recovery in aquifers globally},
-  author={Jasechko, Scott and Seybold, Hansjörg and Perrone, Debra and Fan, Ying and Shamsudduha, Mohammad and Taylor, Richard G and Fallatah, Othman and Kirchner, James W},
+  author={Jasechko, Scott and Seybold, Hansj{\"o}rg and Perrone, Debra and Fan, Ying and Shamsudduha, Mohammad and Taylor, Richard G and Fallatah, Othman and Kirchner, James W},
   journal={Nature},
   volume={625},
   number={7995},
@@ -163,81 +178,147 @@
   doi={10.1038/s41586-023-06879-8}
 }
 
-@article{reinecke2019importance,
-  title={Importance of spatial resolution in global groundwater modeling},
-  author={Reinecke, Robert and Foglia, Laura and Mehl, Steffen and Herman, Jonathan D and Wachholz, Alexander and Trautmann, Tim and D{\"o}ll, Petra},
-  journal={Geoscientific Model Development},
-  volume={12},
-  number={1},
-  pages={111--124},
-  year={2019},
-  doi={10.5194/gmd-12-111-2019}
+% FIXED 2026-06-27 (key renamed reinecke2019importance -> reinecke2020importance):
+% previous entry listed the wrong journal/year and a DOI that resolved to an
+% unrelated atmospheric-chemistry paper. Correct publication is Groundwater (2020).
+@article{reinecke2020importance,
+  title={Importance of Spatial Resolution in Global Groundwater Modeling},
+  author={Reinecke, Robert and Wachholz, Alexander and Mehl, Steffen and Foglia, Laura and Niemann, Christoph and D{\"o}ll, Petra},
+  journal={Groundwater},
+  volume={58},
+  number={3},
+  pages={363--376},
+  year={2020},
+  publisher={Wiley},
+  doi={10.1111/gwat.12996}
 }
 
-@article{rodriguez2015assessment,
-  title={Assessment of satellite total electron content based on Gaussian process regression},
-  author={Rodriguez-Galiano, Victor and Mendes, Maria Paola and Garcia-Soldado, Maria Jose and Chica-Olmo, Mario and Ribeiro, Luís},
-  journal={Remote Sensing},
-  volume={7},
-  number={9},
-  pages={11761--11784},
-  year={2015},
-  doi={10.3390/rs70911761},
-  note={Uses RF for contamination risk mapping -- analogous spatial ML approach}
-}
-
+% FIXED 2026-06-27: previous DOI was unregistered (404) and the "sub-Saharan
+% Africa" title was fabricated. This is the real Heudorfer et al. (2019) paper.
 @article{heudorfer2019groundwater,
-  title={Groundwater level variability in sub-Saharan Africa: understanding physical drivers to improve prediction},
+  title={Index-Based Characterization and Quantification of Groundwater Dynamics},
   author={Heudorfer, Benedikt and Haaf, Ezra and Stahl, Kerstin and Barthel, Roland},
-  journal={Geophysical Research Letters},
-  volume={46},
-  number={18},
-  pages={10633--10642},
+  journal={Water Resources Research},
+  volume={55},
+  number={7},
+  pages={5575--5592},
   year={2019},
-  doi={10.1029/2019GL083607}
+  doi={10.1029/2018WR024418}
 }
 
-@article{bittner2020improving,
-  title={Improving the simulation of streamflow at the regional scale by using neural network to learn the unresolved processes},
-  author={Bittner, Simon and Rychlik, Igor and Benth, Fred Espen and Scaillet, Olivier and Gustafsson, David and Avseth, Per},
-  journal={Water Resources Research},
-  volume={56},
-  pages={e2019WR026626},
+% FIXED 2026-06-27 (key renamed bittner2020improving -> konapala2020hybrid):
+% previous entry's authors were scrambled and the DOI was unregistered (404).
+% Replaced with a real hybrid process+ML streamflow paper.
+@article{konapala2020hybrid,
+  title={Machine learning assisted hybrid models can improve streamflow simulation in diverse catchments across the conterminous US},
+  author={Konapala, Goutam and Kao, Shih-Chieh and Painter, Scott L and Lu, Dan},
+  journal={Environmental Research Letters},
+  volume={15},
+  number={10},
+  pages={104022},
   year={2020},
-  doi={10.1029/2019WR026626},
-  note={Hybrid process + ML for streamflow (analogous to our hybrid DTW approach)}
+  publisher={IOP Publishing},
+  doi={10.1088/1748-9326/aba927}
 }
 
-@article{sanger2022cyclic,
-  title={Cyclic 1-g physical modeling of liquefaction in the Duwamish River valley},
-  author={Sanger, Maximilian and Franke, Kevin and Bott, Jeannie and Arduino, Pedro},
-  journal={Earthquake Spectra},
-  volume={38},
-  number={4},
-  pages={2783--2807},
-  year={2022},
-  doi={10.1177/87552930221098571}
+% FIXED 2026-06-27 (key renamed sanger2022cyclic -> sanger2025liquefaction):
+% the previous "Sanger et al. (2022) Cyclic 1-g modeling" entry was entirely
+% FABRICATED (flagged by M. Sanger; DOI unregistered, wrong first name).
+% This is the real Sanger & Maurer PNW liquefaction-forecasting paper.
+@misc{sanger2025liquefaction,
+  title={Geospatial AI for Liquefaction Hazard and Impact Forecasting: A Demonstrative Study in the U.S. Pacific Northwest},
+  author={Sanger, Morgan D and Maurer, Brett W},
+  year={2025},
+  eprint={2509.10965},
+  archivePrefix={arXiv},
+  primaryClass={physics.geo-ph},
+  doi={10.48550/arXiv.2509.10965}
 }
 
-@article{schmidt2020recent,
-  title={Recent trends in precipitation and streamflow in the Pacific Northwest},
-  author={Schmidt, Lauren and Garen, David},
-  journal={Journal of Hydrology: Regional Studies},
-  volume={32},
-  pages={100758},
-  year={2020},
-  doi={10.1016/j.ejrh.2020.100758}
+% ADDED 2026-06-27: real Sanger & Maurer Vs-profile model — the source of the
+% Vs30/Vs(z) predictor used by the redesigned Stage 1 and by Sanger's GLM.
+@misc{sanger2025parametric,
+  title={Parametric modeling of shear wave velocity profiles for the conterminous U.S.},
+  author={Sanger, Morgan D and Maurer, Brett W},
+  year={2025},
+  eprint={2510.00372},
+  archivePrefix={arXiv},
+  primaryClass={physics.geo-ph},
+  doi={10.48550/arXiv.2510.00372}
 }
 
-@article{tashie2021empirical,
-  title={Empirical baseflow recession revisited},
-  author={Tashie, Abigail and Pavelsky, Tamlin and Band, Lawrence E},
-  journal={Water Resources Research},
-  volume={57},
+% ADDED 2026-06-27: the observation-anchored, high-resolution (~30 m) US water
+% table depth model that the redesigned Stage 1 follows.
+@article{ma2026highres,
+  title={High resolution US water table depth estimates reveal quantity of accessible groundwater},
+  author={Ma, Yueling and Condon, Laura E and Koch, Julian and Bennett, Andrew and Defnet, Amy and Tijerina-Kreuzer, Danielle and Melchior, Peter and Maxwell, Reed M},
+  journal={Communications Earth \& Environment},
+  volume={7},
   number={1},
-  pages={e2020WR027101},
+  year={2026},
+  publisher={Springer Nature},
+  doi={10.1038/s43247-025-03094-3}
+}
+
+% ADDED 2026-06-27: ParFlow-CONUS ML emulator (regional-to-continental).
+@article{bennett2024emulator,
+  title={Spatio-Temporal Machine Learning for Regional to Continental Scale Terrestrial Hydrology},
+  author={Bennett, Andrew and Tran, Hoang and De la Fuente, Luis and Triplett, Amanda and Ma, Yueling and Melchior, Peter and Maxwell, Reed M and Condon, Laura E},
+  journal={Journal of Advances in Modeling Earth Systems},
+  volume={16},
+  number={6},
+  year={2024},
+  doi={10.1029/2023MS004095}
+}
+
+% ADDED 2026-06-27: deep-learning emulator of the ParFlow groundwater-surface
+% water model (ParFlow-ML) — basis for the optional emulator path.
+@article{tran2021emulator,
+  title={Development of a Deep Learning Emulator for a Distributed Groundwater--Surface Water Model: ParFlow-ML},
+  author={Tran, Hoang and Leonarduzzi, Elena and De la Fuente, Luis and Hull, Robert Bruce and Bansal, Vineet and Chennault, Calla and Gentine, Pierre and Melchior, Peter and Condon, Laura E and Maxwell, Reed M},
+  journal={Water},
+  volume={13},
+  number={23},
+  pages={3393},
   year={2021},
-  doi={10.1029/2020WR027101}
+  publisher={MDPI},
+  doi={10.3390/w13233393}
+}
+
+% ADDED 2026-06-27: companion code for ma2026highres (random forest WTD, ~30 m).
+@misc{ma2025hydroframecode,
+  title={high-res-WTD-static: high-resolution water table depth estimation for the contiguous US},
+  author={Ma, Yueling and {HydroFrame-ML}},
+  year={2025},
+  howpublished={\url{https://github.com/HydroFrame-ML/high-res-WTD-static}},
+  note={Companion code to Ma et al. (2026), GPL-3.0}
+}
+
+% ADDED 2026-06-27: real RF-for-groundwater reference (replaces a fabricated
+% "Mar\c{c}ais prospecting RF" claim that had been attached to the wrong paper).
+@article{rodriguez2014nitrate,
+  title={Predictive modeling of groundwater nitrate pollution using Random Forest and multisource variables related to intrinsic and specific vulnerability: A case study in an agricultural setting (Southern Spain)},
+  author={Rodriguez-Galiano, Victor and Mendes, Maria Paula and Garcia-Soldado, Maria Jose and Chica-Olmo, Mario and Ribeiro, Luis},
+  journal={Science of the Total Environment},
+  volume={476-477},
+  pages={189--206},
+  year={2014},
+  publisher={Elsevier},
+  doi={10.1016/j.scitotenv.2014.01.001}
+}
+
+% ADDED 2026-06-27: canonical reference for spatial block cross-validation
+% (replaces a fabricated spatial-CV claim previously attributed to Mar\c{c}ais).
+@article{roberts2017crossval,
+  title={Cross-validation strategies for data with temporal, spatial, hierarchical, or phylogenetic structure},
+  author={Roberts, David R and Bahn, Volker and Ciuti, Simone and Boyce, Mark S and Elith, Jane and Guillera-Arroita, Gurutzeta and Hauenstein, Severin and Lahoz-Monfort, Jos{\'e} J and Schr{\"o}der, Boris and Thuiller, Wilfried and Warton, David I and Wintle, Brendan A and Hartig, Florian and Dormann, Carsten F},
+  journal={Ecography},
+  volume={40},
+  number={8},
+  pages={913--929},
+  year={2017},
+  publisher={Wiley},
+  doi={10.1111/ecog.02881}
 }
 
 @inproceedings{ke2017lightgbm,
@@ -259,25 +340,18 @@
   doi={10.1016/j.cageo.2007.05.001}
 }
 
-@article{angelini2016prediction,
-  title={Prediction of groundwater level anomalies in Central Italy with artificial neural networks},
-  author={Angelini, P and Rago, G},
-  journal={Journal of Hydrology},
-  volume={535},
-  pages={386--395},
-  year={2016},
-  note={ANN for GWL forecasting using climate predictors -- precursor to β-map approach}
-}
-
+% FIXED 2026-06-27: previous DOI resolved to an unrelated geology paper and
+% the journal was wrong (it is Ecological Informatics, not Geoscience Frontiers).
 @article{li2011review,
-  title={A review of comparative studies of spatial interpolation methods in environmental sciences},
+  title={A review of comparative studies of spatial interpolation methods in environmental sciences: Performance and impact factors},
   author={Li, Jin and Heap, Andrew D},
-  journal={Geoscience Frontiers},
-  volume={2},
-  number={2},
-  pages={175--188},
+  journal={Ecological Informatics},
+  volume={6},
+  number={3-4},
+  pages={228--241},
   year={2011},
-  doi={10.1016/j.gsf.2011.03.008}
+  publisher={Elsevier},
+  doi={10.1016/j.ecoinf.2010.12.003}
 }
 
 @article{maxwell2015connections,
@@ -291,31 +365,6 @@
   doi={10.1126/science.aaf7891}
 }
 
-@article{corwin2019future,
-  title={The future of digital soil mapping and proximal soil sensing},
-  author={Corwin, Dennis L and Lesch, Scott M},
-  journal={Geoderma},
-  volume={368},
-  pages={114207},
-  year={2020},
-  note={Regression kriging for soil properties -- methodological analog for GWL}
-}
-
-@article{nolan2007global,
-  title={Factors associated with groundwater occurrence and groundwater sensitivity to modification by human activities and climate change, upper Colorado River Basin phreatophyte area},
-  author={Nolan, Bernard T and Healy, Richard W and Taber, Patricia E and Perkins, Kim and Hitt, Kerie J and Wolock, David M},
-  journal={Scientific Investigations Report},
-  year={2007},
-  publisher={USGS}
-}
-
-@article{healy2010estimating,
-  title={Estimating groundwater recharge},
-  author={Healy, Richard W},
-  journal={Cambridge University Press},
-  year={2010}
-}
-
 @article{scanlon2002choosing,
   title={Choosing appropriate techniques for quantifying groundwater recharge},
   author={Scanlon, Bridget R and Healy, Richard W and Cook, Peter G},
@@ -327,24 +376,17 @@
   doi={10.1007/s10040-001-0176-2}
 }
 
-@article{hyndman1996spi,
-  title={A simple, robust measure of skewness},
+% FIXED 2026-06-27: previous entry had a fabricated title ("A simple, robust
+% measure of skewness"). This is the real McKee et al. (1993) SPI paper.
+@inproceedings{mckee1993spi,
+  title={The relationship of drought frequency and duration to time scales},
   author={McKee, Thomas B and Doesken, Nolan J and Kleist, John},
-  journal={Proceedings of the 8th Conference on Applied Climatology},
+  booktitle={Proceedings of the 8th Conference on Applied Climatology},
+  volume={17},
+  number={22},
   pages={179--184},
   year={1993},
-  publisher={American Meteorological Society}
-}
-
-@article{luijendijk2020global,
-  title={Using groundwater levels to predict coastal flooding},
-  author={Luijendijk, Erwin and Gleeson, Tom and Moosdorf, Nils},
-  journal={Nature Climate Change},
-  volume={10},
-  number={5},
-  pages={452--457},
-  year={2020},
-  doi={10.1038/s41558-020-0756-6}
+  organization={American Meteorological Society, Boston, MA}
 }
 
 @article{ramcharan2018soil,
@@ -358,16 +400,6 @@
   doi={10.2136/sssaj2017.04.0122}
 }
 
-@article{paoletti2020deep,
-  title={Groundwater level predictions using self-organizing map and long short-term memory networks},
-  author={Paoletti, Maria Elisa and Haut, Juan Mario and Plaza, Javier and Plaza, Antonio},
-  journal={Neural Networks},
-  volume={123},
-  pages={28--40},
-  year={2020},
-  note={Deep learning hybrid for GWL}
-}
-
 @article{degraaf2015global,
   title={A global-scale two-layer transient groundwater model: development and application to groundwater depletion},
   author={de Graaf, Inge EM and Sutanudjaja, Edwin H and van Beek, Ludovicus PH and Bierkens, Marc FP},
@@ -377,14 +409,4 @@
   year={2017},
   publisher={Elsevier},
   doi={10.1016/j.advwatres.2017.01.011}
-}
-
-@article{okpoli2015geostatistical,
-  title={Geostatistical analysis of water table and depth to bedrock},
-  author={Okpoli, Clifford C},
-  journal={Journal of Water and Land Development},
-  volume={27},
-  number={1},
-  pages={43--50},
-  year={2015}
 }
