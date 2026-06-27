@@ -763,38 +763,43 @@ plt.tight_layout()
 plt.show()
 ```
 
-#### Alternative: emulating ParFlow instead of regression kriging {#sec-emulator}
+#### Beyond a purely statistical prior
 
-The random forest above is a *statistical* spatial model: it has no internal
-representation of subsurface flow, so it cannot extrapolate to climate or pumping
-states absent from the training record. A physically-grounded alternative is to
-**emulate an integrated hydrologic model** rather than fit observations directly. Deep-
-learning emulators of ParFlow now reproduce the water-table and soil-moisture fields of
-the full groundwater–surface-water solver at a fraction of the cost: @tran2021emulator
-(ParFlow-ML) emulate a distributed groundwater–surface-water model, and
-@bennett2024emulator extend spatio-temporal emulation to regional-to-continental scale.
-The companion high-resolution product of @ma2026highres ([HydroFrame
-code](https://github.com/HydroFrame-ML/high-res-WTD-static)) shows the observation-
-anchored and emulator paradigms converging.
+The random forest above is a *statistical* spatial model with no internal representation
+of subsurface flow. The right place to inject flow physics is not to replace this static
+prior but to add a **dynamics operator** on top of it — the role of Stage 2. We therefore
+defer physically-grounded emulation (ParFlow-ML) to @sec-emulator, where it belongs, since
+it is fundamentally a *temporal* operator.
 
-For this framework the two paths are complementary: an emulator can supply a
-**physically consistent prior** (capturing recharge, lateral flow, and stream–aquifer
-exchange) that the observation-anchored random forest then **bias-corrects toward the
-NWIS record**. Swapping the Stage 1 trend from `RandomForestRegressor` to a ParFlow-ML
-emulator leaves Stages 2–3 and the output contract unchanged.
+### Stage 2: From climate correlation to enforced dynamics {#sec-stage2}
 
-### Stage 2: Climate response functions and β-maps {#sec-stage2}
+Stage 1 fixes the *static* mean; Stage 2 must make it *evolve in time*. We write the full
+field in **anomaly space**, so each stage owns one term and they never compete:
 
-The temporal variability of GWL at each well site is modeled as a linear response to
-three climate forcing indices:
+$$\underbrace{h(x,t)}_{\text{GWL}} \;=\; \underbrace{\overline{\text{DTW}}(x)}_{\text{Stage 1: prior mean}}
+   \;+\; \underbrace{\Delta h(x,t)}_{\text{Stage 2: dynamics}}
+   \;+\; \underbrace{r(x,t)}_{\text{Stage 3: assimilation residual}}$$
+
+The Stage-2 operator $\Delta h$ sits on a ladder of increasing physical content. What the
+framework first implemented — per-site regression on climate indices — is the **lowest
+rung**: it reproduces *correlation* but enforces no *dynamics*. We make that explicit and
+then climb the ladder.
+
+#### Rung 1 — Static-gain climate response (β-maps)
+
+The temporal variability of GWL at each well site is modeled as an instantaneous linear
+response to three climate forcing indices:
 $$\Delta\text{DTW}(s,t) = \beta_0(s) + \beta_1(s)\cdot\text{SPI3}(s,t) +
                           \beta_2(s)\cdot\Delta\text{SWE}(s,t-\tau^*) +
                           \beta_3(s)\cdot\text{PDO}(t) + \varepsilon(s,t)$$
 
 where SPI3 is the 3-month Standardised Precipitation Index [@bloomfield2013analysis],
-$\Delta$SWE is the snow water equivalent anomaly from SNODAS, $\tau^*$ is the
-optimal SWE lag (optimized per terrain zone by AIC), and PDO is the Pacific Decadal
-Oscillation index [@kuss2014multi].
+$\Delta$SWE is the snow water equivalent anomaly from SNODAS, $\tau^*$ a single optimal
+SWE lag (per terrain zone, by AIC), and PDO the Pacific Decadal Oscillation index
+[@kuss2014multi]. This is a **static-gain** model: $\Delta h(t)$ depends only on the
+forcing *at* time $t$ (plus one fixed lag). It is the memoryless limit of a dynamical
+system — useful as a baseline and for scenario screening, but with no storage memory, no
+recession, and no lateral flow.
 
 ```{python}
 #| label: fig-climate-response
@@ -915,6 +920,117 @@ $$\Delta\text{DTW}(x,y,t) = \beta_1(x,y)\cdot\text{SPI3}(x,y,t) +
 
 This property makes the framework compatible with Earth2Studio ensemble climate
 scenarios: a new GWL scenario requires only a matrix multiply, not a new kriging run.
+
+#### Rung 2 — Transfer-function-noise: restoring memory and recession
+
+A water table is not a memoryless gain; it is a **reservoir**. To first order each site
+obeys a linear storage equation, whose solution is a *convolution* of recharge $R$ with an
+impulse-response (memory) kernel $g$:
+
+$$\frac{dh}{dt} = -\frac{h}{\tau} + \frac{R(t)}{S_y}
+\;\;\Longrightarrow\;\;
+\Delta h(t) = \int_{0}^{\infty} g(\kappa)\,R(t-\kappa)\,d\kappa,
+\qquad g(\kappa)\propto \kappa^{\,n-1}e^{-\kappa/a}.$$
+
+The kernel is exponential, or a peaked Gamma/Pearson-III when a vadose-zone travel time is
+present [@vonasmuth2002tfn]. The aquifer response time $\tau$ is the drainage/recession
+timescale familiar from baseflow recession analysis [@brutsaert1977recession]. The β-map
+of Rung 1 is exactly the **single-tap ($\tau\!\to\!0$) special case** of this convolution —
+which is why it cannot reproduce the recession limb after a storm or the multi-year
+carryover of a drought (@fig-tfn).
+
+We therefore replace the per-site OLS with a per-site **transfer-function-noise (TFN)**
+model calibrated in continuous time [@vonasmuth2002tfn; @bakker2019timeseries], the approach
+operationalised in the open-source Pastas framework [@collenteur2019pastas]. This keeps
+everything attractive about Rung 1 — per-site, cheap, observation-driven, interpretable,
+1-D mass-conserving — while restoring the memory kernel and the correct phase lag. The
+recession time $\tau(x)$ becomes itself a kriged map alongside the gains, so the forward
+reconstruction is a per-cell convolution rather than a matrix multiply.
+
+```{python}
+#| label: fig-tfn
+#| fig-cap: "**Why Stage 2 needs memory.** (A) The impulse-response (memory) kernel g(k) of a linear-reservoir water table for three recession times τ: recharge is remembered and released over months to years. (B) The same recharge forcing R′ passed through a TFN reservoir (τ = 12 months) versus the memoryless single-tap β-map. The reservoir reproduces the recession limb after an atmospheric-river pulse and the multi-year carryover through a drought (shaded); the static-gain β-map can do neither. The β-map is the τ→0 special case of the reservoir."
+#| fig-width: 11
+#| fig-height: 4
+
+rng = np.random.default_rng(11)
+T = 240; t_m = np.arange(T)
+R = np.clip(1.0 + 0.8*np.cos(2*np.pi*t_m/12) + 0.4*rng.standard_normal(T), 0, None)
+R[80:112] *= 0.2            # multi-year drought
+R[150:153] += 5.0          # atmospheric-river pulse
+
+def reservoir(R, tau):
+    k = np.exp(-np.arange(0, int(6*tau))/tau); k /= k.sum()
+    return np.convolve(R, k)[:len(R)]
+
+fig, ax = plt.subplots(1, 2, figsize=(11, 4))
+for tau, c in zip([2, 6, 18], [C_GREEN, C_TEAL, C_BLUE]):
+    ax[0].plot(np.arange(40), np.exp(-np.arange(40)/tau)/tau, color=c, lw=2, label=f"τ = {tau} mo")
+ax[0].set(xlabel="lag (months)", ylabel="response weight g(k)")
+ax[0].set_title("(A) Memory kernel g(k) = impulse response", fontsize=10, fontweight="bold")
+ax[0].legend(fontsize=8); ax[0].grid(alpha=0.3)
+
+h = reservoir(R, 12); h -= h.mean()
+h_tap = (h.std()/(R - R.mean()).std()) * (R - R.mean())
+ax[1].bar(t_m, R - R.mean(), color=C_GREY, alpha=0.30, width=1.0, label="recharge forcing R′")
+ax[1].plot(t_m, h, color=C_BLUE, lw=2, label="TFN reservoir (τ=12): memory + recession")
+ax[1].plot(t_m, h_tap, color=C_GOLD, lw=1.2, label="β-map single-tap (memoryless)")
+ax[1].axvspan(80, 112, color="#E84855", alpha=0.08)
+ax[1].text(96, ax[1].get_ylim()[1]*0.82, "drought", ha="center", fontsize=7, color="#E84855")
+ax[1].annotate("AR pulse", (152, h[152]), (172, h.max()*0.9), fontsize=7,
+               arrowprops=dict(arrowstyle="->", color=C_GREY))
+ax[1].set(xlabel="month", ylabel="water-table anomaly (m)")
+ax[1].set_title("(B) Same forcing: dynamics vs static gain", fontsize=10, fontweight="bold")
+ax[1].legend(fontsize=7.5, loc="lower left"); ax[1].grid(alpha=0.3)
+plt.tight_layout(); plt.show()
+```
+
+#### Lateral flow, and where it is enforced
+
+A per-site TFN is still **one-dimensional** (vertical recharge → storage → drainage); it
+carries no Darcy exchange *between* cells. Two mechanisms absorb the lateral signal without
+a full flow solve:
+
+1. **Implicitly, through the parameter maps.** The kriged response time $\tau(x)$ and gains
+   vary with the same terrain and subsurface covariates (HAND, $K_{\text{sat}}$,
+   depth-to-bedrock) that set lateral drainage, so part of the inter-cell redistribution is
+   encoded in *where* the reservoirs are fast or slow.
+2. **Explicitly, masked into the assimilation.** Coherent lateral flow is *spatially smooth
+   and low-frequency* — precisely the structure the Stage 3 residual field $r(x,t)$ is built
+   to represent. Kriging the well innovations lets the assimilation **absorb the lateral-flow
+   signal the 1-D dynamics omit**, with a spatial covariance whose correlation length is the
+   lateral-flow footprint.
+
+This is an approximation, valid where lateral fluxes are slow relative to the monthly cadence
+and where well spacing resolves the correlation length. It degrades at strong gradients —
+pumping cones, tight stream–aquifer exchange — which is exactly the regime that motivates the
+next rung.
+
+#### Rung 3 — ParFlow-ML emulation: full dynamics, with caveats {#sec-emulator}
+
+The physically complete option is to **emulate an integrated hydrologic model**.
+Deep-learning emulators of ParFlow now reproduce its water-table and soil-moisture fields at
+a fraction of the cost — @tran2021emulator (ParFlow-ML) for a distributed
+groundwater–surface-water model, and @bennett2024emulator at regional-to-continental scale —
+and, unlike the TFN, they carry **lateral flow and stream–aquifer exchange** intrinsically.
+Used here they would supply $\Delta h(x,t)$ in anomaly space, conditioned on the same GAIA
+statics that anchor Stage 1, with the well record still correcting the emulator's bias in
+Stage 3. Two issues must be designed for before this rung is trustworthy for hazard work:
+
+- **Extreme events vs. the training distribution.** Current deep-network emulators are
+  trained largely to reproduce the *mean seasonal cycle* (MSC) of the parent ParFlow-CONUS
+  runs. Our hazard interest is the opposite — the tails: multi-year drought drawdown and
+  atmospheric-river-driven rapid water-table rise. These are under-represented and partly
+  **out-of-distribution**, where data-driven emulators are least reliable
+  [@shen2018deeplearning]. Mitigations include extreme-weighted sampling, physics-constrained
+  losses, and treating the well-anchored Stage 3 residual as a guardrail rather than a
+  cosmetic correction.
+- **A downscaling module is required regardless.** ParFlow-CONUS is ~1 km; our target is
+  90 m. Any use of ParFlow-ML therefore needs a **downscaling step** that maps the coarse
+  emulated anomalies onto the 90 m grid using the fine GAIA covariates (HAND, $V_{s30}$,
+  $K_{\text{sat}}$, depth-to-bedrock) — the same fields that already drive Stage 1. Until the
+  emulator, its downscaler, and an explicit extreme-event validation are in place, lateral
+  flow is handled in assimilation (above), and Rung 2 is the operational Stage 2.
 
 ### Stage 3: Kriging of observation residuals {#sec-stage3}
 
