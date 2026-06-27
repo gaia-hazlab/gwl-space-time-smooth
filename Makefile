@@ -1,7 +1,7 @@
 .PHONY: data qc dem grid baseline anomalies covariates eda train validate clean clean-all all \
         pilot pilot-qc pilot-grid pilot-eda hydrogen pilot-baseline uncertainty-stack \
         3dep terrain gaia-data polaris climate baseline-regression climate-response residuals \
-        baseline-legacy anomalies-legacy
+        baseline-legacy anomalies-legacy domains
 
 # === Configuration ===
 START_DATE := 2026-01-01
@@ -104,6 +104,18 @@ dem:
 grid: $(DEM_3DEP)
 	pixi run python -m src.features.compute_grid \
 		--dem $(DEM_3DEP) \
+		--output-dir $(PROCESSED_DIR)
+
+## Hydrogeologic domain mask (issue #2 — foundational for stratified validation/masking)
+## Inputs lithology_90m.tif (DNR geology crosswalk) and dist_coast_90m.tif are data-prep
+## follow-ons; the classifier itself is complete and tested.
+domains: $(HAND_TIF)
+	pixi run python -m src.features.hydrogeologic_domains \
+		--hand $(HAND_TIF) \
+		--slope $(PROCESSED_DIR)/terrain_slope_90m.tif \
+		--lithology $(PROCESSED_DIR)/lithology_90m.tif \
+		--dist-coast $(PROCESSED_DIR)/dist_coast_90m.tif \
+		--dtb $(PROCESSED_DIR)/depth_to_bedrock_90m.tif \
 		--output-dir $(PROCESSED_DIR)
 
 ## Observation-anchored random forest + kriging spatial baseline (replaces co-kriging MM1)
