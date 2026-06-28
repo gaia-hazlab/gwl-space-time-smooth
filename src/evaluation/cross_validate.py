@@ -57,7 +57,7 @@ def spatial_block_cv(
         n_splits=n_splits,
         random_state=random_state,
     )
-    coordinates = (coords_5070[:, 0], coords_5070[:, 1])  # (easting, northing)
+    coordinates = np.asarray(coords_5070)  # (n_samples, 2) easting/northing — verde >=1.9 API
 
     folds = {}
     for fold_idx, (train_idx, test_idx) in enumerate(

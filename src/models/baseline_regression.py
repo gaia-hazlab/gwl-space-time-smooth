@@ -116,6 +116,15 @@ def _sample_raster_at_points(
     return values
 
 
+def _sample_domain_at_points(
+    domain_tif: Path, x_5070: np.ndarray, y_5070: np.ndarray
+) -> np.ndarray:
+    """Sample the categorical hydrogeologic-domain raster at well points (int codes)."""
+    coords = list(zip(x_5070.tolist(), y_5070.tolist()))
+    with rasterio.open(domain_tif) as src:
+        return np.array([v[0] for v in src.sample(coords)], dtype=np.int16)
+
+
 def _load_solus_at_points(
     solus_zarr: Path, x_5070: np.ndarray, y_5070: np.ndarray
 ) -> pd.DataFrame:
@@ -217,6 +226,8 @@ def main() -> None:
     parser.add_argument("--dtb", type=Path, default=Path("data/processed/depth_to_bedrock_90m.tif"),
                         help="Depth-to-bedrock raster; optional, used if present.")
     parser.add_argument("--dem", type=Path, default=Path("data/raw/dem/3dep_90m_5070.tif"))
+    parser.add_argument("--domain", type=Path, default=Path("data/processed/hydrogeologic_domain_90m.tif"),
+                        help="Hydrogeologic-domain raster (#2) for per-domain validation gates (#3).")
     parser.add_argument("--output-dir", type=Path, default=Path("data/processed"))
     parser.add_argument("--n-cv-splits", type=int, default=5)
     parser.add_argument("--cv-block-km", type=float, default=200.0,
@@ -257,14 +268,28 @@ def main() -> None:
 
     logger.info("Fitting baseline on %d wells with %d features.", len(y), X.shape[1])
 
-    # Spatial block CV (model-agnostic helper).
+    # Validation — per hydrogeologic domain with variogram-sized blocks (#3), not a
+    # single pooled gate. Falls back to a pooled score only if no domain raster is given.
     rf = RandomForestRegressor(**RF_KWARGS)
-    cv_metrics = run_cv_metrics(
-        rf, X, y, coords, spacing_m=args.cv_block_km * 1000.0, n_splits=args.n_cv_splits
-    )
-    with open(out_dir / "block_cv_metrics.json", "w") as fh:
-        json.dump(cv_metrics, fh, indent=2)
-    logger.info("CV: RMSE=%.2f m  R²=%.3f", cv_metrics["rmse_mean"], cv_metrics["r2_mean"])
+    if args.domain and Path(args.domain).exists():
+        from src.evaluation.domain_gates import per_domain_cv, write_report
+        dom = _sample_domain_at_points(args.domain, sites["x_5070"].values,
+                                       sites["y_5070"].values)
+        report = per_domain_cv(rf, X, y, coords, dom, n_splits=args.n_cv_splits)
+        gates_pass = write_report(report, out_dir / "block_cv_metrics.json")
+        if not gates_pass:
+            logger.warning("One or more per-domain validation gates FAILED (see "
+                           "block_cv_metrics.json).")
+    else:
+        logger.warning("No --domain raster: falling back to a single pooled CV score. "
+                       "Run `make domains` and pass --domain for per-domain gates (#3).")
+        cv_metrics = run_cv_metrics(rf, X, y, coords,
+                                    spacing_m=args.cv_block_km * 1000.0,
+                                    n_splits=args.n_cv_splits)
+        with open(out_dir / "block_cv_metrics.json", "w") as fh:
+            json.dump({"pooled": cv_metrics}, fh, indent=2)
+        logger.info("Pooled CV: RMSE=%.2f m  R²=%.3f",
+                    cv_metrics["rmse_mean"], cv_metrics["r2_mean"])
 
     # Final fit on all usable sites (with OOB estimate).
     rf = RandomForestRegressor(oob_score=True, **RF_KWARGS)

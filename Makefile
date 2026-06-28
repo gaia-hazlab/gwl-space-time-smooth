@@ -139,6 +139,7 @@ baseline: $(SITES_PARQUET) $(HAND_TIF) $(SOLUS_ZARR)
 		--vs30 $(PROCESSED_DIR)/vs30_90m.tif \
 		--dtb $(PROCESSED_DIR)/depth_to_bedrock_90m.tif \
 		--dem $(RAW_DEM_DIR)/3dep_90m_5070.tif \
+		--domain $(PROCESSED_DIR)/hydrogeologic_domain_90m.tif \
 		--output-dir $(PROCESSED_DIR)
 
 ## Per-site OLS β-map climate response functions (Stage 2)
