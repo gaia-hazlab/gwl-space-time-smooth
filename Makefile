@@ -1,7 +1,7 @@
 .PHONY: data qc dem grid baseline anomalies covariates eda train validate clean clean-all all \
         pilot pilot-qc pilot-grid pilot-eda hydrogen pilot-baseline uncertainty-stack \
         3dep terrain gaia-data polaris climate baseline-regression climate-response residuals \
-        baseline-legacy anomalies-legacy domains
+        baseline-legacy anomalies-legacy domains domain-inputs
 
 # === Configuration ===
 START_DATE := 2026-01-01
@@ -106,9 +106,17 @@ grid: $(DEM_3DEP)
 		--dem $(DEM_3DEP) \
 		--output-dir $(PROCESSED_DIR)
 
+## Fetch the domain-mask inputs (lithology + distance-to-coast) from the GAIA DataHub.
+## Staged by the gaia-data-downloaders Geology_Shoreline_Downloader notebook.
+domain-inputs:
+	pixi run python -m src.data.fetch_gaia lithology \
+		--bbox $(PNW_BBOX_WGS84) \
+		--output-dir $(PROCESSED_DIR)
+	pixi run python -m src.data.fetch_gaia dist_coast \
+		--bbox $(PNW_BBOX_WGS84) \
+		--output-dir $(PROCESSED_DIR)
+
 ## Hydrogeologic domain mask (issue #2 — foundational for stratified validation/masking)
-## Inputs lithology_90m.tif (DNR geology crosswalk) and dist_coast_90m.tif are data-prep
-## follow-ons; the classifier itself is complete and tested.
 domains: $(HAND_TIF)
 	pixi run python -m src.features.hydrogeologic_domains \
 		--hand $(HAND_TIF) \
