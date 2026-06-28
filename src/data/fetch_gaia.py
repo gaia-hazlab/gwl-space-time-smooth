@@ -3,9 +3,11 @@
 Sub-commands:
   solus    — SOLUS100 soil properties (clay, Ksat, sand, pH, bulk density), 100 m
   prism    — PRISM monthly precipitation (2000-present)
-  vs30     — Vs30 near-surface stiffness (Sanger & Maurer 2025 parametric model)
-  polaris  — POLARIS soil hydraulics (Ksat, clay, sand), 30 m — drop-in for --solus
-  dtb      — depth to bedrock (GAIA subsurface reanalysis)
+  vs30       — Vs30 near-surface stiffness (Sanger & Maurer 2025 parametric model)
+  polaris    — POLARIS soil hydraulics (Ksat, clay, sand), 30 m — drop-in for --solus
+  dtb        — depth to bedrock (GAIA subsurface reanalysis)
+  lithology  — standardized lithology classes (WA DNR geology + USGS SGMC); for #2 domains
+  dist_coast — distance to marine coast (m); for the coastal domain + sea-level boundary
 
 All gridded covariates are delivered on the 90 m EPSG:5070 WA grid, ready for the
 observation-anchored Stage 1 model (src/models/baseline_regression.py). vs30 and dtb
@@ -42,6 +44,8 @@ PRISM_STAC_URL = "https://gaia-hazlab.github.io/prism-stac/catalog.json"
 VS_STAC_URL = "https://gaia-hazlab.github.io/vs-stac/catalog.json"
 POLARIS_STAC_URL = "https://gaia-hazlab.github.io/polaris-stac/catalog.json"
 SUBSURFACE_STAC_URL = "https://gaia-hazlab.github.io/subsurface-stac/catalog.json"
+LITHOLOGY_STAC_URL = "https://gaia-hazlab.github.io/lithology-stac/catalog.json"
+COASTLINE_STAC_URL = "https://gaia-hazlab.github.io/coastline-stac/catalog.json"
 
 # SOLUS100 band names → output variable names
 SOLUS_BAND_MAP = {
@@ -424,11 +428,56 @@ def fetch_dtb(
     return out
 
 
+def fetch_lithology(
+    bbox_wgs84: tuple[float, float, float, float], output_dir: Path,
+    resolution: float = TARGET_RES_M,
+) -> Path:
+    """Fetch the standardized lithology raster → lithology_90m.tif.
+
+    Categorical layer (0 unconsolidated, 1 fractured-bedrock, 2 young-volcanic, 3 CRBG)
+    staged in the GAIA DataHub from WA DNR surface geology + USGS SGMC by the
+    gaia-data-downloaders ``Geology_Shoreline_Downloader`` notebook. Consumed directly by
+    ``src.features.hydrogeologic_domains`` (issue #2). Nearest-neighbour resampling — never
+    interpolate class codes.
+    """
+    ds = _load_layer(
+        LITHOLOGY_STAC_URL, "lithology", ["lithology"],
+        "s3://cresst/lithology-stac/lithology_wa.zarr", bbox_wgs84, resolution,
+        resampling="nearest",
+    )
+    da = ds["lithology"] if "lithology" in ds else ds[list(ds.data_vars)[0]]
+    out = Path(output_dir) / "lithology_90m.tif"
+    _write_da_geotiff(da, out, nodata=255.0)
+    logger.info("Lithology → %s", out)
+    return out
+
+
+def fetch_dist_coast(
+    bbox_wgs84: tuple[float, float, float, float], output_dir: Path,
+    resolution: float = TARGET_RES_M,
+) -> Path:
+    """Fetch distance-to-marine-coast (m) → dist_coast_90m.tif.
+
+    Derived in the DataHub from a marine shoreline (NOAA medium-resolution shoreline in
+    production; WA DNR 'Water' polygons in the demo notebook) via a distance transform.
+    Drives the ``coastal`` domain (#2) and the sea-level boundary condition (#10).
+    """
+    ds = _load_layer(
+        COASTLINE_STAC_URL, "dist-coast", ["dist_coast_m"],
+        "s3://cresst/coastline-stac/dist_coast_conus.zarr", bbox_wgs84, resolution,
+    )
+    da = ds["dist_coast_m"] if "dist_coast_m" in ds else ds[list(ds.data_vars)[0]]
+    out = Path(output_dir) / "dist_coast_90m.tif"
+    _write_da_geotiff(da, out)
+    logger.info("Distance to coast → %s", out)
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fetch GAIA DataHub layers from s3://cresst.")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    for cmd in ("solus", "prism", "vs30", "polaris", "dtb"):
+    for cmd in ("solus", "prism", "vs30", "polaris", "dtb", "lithology", "dist_coast"):
         p = sub.add_parser(cmd)
         p.add_argument("--bbox", nargs=4, type=float,
                        metavar=("WEST", "SOUTH", "EAST", "NORTH"),
@@ -453,6 +502,10 @@ def main() -> None:
         fetch_polaris(bbox, out)
     elif args.command == "dtb":
         fetch_dtb(bbox, out)
+    elif args.command == "lithology":
+        fetch_lithology(bbox, out)
+    elif args.command == "dist_coast":
+        fetch_dist_coast(bbox, out)
 
 
 if __name__ == "__main__":

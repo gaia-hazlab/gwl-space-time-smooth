@@ -51,7 +51,7 @@ def make_stac_item(
     measurement:
         What is measured (e.g. "depth-to-water (m below surface)").
     resolution_m:
-        Spatial resolution in metres (typically 1000 for 90 m outputs).
+        Spatial resolution in metres (typically 90 for the WA 90 m outputs).
     uncertainty_path:
         Optional companion uncertainty raster/Zarr.
     datetime_range:
