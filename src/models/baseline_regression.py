@@ -119,10 +119,20 @@ def _sample_raster_at_points(
 def _sample_domain_at_points(
     domain_tif: Path, x_5070: np.ndarray, y_5070: np.ndarray
 ) -> np.ndarray:
-    """Sample the categorical hydrogeologic-domain raster at well points (int codes)."""
+    """Sample the categorical hydrogeologic-domain raster at well points (int codes).
+
+    The raster's nodata is normalised to ``DOMAIN_NODATA`` so out-of-mask wells carry an
+    explicit code (they intersect no domain in per_domain_cv) rather than a silent value.
+    """
+    from src.features.hydrogeologic_domains import DOMAIN_NODATA
+
     coords = list(zip(x_5070.tolist(), y_5070.tolist()))
     with rasterio.open(domain_tif) as src:
-        return np.array([v[0] for v in src.sample(coords)], dtype=np.int16)
+        vals = np.array([v[0] for v in src.sample(coords)], dtype=np.int16)
+        nod = src.nodata
+    if nod is not None:
+        vals[vals == int(nod)] = DOMAIN_NODATA
+    return vals
 
 
 def _load_solus_at_points(
@@ -273,8 +283,13 @@ def main() -> None:
     rf = RandomForestRegressor(**RF_KWARGS)
     if args.domain and Path(args.domain).exists():
         from src.evaluation.domain_gates import per_domain_cv, write_report
+        from src.features.hydrogeologic_domains import DOMAIN_NODATA
         dom = _sample_domain_at_points(args.domain, sites["x_5070"].values,
                                        sites["y_5070"].values)
+        n_out = int((dom == DOMAIN_NODATA).sum())
+        if n_out:
+            logger.warning("%d of %d wells fall outside the domain mask (nodata) and are "
+                           "excluded from per-domain validation.", n_out, len(dom))
         report = per_domain_cv(rf, X, y, coords, dom, n_splits=args.n_cv_splits)
         gates_pass = write_report(report, out_dir / "block_cv_metrics.json")
         if not gates_pass:

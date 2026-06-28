@@ -58,10 +58,15 @@ def estimate_variogram_range(
         return DEFAULT_BLOCK_M
 
     rng = np.random.default_rng(random_state)
-    i, j = np.triu_indices(n, k=1)
-    if i.size > max_pairs:                      # subsample pairs for big domains
-        sel = rng.choice(i.size, max_pairs, replace=False)
-        i, j = i[sel], j[sel]
+    total_pairs = n * (n - 1) // 2
+    if total_pairs > max_pairs:
+        # Sample random index pairs directly — never materialize the O(n^2) triangle.
+        i = rng.integers(0, n, size=max_pairs)
+        j = rng.integers(0, n, size=max_pairs)
+        keep = i != j
+        i, j = i[keep], j[keep]
+    else:
+        i, j = np.triu_indices(n, k=1)
     d = np.hypot(coords_5070[i, 0] - coords_5070[j, 0],
                  coords_5070[i, 1] - coords_5070[j, 1])
     semivar = 0.5 * (values[i] - values[j]) ** 2
@@ -110,6 +115,9 @@ def per_domain_cv(
             continue
         if n < MIN_WELLS_FOR_CV:
             rec["note"] = f"too few wells (<{MIN_WELLS_FOR_CV}) for spatial CV"
+            # A gate-mode domain that cannot be validated must NOT silently pass.
+            if gate["mode"] == "gate":
+                rec["gate"] = {"status": "unvalidated", "reason": rec["note"]}
             out[name] = rec
             continue
 
@@ -123,6 +131,8 @@ def per_domain_cv(
             rec["gate"] = _evaluate_gate(name, rec)
         except Exception as exc:                  # degenerate folds etc. — report, don't crash
             rec["note"] = f"CV failed: {type(exc).__name__}: {exc}"
+            if gate["mode"] == "gate":
+                rec["gate"] = {"status": "unvalidated", "reason": rec["note"]}
         out[name] = rec
     return out
 
@@ -160,8 +170,11 @@ def write_report(report: dict, path: Path) -> bool:
     """Write per-domain block_cv_metrics.json. Returns True if all gate-mode domains pass."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # A gate-mode domain must reach status "pass"; FAIL *or* unvalidated (CV error /
+    # too few wells) counts against the build — never silently pass an unchecked domain.
     failures = [n for n, r in report.items()
-                if (r.get("gate") or {}).get("status") == "FAIL"]
+                if DOMAIN_GATES.get(n, {}).get("mode") == "gate"
+                and (r.get("gate") or {}).get("status") != "pass"]
     payload = {"domains": report, "all_gates_pass": not failures, "failed_domains": failures}
     path.write_text(json.dumps(payload, indent=2))
     logger.info(format_report(report))

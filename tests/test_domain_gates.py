@@ -77,6 +77,28 @@ def test_per_domain_cv_structure():
     assert MIN_BLOCK_M / 1000 <= vf["block_km"] <= MAX_BLOCK_M / 1000
 
 
+def test_unvalidatable_gate_domain_does_not_pass():
+    # A gate-mode domain with too few wells must be flagged 'unvalidated', and
+    # write_report must NOT report all_gates_pass.
+    import json, pathlib, tempfile
+    from sklearn.linear_model import LinearRegression
+    from src.evaluation.domain_gates import per_domain_cv, write_report
+    code = {v: k for k, v in DOMAINS.items()}
+    n = 5                                            # < MIN_WELLS_FOR_CV
+    rng = np.random.default_rng(2)
+    xy = rng.uniform(0, 10_000, (n, 2))
+    y = rng.standard_normal(n)
+    X = np.column_stack([xy[:, 0], xy[:, 1]])
+    codes = np.full(n, code["unconsolidated_valley_fill"])
+    rep = per_domain_cv(LinearRegression(), X, y, xy, codes, n_splits=3)
+    assert rep["unconsolidated_valley_fill"]["gate"]["status"] == "unvalidated"
+    with tempfile.TemporaryDirectory() as d:
+        out = pathlib.Path(d) / "block_cv_metrics.json"
+        ok = write_report(rep, out)
+        payload = json.loads(out.read_text())
+    assert ok is False and "unconsolidated_valley_fill" in payload["failed_domains"]
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:
