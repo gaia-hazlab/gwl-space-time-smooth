@@ -18,6 +18,9 @@ SPI3_ZARR := $(PROCESSED_DIR)/spi3_monthly_wa.zarr
 SWE_ZARR  := data/raw/climate/snodas_swe_monthly_wa.zarr
 PDO_CSV   := data/raw/climate/pdo_monthly.csv
 SOLUS_ZARR := $(PROCESSED_DIR)/solus100_wa.zarr
+LITHOLOGY_TIF := $(PROCESSED_DIR)/lithology_90m.tif
+DISTCOAST_TIF := $(PROCESSED_DIR)/dist_coast_90m.tif
+DOMAIN_TIF := $(PROCESSED_DIR)/hydrogeologic_domain_90m.tif
 GRID_NC := $(PROCESSED_DIR)/conus_grid_90m.nc
 BASELINE_WTE := $(PROCESSED_DIR)/baseline_wte_m.tif
 
@@ -108,27 +111,29 @@ grid: $(DEM_3DEP)
 
 ## Fetch the domain-mask inputs (lithology + distance-to-coast) from the GAIA DataHub.
 ## Staged by the gaia-data-downloaders Geology_Shoreline_Downloader notebook.
-domain-inputs:
+domain-inputs: $(LITHOLOGY_TIF) $(DISTCOAST_TIF)
+$(LITHOLOGY_TIF):
 	pixi run python -m src.data.fetch_gaia lithology \
-		--bbox $(PNW_BBOX_WGS84) \
-		--output-dir $(PROCESSED_DIR)
+		--bbox $(PNW_BBOX_WGS84) --output-dir $(PROCESSED_DIR)
+$(DISTCOAST_TIF):
 	pixi run python -m src.data.fetch_gaia dist_coast \
-		--bbox $(PNW_BBOX_WGS84) \
-		--output-dir $(PROCESSED_DIR)
+		--bbox $(PNW_BBOX_WGS84) --output-dir $(PROCESSED_DIR)
 
 ## Hydrogeologic domain mask (issue #2 — foundational for stratified validation/masking)
-domains: $(HAND_TIF)
+domains: $(DOMAIN_TIF)
+$(DOMAIN_TIF): $(HAND_TIF) $(LITHOLOGY_TIF) $(DISTCOAST_TIF)
 	pixi run python -m src.features.hydrogeologic_domains \
 		--hand $(HAND_TIF) \
 		--slope $(PROCESSED_DIR)/terrain_slope_90m.tif \
-		--lithology $(PROCESSED_DIR)/lithology_90m.tif \
-		--dist-coast $(PROCESSED_DIR)/dist_coast_90m.tif \
+		--lithology $(LITHOLOGY_TIF) \
+		--dist-coast $(DISTCOAST_TIF) \
 		--dtb $(PROCESSED_DIR)/depth_to_bedrock_90m.tif \
 		--output-dir $(PROCESSED_DIR)
 
 ## Observation-anchored random forest + kriging spatial baseline (replaces co-kriging MM1)
-## Vs30 and depth-to-bedrock are optional covariates: used automatically if present.
-baseline: $(SITES_PARQUET) $(HAND_TIF) $(SOLUS_ZARR)
+## Depends on the domain raster so per-domain validation gates (#3) always run — never a
+## silent pooled fallback. Vs30/depth-to-bedrock are optional covariates if present.
+baseline: $(SITES_PARQUET) $(HAND_TIF) $(SOLUS_ZARR) $(DOMAIN_TIF)
 	pixi run python -m src.models.baseline_regression \
 		--sites $(SITES_PARQUET) \
 		--hand $(HAND_TIF) \
@@ -139,6 +144,7 @@ baseline: $(SITES_PARQUET) $(HAND_TIF) $(SOLUS_ZARR)
 		--vs30 $(PROCESSED_DIR)/vs30_90m.tif \
 		--dtb $(PROCESSED_DIR)/depth_to_bedrock_90m.tif \
 		--dem $(RAW_DEM_DIR)/3dep_90m_5070.tif \
+		--domain $(DOMAIN_TIF) \
 		--output-dir $(PROCESSED_DIR)
 
 ## Per-site OLS β-map climate response functions (Stage 2)
