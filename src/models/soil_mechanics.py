@@ -46,7 +46,9 @@ class MechanicsInputs:
 
     vs30: np.ndarray                     # (y, x) time-averaged shear-wave velocity  [Sanger & Maurer]
     soil_static: np.ndarray              # (y, x) SOLUS strength/plasticity proxy (e.g. clay%, PI)
-    water_table_depth: np.ndarray | None # (time, y, x) DTW from the GWL module        [pore pressure]
+    water_table_depth: np.ndarray | None # DTW from the GWL module: static (y, x) baseline OR
+                                         #   time-varying (time, y, x) — implementation must
+                                         #   accept either shape                       [pore pressure]
     saturation: np.ndarray | None        # (time, y, x) θ/θ_sat from soil_moisture      [effective stress]
     dvv: np.ndarray | None               # (time, y, x) ambient-noise dv/v (dimensionless, fraction)
 
@@ -72,7 +74,9 @@ def main() -> None:
     p.add_argument("--solus", type=Path, default=Path("data/processed/solus100_wa.zarr"),
                    help="SOLUS soil properties — static strength/plasticity proxy.")
     p.add_argument("--dtw", type=Path, default=Path("data/processed/baseline_dtw_m.tif"),
-                   help="Water-table depth from the GWL module (pore-pressure coupling).")
+                   help="Water-table depth for pore-pressure coupling. Default is the STATIC "
+                        "baseline_dtw_m.tif placeholder; pass a time-varying GWL DTW stack for "
+                        "the dynamic estimate (the estimator accepts either).")
     p.add_argument("--saturation", type=Path, default=None,
                    help="Saturation state from src.models.soil_moisture (effective-stress coupling).")
     p.add_argument("--dvv", type=Path, default=None,

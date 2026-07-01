@@ -170,12 +170,12 @@ def main() -> None:
             vc = gdf[col].value_counts(dropna=False)
             logger.info("Unique values of '%s' (%d distinct):", col, len(vc))
             for val, n in vc.items():
-                print(f"  {n:>8d}  {val!r}")
+                logger.info("  %8d  %r", n, val)
         else:
             logger.info("Columns and cardinality (set 'attribute_column' to one of these):")
             for c in gdf.columns:
                 if c != gdf.geometry.name:
-                    print(f"  {gdf[c].nunique(dropna=False):>6d} distinct  {c}")
+                    logger.info("  %6d distinct  %s", gdf[c].nunique(dropna=False), c)
         return
 
     crosswalk = _load_crosswalk(args.crosswalk)
