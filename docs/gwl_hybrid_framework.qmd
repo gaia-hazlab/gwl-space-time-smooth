@@ -795,7 +795,7 @@ $$\Delta\text{DTW}(s,t) = \beta_0(s) + \beta_1(s)\cdot\text{SPI3}(s,t) +
 
 where SPI3 is the 3-month Standardised Precipitation Index [@bloomfield2013analysis],
 $\Delta$SWE is the snow water equivalent anomaly from SNODAS, $\tau^*$ a single optimal
-SWE lag (per terrain zone, by AIC), and PDO the Pacific Decadal Oscillation index
+SWE lag (per hydrogeologic domain, by AIC), and PDO the Pacific Decadal Oscillation index
 [@kuss2014multi]. This is a **static-gain** model: $\Delta h(t)$ depends only on the
 forcing *at* time $t$ (plus one fixed lag). It is the memoryless limit of a dynamical
 system — useful as a baseline and for scenario screening, but with no storage memory, no
@@ -909,7 +909,7 @@ plt.show()
 Following @bloomfield2013analysis, who showed that SPI is the dominant GWL predictor
 at most temperate sites, and @kuss2014multi, who demonstrated significant PDO
 teleconnections in western US groundwater, we optimize the SWE lag $\tau^*$ by
-terrain zone (valley / transition / upland) using the Akaike Information Criterion.
+hydrogeologic domain (@sec-validation) using the Akaike Information Criterion.
 Once per-site β coefficients are estimated, they are kriged to the full 90 m grid
 as spatially continuous β-maps. This enables **forward GWL estimation from any climate
 scenario** without re-running kriging:
@@ -1167,7 +1167,7 @@ Four distinct timescales drive PNW GWL variability:
 
 ```{python}
 #| label: fig-uncertainty
-#| fig-cap: "**Uncertainty budget decomposition by terrain zone.** (A) The four-component σ_total = sqrt(σ_rf² + σ_krige² + σ_response² + σ_residual²) shown as stacked bars for three terrain zones. Valley floors have low σ_rf (HAND is a strong predictor) but high σ_krige (fewer wells) and moderate σ_response (climate forcing is strong but AR is missing). Upland areas have high σ_rf (sparse training data at high elevation) and high σ_response (snowmelt lag is uncertain). (B) Well density decays rapidly with elevation in the PNW, motivating the 50 km confidence mask. (C) σ_total contour map schematic showing how uncertainty scales with distance from wells and with terrain zone."
+#| fig-cap: "**Uncertainty budget decomposition by hydrogeologic domain.** (A) The four-component σ_total = sqrt(σ_rf² + σ_krige² + σ_response² + σ_residual²) shown as stacked bars for three representative domains. Unconsolidated valley fill has low σ_rf (HAND is a strong predictor, wells dense) but moderate σ_response (climate forcing is strong but AR is missing). Fractured uplands have high σ_rf (sparse training data) and high σ_response (snowmelt lag is uncertain), and are report-only. (B) Well density decays rapidly with elevation in the PNW, motivating the variogram-driven confidence mask. (C) σ_total contour map schematic showing how uncertainty scales with distance from wells relative to the domain variogram range."
 #| fig-width: 11
 #| fig-height: 5.5
 
@@ -1175,7 +1175,7 @@ fig, axes = plt.subplots(1, 3, figsize=(11, 5.5))
 fig.subplots_adjust(wspace=0.42)
 
 # ── Panel A: stacked uncertainty bars ─────────────────────────────────────
-zones = ["Valley\n(HAND<5m)", "Transition\n(5-20m)", "Upland\n(>20m)"]
+zones = ["Valley fill\n(gate ≤1.5 m)", "Basin\n(gate ≤2.5 m)", "Fractured upland\n(report-only)"]
 s_rf      = np.array([0.8, 1.8, 3.2])   # m
 s_krige     = np.array([1.4, 1.1, 0.9])
 s_response  = np.array([1.1, 1.4, 2.1])
@@ -1196,7 +1196,7 @@ axes[0].plot(x_pos, s_total, "ko-", ms=7, lw=2, label="σ_total", zorder=5)
 axes[0].set_xticks(x_pos)
 axes[0].set_xticklabels(zones, fontsize=8.5)
 axes[0].set_ylabel("Uncertainty σ (m)", fontsize=9)
-axes[0].set_title("(A)  Uncertainty by Terrain Zone", fontsize=9.5, fontweight="bold")
+axes[0].set_title("(A)  Uncertainty by Hydrogeologic Domain", fontsize=9.5, fontweight="bold")
 axes[0].legend(fontsize=7, loc="upper left", ncol=1)
 
 # ── Panel B: well density vs elevation ────────────────────────────────────
@@ -1238,10 +1238,10 @@ unc_map = np.clip(unc_map, 0.3, 4.5)
 im = ax_map.contourf(x_g, y_g, unc_map, levels=15, cmap="YlOrRd", alpha=0.85)
 ax_map.scatter(well_locs[:, 0], well_locs[:, 1], s=30, c=C_BLUE, zorder=5,
                 edgecolors="white", lw=0.5, label="Wells")
-# 50 km confidence mask contour
+# variogram-driven confidence mask contour (support falls off at the domain range)
 ax_map.contour(x_g, y_g, unc_map, levels=[1.8], colors=[C_PURPLE], linewidths=2,
                 linestyles="--")
-ax_map.text(5.5, 7.5, "Low confidence\n(>50 km from well)", fontsize=8, color=C_PURPLE,
+ax_map.text(5.5, 7.5, "Low support\n(beyond domain\nvariogram range)", fontsize=8, color=C_PURPLE,
              ha="center")
 ax_map.text(2.5, 2.5, "High confidence\n(dense wells)", fontsize=8, color="white",
              ha="center", fontweight="bold")
@@ -1272,12 +1272,14 @@ where:
   proxy for the unexplained variance in the Stage 2 OLS fit
 - $\sigma_{\text{krige,resid}}$ is the Stage 3 kriging standard deviation (time-varying)
 
-All outputs carry a **well-density mask**: cells farther than 50 km from the nearest
-usable well are flagged as low-confidence. In the PNW Cascades, well density drops
-sharply above 500 m elevation (@fig-uncertainty B), making uncertainty large in exactly
-the terrain zone most critical for LandLab hillslope hydrology. This is an honest
-limitation of observation-anchored products that no amount of ML sophistication can
-overcome without additional monitoring infrastructure.
+All outputs carry a **variogram-driven well-support mask**: a cell's confidence is set by
+its distance to the nearest usable well *relative to its hydrogeologic-domain variogram
+range* (see @sec-validation), not a fixed radius. In the PNW Cascades, well density drops
+sharply above 500 m elevation (@fig-uncertainty B), so support falls off fastest in the
+sparse fractured uplands most critical for LandLab hillslope hydrology; the volcanic-deep
+and confined-basalt domains are hard-masked outright. This is an honest limitation of
+observation-anchored products that no amount of ML sophistication can overcome without
+additional monitoring infrastructure.
 
 ---
 
@@ -1395,35 +1397,76 @@ as STAC item metadata. This ensures interoperability with the GAIA CLI
 
 ## Validation Strategy {#sec-validation}
 
-All validation uses **spatially stratified hold-out sets** and **spatial block CV**
-with 200 km blocks. Random hold-out is never used because spatial autocorrelation
-between nearby wells would inflate R² by 0.1–0.3 [@roberts2017crossval].
+Validation is **stratified by hydrogeologic domain** and never collapsed into a single
+pooled score. The domain mask segments the grid into six groundwater flow systems from
+HAND, lithology, and distance-to-coast — unconsolidated valley fill, unconsolidated basin,
+coastal, fractured upland, volcanic-deep, and confined-basalt. Each
+domain has its own well density, spatial decorrelation length, and hazard relevance, so a
+global metric would flatter the sparse uplands and hide error in the liquefaction-critical
+valley fill. Random hold-out is never used: spatial autocorrelation between nearby wells
+would inflate skill by 0.1–0.3 [@roberts2017crossval]; cross-validation instead uses
+spatially independent blocks.
 
-### Terrain sanity checks
-- HAND < 5 m at Green River, Duwamish, Puyallup valley cells.
-- HAND > 50 m on Cascade ridge crests.
-- DTW decreases monotonically from ridge (HAND large) to valley floor (HAND ≈ 0).
+### Per-domain gates and variogram-sized CV blocks
+Accuracy is judged **per flow system**, with the cross-validation block sized to each
+domain's **empirical variogram range** rather than a fixed distance — a continental-scale
+fixed block would exceed the entire Puget Lowland, while fractured rock decorrelates in
+~km. Held-out
+blocks are therefore genuinely independent of the training wells. Depth-to-water gates
+(m RMSE) by domain:
 
-### Stage 1 metrics
-- Spatial block CV RMSE < legacy co-kriging MM1 baseline. Target: < 8 m for PNW.
-- Feature importance: HAND should rank ≥1st or 2nd (below SPI3 in humid settings).
-- Zero straight-line discontinuities at HUC-2 or DEM tile boundaries.
+| Domain | Mode | RMSE target | RMSE threshold | \|bias\| |
+|---|---|---|---|---|
+| Unconsolidated valley fill (liquefaction core) | **gate** | 0.75 | 1.5 | 0.25 |
+| Unconsolidated basin | **gate** | 1.5 | 2.5 | 0.5 |
+| Coastal | **gate** | 1.0 | 2.0 | 0.3 |
+| Fractured upland | report-only | — | — | — |
+| Volcanic-deep, confined-basalt | masked | — | — | — |
 
-### Stage 2 metrics
-- Median R² across WA+OR wells > 0.35 (exceeds HydroGEN's 0.34 on analogous metric).
-- SWE lag > 0 months in mountain-front wells (physically expected).
-- β₁ (SPI-3) negative everywhere (wetter → shallower water table).
-- PDO term significant ($p$ < 0.05) in >50% of PNW sites (consistent with @kuss2014multi).
+Gate-mode domains fail the build if the threshold is exceeded; report-only domains (sparse,
+hard terrain) are measured but never block release; masked domains fall outside the
+shallow-water-table product entirely and are not scored.
 
-### Seasonal cycle check
-Domain-mean GWL anomaly should peak (shallowest) in Feb–Mar and trough (deepest)
-in Aug–Sep — consistent with observed PNW rainfall and snowmelt timing.
+### Confidence mask (variogram-driven, not a fixed radius)
+Every output carries an ordinal **well-support mask** set by a cell's distance to the
+nearest usable well *relative to its domain's variogram range* (within 1× → high, 2× →
+moderate, 3× → low, beyond → unsupported). This retires the earlier fixed-radius mask,
+which labelled nearly all of western Washington "confident" even where glacial fill
+decorrelates in a few km. The `volcanic-deep` and `confined-basalt` domains are hard-masked regardless
+of well distance — the shallow-water-table physics does not hold there.
 
-### Physical plausibility
-- DTW < 0 m in < 0.1% of final grid cells (water table above land surface only
-  in active floodplains and tidal zones).
-- $\sigma_{\text{total}}$ largest far from wells (near-well uncertainty should be
-  dominated by $\sigma_{\text{response}}$, not $\sigma_{\text{krige}}$).
+### Calibrated uncertainty (coverage / PIT / CRPS)
+"σ grows away from wells" is necessary but not sufficient for a hazard product: a 90%
+predictive interval must actually contain ~90% of withheld observations. Per domain we
+report empirical **interval coverage** at the 50/80/90/95% levels, the **PIT** mean, and
+the **CRPS**, computed from out-of-fold `(mean, σ)` where σ is the random-forest
+tree-ensemble spread at withheld wells from per-domain block CV. A **calibration gate**
+fails any gate-mode domain whose 90% coverage departs from nominal by more than 0.05.
+
+### Temporal validation (planned)
+Spatial CV scores the map; it does not test the *dynamics*. A leave-one-recorder-out check
+at continuous NWIS recorders — comparing modelled vs observed phase, recession slope, and
+guarding against temporal aliasing of the monthly product — is the next validation rung
+and is tracked as future work.
+
+### Model-diagnostic and physical-plausibility checks
+- **Feature importance:** HAND ranks ≥1st or 2nd (below SPI-3 in humid settings); no
+  straight-line discontinuities at HUC-2 or DEM tile boundaries.
+- **Stage 2 signs:** median per-well R² exceeds the HydroGEN analogue; SWE lag > 0 in
+  mountain-front wells; β₁ (SPI-3) negative everywhere (wetter → shallower); PDO term
+  significant ($p$ < 0.05) in >50% of sites [@kuss2014multi].
+- **Terrain monotonicity:** DTW decreases from ridge to valley floor; DTW < 0 m in < 0.1%
+  of final cells (only active floodplains and tidal zones).
+- **Seasonal cycle:** domain-mean anomaly shallowest in Feb–Mar, deepest in Aug–Sep,
+  consistent with PNW rainfall and snowmelt timing.
+
+### Limitations and honest masking
+The guiding principle is **better silent than confidently wrong**: masked domains and
+unsupported cells are withheld rather than published with a fabricated σ; sparse uplands
+are report-only; and uncertainty is allowed to grow — honestly — away from monitoring.
+This is an inherent limitation of an observation-anchored product that no amount of ML
+sophistication removes without additional wells, and it is surfaced explicitly to the
+downstream liquefaction and LandLab models rather than hidden.
 
 ---
 

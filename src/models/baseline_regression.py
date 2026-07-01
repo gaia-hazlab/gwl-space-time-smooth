@@ -29,9 +29,11 @@ Outputs (data/processed/):
   baseline_wte_m.tif          — median WTE = DEM − DTW (m NAVD88)
   baseline_rf_std_m.tif       — random-forest tree-ensemble σ (m)
   baseline_kriging_std_m.tif  — kriging σ on residuals (m)
-  well_density_mask.tif       — 1 where nearest well ≤ 50 km, 0 elsewhere
+  well_support_mask_90m.tif   — ordinal confidence (variogram-driven, #4): 0 masked .. 3 high
+  well_density_mask.tif       — binary support (confidence > 0; back-compat)
   rf_feature_importance.json
-  block_cv_metrics.json
+  block_cv_metrics.json       — per-domain spatial-block CV gates (#3)
+  coverage_metrics.json       — per-domain interval coverage / PIT / CRPS calibration (#5)
 """
 
 from __future__ import annotations
@@ -281,8 +283,11 @@ def main() -> None:
     # Validation — per hydrogeologic domain with variogram-sized blocks (#3), not a
     # single pooled gate. Falls back to a pooled score only if no domain raster is given.
     rf = RandomForestRegressor(**RF_KWARGS)
+    domain_ranges: dict[str, float] = {}              # domain -> variogram block (m), for #4
     if args.domain and Path(args.domain).exists():
         from src.evaluation.domain_gates import per_domain_cv, write_report
+        from src.evaluation.coverage import (per_domain_coverage, rf_spatial_oof,
+                                             write_coverage_report)
         from src.features.hydrogeologic_domains import DOMAIN_NODATA
         dom = _sample_domain_at_points(args.domain, sites["x_5070"].values,
                                        sites["y_5070"].values)
@@ -290,11 +295,22 @@ def main() -> None:
         if n_out:
             logger.warning("%d of %d wells fall outside the domain mask (nodata) and are "
                            "excluded from per-domain validation.", n_out, len(dom))
+        # Per-domain spatial-block CV gates (#3).
         report = per_domain_cv(rf, X, y, coords, dom, n_splits=args.n_cv_splits)
         gates_pass = write_report(report, out_dir / "block_cv_metrics.json")
         if not gates_pass:
             logger.warning("One or more per-domain validation gates FAILED (see "
                            "block_cv_metrics.json).")
+        domain_ranges = {name: r["block_km"] * 1000.0
+                         for name, r in report.items() if "block_km" in r}
+        # Calibrated-uncertainty diagnostics (#5): OOF tree-ensemble σ -> coverage/PIT/CRPS.
+        mu_oof, sd_oof = rf_spatial_oof(RF_KWARGS, X, y, coords, dom,
+                                        n_splits=args.n_cv_splits,
+                                        block_m_by_domain=domain_ranges)
+        cov_report = per_domain_coverage(y, mu_oof, sd_oof, dom)
+        if not write_coverage_report(cov_report, out_dir / "coverage_metrics.json"):
+            logger.warning("Predictive intervals are NOT calibrated in one or more gate "
+                           "domains (see coverage_metrics.json).")
     else:
         logger.warning("No --domain raster: falling back to a single pooled CV score. "
                        "Run `make domains` and pass --domain for per-domain gates (#3).")
@@ -404,10 +420,25 @@ def main() -> None:
         dem_arr[dem_arr == dem_src.nodata] = np.nan
     wte_final_2d = dem_arr - dtw_final_2d
 
-    # Well density mask
-    tree = cKDTree(np.column_stack([sites["x_5070"].values, sites["y_5070"].values]))
-    dist, _ = tree.query(np.column_stack([x_grid, y_grid]))
-    mask_2d = (dist.reshape(nrows, ncols) <= WELL_DENSITY_RADIUS_M).astype(np.float32)
+    # Spatial support — variogram-driven confidence mask (#4), replacing the fixed 50 km
+    # well-density mask. Falls back to 50 km only if no aligned domain raster is available.
+    well_xy = np.column_stack([sites["x_5070"].values, sites["y_5070"].values])
+    mask_2d = None
+    if args.domain and Path(args.domain).exists():
+        from src.evaluation.confidence_mask import (build_confidence_mask,
+                                                    write_confidence_mask)
+        with rasterio.open(args.domain) as dsrc:
+            dom_arr = dsrc.read(1)
+        if dom_arr.shape == (nrows, ncols):
+            conf = build_confidence_mask(dom_arr, x_grid, y_grid, well_xy, domain_ranges)
+            write_confidence_mask(conf, dem_profile, out_dir / "well_support_mask_90m.tif")
+            mask_2d = ((conf > 0) & (conf != 255)).astype(np.float32)  # binary back-compat
+        else:
+            logger.warning("Domain raster shape %s != grid %s; using 50 km fallback mask.",
+                           dom_arr.shape, (nrows, ncols))
+    if mask_2d is None:
+        dist, _ = cKDTree(well_xy).query(np.column_stack([x_grid, y_grid]))
+        mask_2d = (dist.reshape(nrows, ncols) <= WELL_DENSITY_RADIUS_M).astype(np.float32)
 
     # Write outputs
     _write_tif(dtw_final_2d, dem_profile, out_dir / "baseline_dtw_m.tif")
