@@ -124,24 +124,20 @@ def compute_hand(
     nrows, ncols = dem_arr.shape
     is_stream = contrib_area_m2 >= stream_threshold_m2
 
-    # richdem D8 flow directions: 1=E, 2=NE, 4=N, 8=NW, 16=W, 32=SW, 64=S, 128=SE
+    # richdem's Python API exposes FlowProportions (not FlowDirections). For D8 exactly
+    # one proportion slot per cell is 1.0, giving the single downstream neighbour. Fill
+    # depressions first so routing matches the contributing-area / stream network above.
     rda = rd.rdarray(np.where(np.isnan(dem_arr), NODATA, dem_arr), no_data=NODATA)
-    flow_dir = rd.FlowDirections(rda, method="D8")
-    fd = np.array(flow_dir).astype(np.int32)
+    rd.FillDepressions(rda, epsilon=True, in_place=True)
+    props = np.asarray(rd.FlowProportions(rda, method="D8"))  # (nrows, ncols, 9)
 
-    # D8 direction offsets: direction_value → (drow, dcol)
-    d8_offsets = {
-        1: (0, 1),
-        2: (-1, 1),
-        4: (-1, 0),
-        8: (-1, -1),
-        16: (0, -1),
-        32: (1, -1),
-        64: (1, 0),
-        128: (1, 1),
-    }
+    # richdem neighbour offsets for proportion slots 1..8: (drow, dcol) = (RD_DY[n], RD_DX[n]).
+    RD_DX = np.array([0, -1, -1, 0, 1, 1, 1, 0, -1])
+    RD_DY = np.array([0, 0, -1, -1, -1, 0, 1, 1, 1])
+    nbr = np.argmax(props[:, :, 1:9], axis=2) + 1     # dominant downstream slot (1..8)
+    has_flow = props[:, :, 1:9].max(axis=2) > 0        # False at pits / outlets / edges
 
-    # For each non-stream cell, follow D8 path until a stream cell is reached
+    # For each non-stream cell, follow the D8 path until a stream cell is reached
     hand = np.full((nrows, ncols), np.nan, dtype=np.float32)
     hand[is_stream] = 0.0
 
@@ -151,12 +147,11 @@ def compute_hand(
                 continue
             # Trace downstream to the nearest stream
             r, c = row, col
-            for _ in range(1000):  # max 1000 steps
-                direction = fd[r, c]
-                if direction not in d8_offsets:
+            for _ in range(5000):  # generous cap for large tiles
+                if not has_flow[r, c]:
                     break
-                dr, dc = d8_offsets[direction]
-                r2, c2 = r + dr, c + dc
+                n = nbr[r, c]
+                r2, c2 = r + RD_DY[n], c + RD_DX[n]
                 if r2 < 0 or r2 >= nrows or c2 < 0 or c2 >= ncols:
                     break
                 if is_stream[r2, c2]:

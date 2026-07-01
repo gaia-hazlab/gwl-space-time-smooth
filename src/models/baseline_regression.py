@@ -52,16 +52,18 @@ from scipy.spatial import cKDTree
 logger = logging.getLogger(__name__)
 
 # Always-available physical predictors (no coordinates).
+# Terrain predictors are always required (HAND is the headline covariate and comes from
+# 3DEP, independent of the GAIA DataHub).
 BASE_FEATURE_COLS = [
     "hand_m",          # terrain: Height Above Nearest Drainage
     "twi",             # terrain: Topographic Wetness Index
     "slope_deg",       # terrain: slope in degrees
-    "ksat_cm_hr",      # soil: saturated hydraulic conductivity (SOLUS100/POLARIS)
-    "clay_pct",        # soil: clay fraction 0-5 cm (SOLUS100)
-    "sand_pct",        # soil: sand fraction 0-5 cm (SOLUS100)
-    "mean_ppt_mm",     # climate: mean annual precipitation (PRISM)
-    "aridity_idx",     # climate: mean_ppt / (PET proxy)
 ]
+# Soil predictors from the SOLUS100/POLARIS zarr — included only when that store exists.
+SOLUS_FEATURE_COLS = ["ksat_cm_hr", "clay_pct", "sand_pct"]
+# Climate predictors derived from the PRISM mean-annual-ppt raster — included only when it
+# exists (aridity_idx = mean_ppt / PET-proxy is derived from the same raster).
+PRISM_FEATURE_COLS = ["mean_ppt_mm", "aridity_idx"]
 # Optional predictors, included only when the corresponding raster is provided.
 # name -> CLI arg attribute holding its raster path.
 OPTIONAL_FEATURE_RASTERS = {
@@ -82,8 +84,21 @@ RF_KWARGS = dict(n_estimators=300, min_samples_leaf=2, random_state=0, n_jobs=-1
 
 
 def _active_feature_cols(args) -> list[str]:
-    """Base predictors plus any optional rasters that actually exist on disk."""
+    """Terrain predictors plus any soil/climate/optional layers present on disk.
+
+    The model degrades gracefully to whatever covariates exist: terrain (HAND/TWI/slope)
+    is always used; SOLUS soil and PRISM climate predictors join only when their rasters
+    are available (e.g. once the GAIA DataHub publishes them).
+    """
     cols = list(BASE_FEATURE_COLS)
+    if getattr(args, "solus", None) is not None and Path(args.solus).exists():
+        cols += SOLUS_FEATURE_COLS
+    else:
+        logger.info("SOLUS predictors skipped (no store at %s).", getattr(args, "solus", None))
+    if getattr(args, "prism_ppt", None) is not None and Path(args.prism_ppt).exists():
+        cols += PRISM_FEATURE_COLS
+    else:
+        logger.info("PRISM predictors skipped (no raster at %s).", getattr(args, "prism_ppt", None))
     for name, arg in OPTIONAL_FEATURE_RASTERS.items():
         path = getattr(args, arg, None)
         if path is not None and Path(path).exists():
@@ -103,6 +118,15 @@ def _load_sites(sites_parquet: Path) -> pd.DataFrame:
         & (df["median_dtw_m"] > 0)  # DTW must be positive
     )
     df = df[mask].copy()
+
+    # Project site lon/lat (EPSG:4326) to the analysis CRS (EPSG:5070) if not already
+    # present; every downstream sampler indexes rasters by x_5070/y_5070 metres.
+    if "x_5070" not in df.columns or "y_5070" not in df.columns:
+        from pyproj import Transformer
+
+        tf = Transformer.from_crs("EPSG:4326", "EPSG:5070", always_xy=True)
+        df["x_5070"], df["y_5070"] = tf.transform(df["lon"].to_numpy(), df["lat"].to_numpy())
+
     logger.info("Loaded %d usable sites for baseline regression.", len(df))
     return df
 
@@ -174,16 +198,20 @@ def _build_feature_matrix(
     feats["hand_m"] = _sample_raster_at_points(hand_tif, x, y)
     feats["twi"] = _sample_raster_at_points(twi_tif, x, y)
     feats["slope_deg"] = _sample_raster_at_points(slope_tif, x, y)
-    feats["mean_ppt_mm"] = _sample_raster_at_points(prism_ppt_tif, x, y)
 
-    soil = _load_solus_at_points(solus_zarr, x, y)
-    soil.index = sites.index
-    feats["ksat_cm_hr"] = soil["ksat_cm_hr"]
-    feats["clay_pct"] = soil["clay_pct"]
-    feats["sand_pct"] = soil["sand_pct"]
+    # SOLUS soil predictors — only when their columns are active (store present).
+    if any(c in active_cols for c in SOLUS_FEATURE_COLS):
+        soil = _load_solus_at_points(solus_zarr, x, y)
+        soil.index = sites.index
+        feats["ksat_cm_hr"] = soil["ksat_cm_hr"]
+        feats["clay_pct"] = soil["clay_pct"]
+        feats["sand_pct"] = soil["sand_pct"]
 
-    # Aridity index: precipitation / (PET proxy ≈ 1200 mm/yr at PNW latitudes).
-    feats["aridity_idx"] = feats["mean_ppt_mm"] / 1200.0
+    # PRISM climate predictors — only when active (raster present). Aridity index:
+    # precipitation / (PET proxy ≈ 1200 mm/yr at PNW latitudes).
+    if any(c in active_cols for c in PRISM_FEATURE_COLS):
+        feats["mean_ppt_mm"] = _sample_raster_at_points(prism_ppt_tif, x, y)
+        feats["aridity_idx"] = feats["mean_ppt_mm"] / 1200.0
 
     # Optional physical predictors.
     for name, path in optional_rasters.items():
@@ -347,22 +375,26 @@ def main() -> None:
         "hand_m": _grid_sample(args.hand),
         "twi": _grid_sample(args.twi),
         "slope_deg": _grid_sample(args.slope),
-        "mean_ppt_mm": _grid_sample(args.prism_ppt),
     }
-    grid_feats["aridity_idx"] = grid_feats["mean_ppt_mm"] / 1200.0
 
-    # SOLUS on grid (nearest-sampled from native Zarr).
-    import xarray as xr
-    solus_ds = xr.open_zarr(args.solus, consolidated=True)
-    xq = xr.DataArray(x_grid, dims="pts")
-    yq = xr.DataArray(y_grid, dims="pts")
-    for var in ("ksat_cm_hr", "clay_pct", "sand_pct"):
-        if var in solus_ds:
-            grid_feats[var] = np.asarray(
-                solus_ds[var].sel(x=xq, y=yq, method="nearest").values, dtype=np.float32
-            )
-        else:
-            grid_feats[var] = np.full_like(grid_feats["hand_m"], np.nan)
+    # PRISM climate on grid — only when active (mirrors the training feature matrix).
+    if any(c in active_cols for c in PRISM_FEATURE_COLS):
+        grid_feats["mean_ppt_mm"] = _grid_sample(args.prism_ppt)
+        grid_feats["aridity_idx"] = grid_feats["mean_ppt_mm"] / 1200.0
+
+    # SOLUS soil on grid (nearest-sampled from native Zarr) — only when active.
+    if any(c in active_cols for c in SOLUS_FEATURE_COLS):
+        import xarray as xr
+        solus_ds = xr.open_zarr(args.solus, consolidated=True)
+        xq = xr.DataArray(x_grid, dims="pts")
+        yq = xr.DataArray(y_grid, dims="pts")
+        for var in SOLUS_FEATURE_COLS:
+            if var in solus_ds:
+                grid_feats[var] = np.asarray(
+                    solus_ds[var].sel(x=xq, y=yq, method="nearest").values, dtype=np.float32
+                )
+            else:
+                grid_feats[var] = np.full_like(grid_feats["hand_m"], np.nan)
 
     for name, path in optional_rasters.items():
         grid_feats[name] = _grid_sample(path)
