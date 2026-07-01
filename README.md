@@ -72,15 +72,19 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   │   ├── download_nwis.py      ← USGS NWIS well download (state-by-state, checkpointed)
 │   │   ├── qc_nwis.py            ← QC chain + monthly aggregation (no gap filling)
 │   │   ├── download_3dep.py      ← 3DEP 10 m DEM via py3dep (replaces download_dem.py)
-│   │   ├── fetch_gaia.py         ← SOLUS100 + PRISM from s3://cresst via odc.stac
+│   │   ├── fetch_gaia.py         ← SOLUS100/PRISM/Vs30/dtb/lithology from s3://cresst via odc.stac
+│   │   ├── rasterize_geology.py  ← LOCAL DNR geology polygons → lithology_90m.tif (pre-DataHub)
 │   │   └── fetch_climate.py      ← PDO index, SNODAS SWE, SPI-3 derivation
 │   ├── features/
-│   │   ├── compute_grid.py       ← canonical 90 m EPSG:5070 grid definition
-│   │   └── compute_terrain.py    ← HAND, TWI, slope, contributing area from 3DEP DEM
+│   │   ├── compute_grid.py          ← canonical 90 m EPSG:5070 grid definition
+│   │   ├── compute_terrain.py       ← HAND, TWI, slope, contributing area from 3DEP DEM
+│   │   └── hydrogeologic_domains.py  ← domain mask from lithology + HAND + dist-coast (issue #2)
 │   ├── models/
 │   │   ├── baseline_regression.py   ← Stage 1: random forest + regression kriging
 │   │   ├── climate_response.py      ← Stage 2: per-site OLS β-maps
 │   │   ├── interpolate_residuals.py ← Stage 3: krige residuals + final assembly
+│   │   ├── soil_moisture.py         ← SCAFFOLD: soil-moisture state (soil-hydromechanics)
+│   │   ├── soil_mechanics.py        ← SCAFFOLD: soil-mechanics state (Vs30 + dv/v)
 │   │   ├── interpolate_baseline.py  ← LEGACY: co-kriging MM1 (comparison only)
 │   │   └── interpolate_anomalies.py ← LEGACY: ordinary kriging of anomalies
 │   ├── evaluation/
@@ -107,10 +111,11 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   └── processed/             ← QC'd parquets, terrain TIFs, β maps, Zarr archives
 │
 ├── docs/
-│   ├── REFACTORING_PLAN.md    ← 6-phase GAIA integration plan (git-tracked)
-│   ├── gaia-conventions.md    ← DataTree schema, STAC provenance, s3://cresst patterns
-│   ├── assumptions.md         ← severity-tagged assumptions register
-│   └── limitations.md         ← known limitations
+│   ├── REFACTORING_PLAN.md          ← 6-phase GAIA integration plan (git-tracked)
+│   ├── gaia-conventions.md          ← DataTree schema, STAC provenance, lithology contract
+│   ├── intermediate-staging-plan.md ← pre-gaia-cli staging + soil-hydromechanics scope
+│   ├── assumptions.md               ← severity-tagged assumptions register
+│   └── limitations.md               ← known limitations
 │
 └── .github/
     ├── copilot-instructions.md        ← workspace coding rules (updated for GAIA)
@@ -171,14 +176,21 @@ significantly slower and may still hit the anonymous concurrency limit.
 
 Run targets in order. Each target is idempotent.
 
+> **`make` or `pixi run`?** `pixi` is the canonical task runner (gaia-cli parity, and it
+> is what the GitHub Actions workflows use). Every `make <target>` below has an equivalent
+> `pixi run <target>` — the `Makefile` recipes simply call `pixi run` under the hood, so
+> both stay in sync. Use `pixi run <target>` in CI; `make <target>` is a local convenience.
+
 ```bash
 make data              # Download NWIS GW levels (state-by-state, checkpointed)
 make qc                # QC + monthly aggregation → data/processed/
 make 3dep              # 3DEP 10 m DEM for PNW (replaces make dem)
-make gaia-data         # SOLUS100 soil properties + PRISM ppt from s3://cresst
+make gaia-data         # SOLUS100 soil + PRISM ppt + Vs30 + depth-to-bedrock from s3://cresst
 make climate           # PDO index, SNODAS SWE, SPI-3 derivation
 make terrain           # HAND + TWI + slope → data/processed/terrain_*.tif
 make grid              # 90 m EPSG:5070 grid → data/processed/
+make domain-inputs     # lithology + distance-to-coast (see "Lithology" note below)
+make domains           # hydrogeologic-domain mask → hydrogeologic_domain_90m.tif (issue #2)
 make baseline          # random forest + regression kriging → baseline_*.tif
 make climate-response  # β-map OLS fitting → beta_*.tif + gwl_climate_response.zarr
 make residuals         # Stage 3 kriging + final GWL → gwl_dtw.zarr / gwl_wte.zarr
@@ -187,13 +199,47 @@ make clean             # Remove processed outputs (keeps raw downloads)
 ```
 
 `make data` is the slowest step (~hours for CONUS; checkpointed per state).
-`make gaia-data` requires anonymous s3 access — no credentials needed.
+`make gaia-data` requires anonymous s3 access — no credentials needed. `make domains`
+feeds per-domain validation gates in `make baseline`, so run it first.
+
+#### Lithology layer — local vs. DataHub
+
+The `domains` mask needs a standardized lithology raster. Until the GAIA DataHub
+`lithology-stac` collection is live, produce it **locally** from WA DNR surface-geology
+polygons instead of `make domain-inputs`:
+
+```bash
+# 1. discover the attribute values in your DNR extract, to complete the crosswalk
+make list-geology-units      # or: pixi run list-geology-units
+# 2. edit data/processed/lithology_crosswalk.json until coverage is complete
+# 3. rasterize DNR polygons → lithology_90m.tif, aligned to the HAND grid
+make lithology-local         # needs make terrain first (uses terrain_hand_90m.tif as --like)
+```
+
+`make lithology-local` writes a raster byte-compatible with the future DataHub layer, so
+switching to `make domain-inputs` later is a drop-in swap. Point `GEOLOGY_VECTOR` in the
+`Makefile` at your DNR file. See [`docs/intermediate-staging-plan.md`](docs/intermediate-staging-plan.md).
 
 Legacy pipeline (comparison):
 ```bash
 make baseline-legacy   # Old co-kriging MM1
 make anomalies-legacy  # Old ordinary kriging of anomalies
 ```
+
+#### Soil-hydromechanics state modules (scaffolds)
+
+This repo is being repositioned as **`gaia-soil-hydromechanics`** — a coupled
+subsurface-state estimator (soil moisture + groundwater level + soil mechanics) for the
+liquefaction / landslide / flood digital twins. GWL is the mature module; the other two
+are interface scaffolds (not yet implemented — they exit with a message):
+
+```bash
+make soil-moisture     # θ(x,t): SOLUS/POLARIS static envelope + reanalysis/RS driver — SCAFFOLD
+make soil-mechanics    # stiffness/strength: Vs30 + effective stress + dv/v constraint — SCAFFOLD
+```
+
+See [`docs/intermediate-staging-plan.md`](docs/intermediate-staging-plan.md) for the scope,
+the static/dynamic sources, and the (deferred) rename checklist.
 
 ### 3. Outputs
 
