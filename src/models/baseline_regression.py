@@ -92,7 +92,17 @@ def _active_feature_cols(args) -> list[str]:
     """
     cols = list(BASE_FEATURE_COLS)
     if getattr(args, "solus", None) is not None and Path(args.solus).exists():
-        cols += SOLUS_FEATURE_COLS
+        # Include only the SOLUS variables actually present in the store, so a partial
+        # store (e.g. texture-only clay/sand without a derived ksat) still contributes
+        # instead of dropping every well on an all-NaN required column.
+        import xarray as xr
+
+        solus_vars = set(xr.open_zarr(args.solus, consolidated=True).data_vars)
+        present = [c for c in SOLUS_FEATURE_COLS if c in solus_vars]
+        cols += present
+        missing = [c for c in SOLUS_FEATURE_COLS if c not in solus_vars]
+        if missing:
+            logger.info("SOLUS store missing %s; using %s.", missing, present or "none")
     else:
         logger.info("SOLUS predictors skipped (no store at %s).", getattr(args, "solus", None))
     if getattr(args, "prism_ppt", None) is not None and Path(args.prism_ppt).exists():
