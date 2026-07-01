@@ -75,6 +75,9 @@ def fetch_solus(
             logger.info("Reading %s", url)
             da = rioxarray.open_rasterio(url, masked=True).squeeze("band", drop=True)
             da = da.rio.clip_box(minx, miny, maxx, maxy)
+            # Force-mask the sentinel in case a COG's nodata metadata is missing/inconsistent,
+            # so 255 is never averaged in as a real 255 % value.
+            da = da.where(da != SOLUS_NODATA)
             layers.append(da)
         # The SOLUS depth COGs share one 100 m EPSG:5070 grid, so clipped windows align
         # and can be averaged directly to a representative 0–5 cm value.

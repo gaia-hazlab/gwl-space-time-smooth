@@ -97,7 +97,8 @@ def _active_feature_cols(args) -> list[str]:
         # instead of dropping every well on an all-NaN required column.
         import xarray as xr
 
-        solus_vars = set(xr.open_zarr(args.solus, consolidated=True).data_vars)
+        with xr.open_zarr(args.solus, consolidated=True) as _solus_ds:
+            solus_vars = set(_solus_ds.data_vars)
         present = [c for c in SOLUS_FEATURE_COLS if c in solus_vars]
         cols += present
         missing = [c for c in SOLUS_FEATURE_COLS if c not in solus_vars]

@@ -104,8 +104,10 @@ def compute_hand(
     HAND at each cell = elevation of that cell − elevation of the nearest stream cell
     (in the D8 flow direction network, following the path to the stream).
 
-    This implementation uses a BFS on the flow-direction grid to trace each
-    cell to its downstream stream cell and records the elevation difference.
+    The D8 downstream neighbour of each cell is derived from richdem's
+    ``FlowProportions`` (the single slot equal to 1.0 under D8), and each non-stream cell
+    is traced along that network to its first stream cell, recording the elevation
+    difference.
 
     Parameters
     ----------
@@ -129,13 +131,15 @@ def compute_hand(
     # depressions first so routing matches the contributing-area / stream network above.
     rda = rd.rdarray(np.where(np.isnan(dem_arr), NODATA, dem_arr), no_data=NODATA)
     rd.FillDepressions(rda, epsilon=True, in_place=True)
-    props = np.asarray(rd.FlowProportions(rda, method="D8"))  # (nrows, ncols, 9)
+    # (nrows, ncols, 9) float array — force float32 to halve peak memory on large 3DEP tiles.
+    props = np.asarray(rd.FlowProportions(rda, method="D8"), dtype=np.float32)
 
     # richdem neighbour offsets for proportion slots 1..8: (drow, dcol) = (RD_DY[n], RD_DX[n]).
     RD_DX = np.array([0, -1, -1, 0, 1, 1, 1, 0, -1])
     RD_DY = np.array([0, 0, -1, -1, -1, 0, 1, 1, 1])
     nbr = np.argmax(props[:, :, 1:9], axis=2) + 1     # dominant downstream slot (1..8)
     has_flow = props[:, :, 1:9].max(axis=2) > 0        # False at pits / outlets / edges
+    del props  # free the (nrows, ncols, 9) array before the per-cell tracing loop
 
     # For each non-stream cell, follow the D8 path until a stream cell is reached
     hand = np.full((nrows, ncols), np.nan, dtype=np.float32)
