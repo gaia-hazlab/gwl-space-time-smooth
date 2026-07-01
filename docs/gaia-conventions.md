@@ -135,6 +135,41 @@ ds = xr.open_zarr(store, consolidated=True)
 
 ---
 
+## Lithology Layer Contract (DNR geology → standardized classes)
+
+The lithology layer is **categorical** and originates from **vector polygons** (WA DNR
+1:100,000 geology + USGS SGMC), so it does not follow the continuous-raster pattern of
+SOLUS/PRISM. The raw archive and the analysis layer are deliberately separate tiers:
+
+| Tier | Format | Notes |
+|------|--------|-------|
+| Raw archive | GeoParquet / GeoPackage (vector) | original DNR unit codes, lossless — **not** Zarr |
+| Analysis layer | categorical uint8 COG / Zarr, 90 m EPSG:5070 | classes below, nodata `255`, **nearest-neighbour only** |
+| Crosswalk | `lithology_crosswalk.json` | DNR-unit → class mapping (human-curated, reviewable) |
+
+Standardized classes (lock-step with `src.features.hydrogeologic_domains.LITHO_*`):
+
+| Code | Class | Examples |
+|------|-------|----------|
+| 0 | unconsolidated | alluvium, glacial drift/outwash, fill |
+| 1 | fractured_bedrock | sedimentary / metamorphic / intrusive / pre-Tertiary volcanics |
+| 2 | young_volcanic | High Cascade basalt, stratovolcano edifices (Plio-Pleistocene+) |
+| 3 | crbg | Columbia River Basalt Group (Miocene) |
+| 255 | nodata | unmapped unit — explicit, never silently misclassified |
+
+**Producer (DataHub / gaia-cli, target):** publish the `lithology-stac` collection
+(`https://gaia-hazlab.github.io/lithology-stac/catalog.json`, backed by
+`s3://cresst/lithology-stac/lithology_wa.zarr`).
+
+**Producer (intermediate / local, today):** `src/data/rasterize_geology.py` does the
+identical polygon→90 m raster on a laptop and writes `data/processed/lithology_90m.tif`.
+See [intermediate-staging-plan.md](intermediate-staging-plan.md).
+
+**Consumer:** `fetch_gaia.fetch_lithology` (`resampling="nearest"`, nodata 255) →
+`hydrogeologic_domains` via `--lithology`. **Never interpolate class codes.**
+
+---
+
 ## CRS and Units
 
 | Parameter | Rule |

@@ -65,6 +65,12 @@ grid = "python -m src.features.compute_grid --output-dir data/processed"
 baseline = "python -m src.models.baseline_regression --sites data/processed/nwis_sites_clean.parquet --output-dir data/processed"
 climate-response = "python -m src.models.climate_response --monthly data/processed/nwis_gwlevels_monthly.parquet --sites data/processed/nwis_sites_clean.parquet --output-dir data/processed"
 residuals = "python -m src.models.interpolate_residuals --monthly data/processed/nwis_gwlevels_monthly.parquet --output-dir data/processed"
+# === Lithology (intermediate/local, until DataHub lithology-stac is live) ===
+list-geology-units = "python -m src.data.rasterize_geology --geology data/raw/geology/wa_dnr_geol.gpkg --crosswalk data/processed/lithology_crosswalk.json --list-units"
+lithology-local = "python -m src.data.rasterize_geology --geology data/raw/geology/wa_dnr_geol.gpkg --crosswalk data/processed/lithology_crosswalk.json --like data/processed/terrain_hand_90m.tif --output data/processed/lithology_90m.tif"
+# === gaia-soil-hydromechanics state modules (SCAFFOLDS — not yet implemented) ===
+soil-moisture = "python -m src.models.soil_moisture --output-dir data/processed"
+soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"
 # === Legacy (comparison only) ===
 baseline-legacy = "python -m src.models.interpolate_baseline"
 anomalies-legacy = "python -m src.models.interpolate_anomalies"

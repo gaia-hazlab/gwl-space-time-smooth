@@ -1,7 +1,8 @@
 .PHONY: data qc dem grid baseline anomalies covariates eda train validate clean clean-all all \
         pilot pilot-qc pilot-grid pilot-eda hydrogen pilot-baseline uncertainty-stack \
         3dep terrain gaia-data polaris climate baseline-regression climate-response residuals \
-        baseline-legacy anomalies-legacy domains domain-inputs
+        baseline-legacy anomalies-legacy domains domain-inputs lithology-local list-geology-units \
+        soil-moisture soil-mechanics
 
 # === Configuration ===
 START_DATE := 2026-01-01
@@ -19,6 +20,10 @@ SWE_ZARR  := data/raw/climate/snodas_swe_monthly_wa.zarr
 PDO_CSV   := data/raw/climate/pdo_monthly.csv
 SOLUS_ZARR := $(PROCESSED_DIR)/solus100_wa.zarr
 LITHOLOGY_TIF := $(PROCESSED_DIR)/lithology_90m.tif
+LITHOLOGY_CROSSWALK := $(PROCESSED_DIR)/lithology_crosswalk.json
+# Local DNR surface-geology polygons (WA DNR 100K). Intermediate source until the GAIA
+# DataHub lithology-stac collection is live — see docs/intermediate-staging-plan.md
+GEOLOGY_VECTOR := data/raw/geology/wa_dnr_geol.gpkg
 DISTCOAST_TIF := $(PROCESSED_DIR)/dist_coast_90m.tif
 DOMAIN_TIF := $(PROCESSED_DIR)/hydrogeologic_domain_90m.tif
 GRID_NC := $(PROCESSED_DIR)/conus_grid_90m.nc
@@ -111,6 +116,8 @@ grid: $(DEM_3DEP)
 
 ## Fetch the domain-mask inputs (lithology + distance-to-coast) from the GAIA DataHub.
 ## Staged by the gaia-data-downloaders Geology_Shoreline_Downloader notebook.
+## NOTE: while lithology-stac is not yet live, produce $(LITHOLOGY_TIF) locally with
+## `make lithology-local` instead (see docs/intermediate-staging-plan.md).
 domain-inputs: $(LITHOLOGY_TIF) $(DISTCOAST_TIF)
 $(LITHOLOGY_TIF):
 	pixi run python -m src.data.fetch_gaia lithology \
@@ -118,6 +125,21 @@ $(LITHOLOGY_TIF):
 $(DISTCOAST_TIF):
 	pixi run python -m src.data.fetch_gaia dist_coast \
 		--bbox $(PNW_BBOX_WGS84) --output-dir $(PROCESSED_DIR)
+
+## List the attribute values in the DNR geology extract, to complete the crosswalk.
+list-geology-units:
+	pixi run python -m src.data.rasterize_geology \
+		--geology $(GEOLOGY_VECTOR) --crosswalk $(LITHOLOGY_CROSSWALK) --list-units
+
+## Intermediate/local lithology: rasterize DNR geology polygons -> $(LITHOLOGY_TIF),
+## aligned cell-for-cell to the HAND grid. Drop-in for the DataHub lithology layer.
+## Depends on terrain (for --like) and the reviewed crosswalk JSON.
+lithology-local: $(HAND_TIF) $(LITHOLOGY_CROSSWALK)
+	pixi run python -m src.data.rasterize_geology \
+		--geology $(GEOLOGY_VECTOR) \
+		--crosswalk $(LITHOLOGY_CROSSWALK) \
+		--like $(HAND_TIF) \
+		--output $(LITHOLOGY_TIF)
 
 ## Hydrogeologic domain mask (issue #2 — foundational for stratified validation/masking)
 domains: $(DOMAIN_TIF)
@@ -201,6 +223,16 @@ train:
 ## Run validation and artifact detection — placeholder
 validate:
 	@echo "TODO: Implement validation pipeline"
+
+## gaia-soil-hydromechanics state modules (SCAFFOLDS — interfaces only, not yet implemented)
+soil-moisture:
+	pixi run python -m src.models.soil_moisture --output-dir $(PROCESSED_DIR)
+
+soil-mechanics:
+	pixi run python -m src.models.soil_mechanics \
+		--vs30 $(PROCESSED_DIR)/vs30_90m.tif \
+		--dtw $(PROCESSED_DIR)/baseline_dtw_m.tif \
+		--output-dir $(PROCESSED_DIR)
 
 ## PNW pilot — QC (WA + OR only — ID has no level records yet)
 pilot-qc: $(RAW_DIR)/download_log.json
