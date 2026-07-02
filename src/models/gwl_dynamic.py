@@ -29,7 +29,7 @@ import xarray as xr
 from src.models.downscale import (
     ProvStep,
     UncertaintyBudget,
-    bilinear_downscale,
+    downscale,
     representativeness_sigma,
 )
 
@@ -82,11 +82,14 @@ def gwl_dynamic_90m(
     window: tuple[str, str],
     coarse_res_m: float = 2000.0,
     min_wells: int = 8,
+    downscaler: str = "bilinear",
 ):
     """Return (times, DTW_90m[t,y,x], UncertaintyBudget) over the requested window.
 
     ``monthly_pilot`` needs columns x_5070, y_5070, dtw_m, date (month start). Baseline and
     rf_std are 90 m EPSG:5070 DataArrays. Anomalies are relative to each well's window mean.
+    The coarse kriged anomaly is mapped to 90 m via the modular downscaler (``"bilinear"``
+    baseline; the fine baseline is passed as a covariate for future data-informed methods).
     """
     df = monthly_pilot.copy()
     df = df[(df.date >= pd.Timestamp(window[0])) & (df.date <= pd.Timestamp(window[1]))]
@@ -110,8 +113,9 @@ def gwl_dynamic_90m(
             .rio.write_crs("EPSG:5070").rio.set_spatial_dims(x_dim="x", y_dim="y")
         coarse_sig = xr.DataArray(sigma, dims=("y", "x"), coords={"y": gy, "x": gx}) \
             .rio.write_crs("EPSG:5070").rio.set_spatial_dims(x_dim="x", y_dim="y")
-        anom90 = bilinear_downscale(coarse.sortby("y"), like).values
-        sig90 = bilinear_downscale(coarse_sig.sortby("y"), like).values
+        cov = {"baseline": baseline_dtw}  # fine static covariate for smarter downscalers
+        anom90 = downscale(coarse.sortby("y"), like, method=downscaler, covariates=cov).values
+        sig90 = downscale(coarse_sig.sortby("y"), like, method=downscaler, covariates=cov).values
         dtw = np.where(valid, base + anom90, np.nan)
         times.append(mo)
         frames.append(dtw.astype("float32"))

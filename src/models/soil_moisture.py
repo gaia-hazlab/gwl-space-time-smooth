@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import rioxarray  # noqa: F401  (registers the .rio xarray accessor used across this module)
 import xarray as xr
 
@@ -181,19 +182,21 @@ def estimate_soil_moisture(inp: SoilMoistureInputs) -> tuple[np.ndarray, np.ndar
 # ---------------------------------------------------------------------------
 # 90 m statistical downscaling — fine static envelope × downscaled coarse wetness
 # ---------------------------------------------------------------------------
-def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times=None):
+def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times=None,
+                      downscaler="bilinear"):
     """Downscale the θ estimate onto the 90 m envelope grid, with a 3-term σ budget.
 
     The dynamic wetness is solved at the coarse TerraClimate grid (its true resolution) and
-    *bilinearly downscaled* to 90 m; the fine static envelope supplies the sub-4 km spatial
-    structure. Returns (times, θ_90m[t,y,x], UncertaintyBudget) — the budget carries the
-    static (pedotransfer), dynamic (driver) and downscaling (representativeness) components
-    plus provenance. ``times`` optionally selects a subset (indices) to keep memory bounded.
+    downscaled to 90 m via the modular :func:`~src.models.downscale.downscale` operator
+    (``downscaler="bilinear"`` is the resampling baseline; register a smarter, covariate-aware
+    method to upgrade). The fine static envelope supplies the sub-4 km spatial structure.
+    Returns (times, θ_90m[t,y,x], UncertaintyBudget) with static / dynamic / downscaling
+    components + provenance. ``times`` optionally selects a subset (indices).
     """
     from src.models.downscale import (
         ProvStep,
         UncertaintyBudget,
-        bilinear_downscale,
+        downscale,
         representativeness_sigma,
     )
 
@@ -214,9 +217,10 @@ def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times
     wp, fc, sat = env90["theta_wp"].values, env90["theta_fc"].values, env90["theta_sat"].values
     awc90 = np.clip(fc - wp, 1e-6, None)
 
+    cov = {"envelope": env90}  # fine static covariates a smarter downscaler may exploit
     frames = []
     for t in idx:
-        w90 = bilinear_downscale(w_coarse.isel(time=t), like).values
+        w90 = downscale(w_coarse.isel(time=t), like, method=downscaler, covariates=cov).values
         w90 = np.clip(w90, 0.0, 1.0)
         theta = np.minimum(wp + w90 * (fc - wp), sat)
         frames.append(theta.astype("float32"))
@@ -224,7 +228,8 @@ def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times
 
     # Uncertainty budget (time-mean wetness weights the static/dynamic split).
     w90_mean = np.clip(
-        bilinear_downscale(w_coarse.isel(time=list(idx)).mean("time"), like).values, 0.0, 1.0)
+        downscale(w_coarse.isel(time=list(idx)).mean("time"), like, method=downscaler,
+                  covariates=cov).values, 0.0, 1.0)
     budget = UncertaintyBudget()
     budget.add("static_pedotransfer", np.sqrt((1 - w90_mean) ** 2 + w90_mean ** 2) * _PTF_SIGMA)
     budget.add("dynamic_driver", _W_SIGMA * awc90)
@@ -240,6 +245,40 @@ def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times
     ]
     sel_times = np.asarray(driver_ds["time"].values)[list(idx)]
     return sel_times, theta_90m, budget
+
+
+# ---------------------------------------------------------------------------
+# Forcing ensemble — same envelope + bucket under multiple climate forcings
+# ---------------------------------------------------------------------------
+def soil_moisture_forcing_ensemble(env90, drivers: dict, root_depth_m=DEFAULT_ROOT_DEPTH_M):
+    """Run the θ estimate under several forcings and quantify forcing uncertainty.
+
+    ``drivers`` maps a forcing name (e.g. "TerraClimate", "PRISM") to its monthly driver
+    Dataset (each with precip_mm, pet_mm). Each is solved with the SAME static envelope and
+    bucket, downscaled to the SAME 90 m grid, then intersected on common months. Returns
+    (months, per-forcing θ dict, ensemble-mean θ, σ_forcing[y,x]) where σ_forcing is the
+    time-mean cross-forcing standard deviation — the forcing-uncertainty term for the budget
+    and the basis for bootstrapping / ensembling.
+    """
+    # Common months across all forcings (month-resolution timestamps).
+    month_sets = []
+    for ds in drivers.values():
+        month_sets.append({(pd.Timestamp(t).year, pd.Timestamp(t).month)
+                           for t in ds["time"].values})
+    common = sorted(set.intersection(*month_sets))
+
+    per_forcing, times_ref = {}, None
+    for name, ds in drivers.items():
+        dt = pd.DatetimeIndex(ds["time"].values)
+        idx = [int(np.where((dt.year == y) & (dt.month == m))[0][0]) for (y, m) in common]
+        t, theta, _ = soil_moisture_90m(env90, ds, root_depth_m=root_depth_m, times=idx)
+        per_forcing[name] = theta
+        times_ref = t
+
+    stack = np.stack(list(per_forcing.values()), axis=0)   # (forcing, time, y, x)
+    ens_mean = np.nanmean(stack, axis=0)
+    sigma_forcing = np.nanmean(np.nanstd(stack, axis=0), axis=0)  # (y, x) time-mean spread
+    return times_ref, per_forcing, ens_mean, sigma_forcing.astype("float32")
 
 
 # ---------------------------------------------------------------------------

@@ -69,15 +69,18 @@ residuals = "python -m src.models.interpolate_residuals --monthly data/processed
 list-geology-units = "python -m src.data.rasterize_geology --geology data/raw/geology/wa_dnr_geol.gpkg --crosswalk data/processed/lithology_crosswalk.json --list-units"
 lithology-local = "python -m src.data.rasterize_geology --geology data/raw/geology/wa_dnr_geol.gpkg --crosswalk data/processed/lithology_crosswalk.json --like data/processed/terrain_hand_90m.tif --output data/processed/lithology_90m.tif"
 # === gaia-soil-hydromechanics state modules ===
-# Dynamic climate driver for soil moisture (TerraClimate monthly P/PET/soil over the pilot).
+# Dynamic climate forcing for soil moisture — two interchangeable sources (forcing ensemble):
 terraclimate = "python -m src.data.fetch_terraclimate --output data/processed/terraclimate_monthly_puget.zarr"
+prism = "python -m src.data.fetch_prism_monthly --output data/processed/prism_monthly_puget.zarr"  # obs-based; ppt+tmean→Hamon PET
 # Soil-moisture state: SOLUS→Saxton-Rawls static envelope × Thornthwaite-Mather dynamic bucket.
 soil-moisture = "python -m src.models.soil_moisture --output-dir data/processed"
 soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"  # SCAFFOLD (#19)
 # 90 m time-varying products: GWL + θ GIFs and the tracked downscaling uncertainty budget.
 products-90m = "python notebooks/make_products_90m.py"
+# Forcing-ensemble (TerraClimate vs PRISM) + demonstrative dv/v coupling figures.
+ensemble-dvv = "python notebooks/make_ensemble_dvv_figures.py"
 # Demo: static figures + GIFs + provenance, assembled into the self-contained Quarto page.
-demo = "python notebooks/demo_gwl_sm.py && python notebooks/make_products_90m.py && python notebooks/build_demo_qmd.py && quarto render docs/gwl_soil_moisture_demo.qmd --to html"
+demo = "python notebooks/demo_gwl_sm.py && python notebooks/make_products_90m.py && python notebooks/make_ensemble_dvv_figures.py && python notebooks/build_demo_qmd.py && quarto render docs/gwl_soil_moisture_demo.qmd --to html"
 # === Legacy (comparison only) ===
 baseline-legacy = "python -m src.models.interpolate_baseline"
 anomalies-legacy = "python -m src.models.interpolate_anomalies"
