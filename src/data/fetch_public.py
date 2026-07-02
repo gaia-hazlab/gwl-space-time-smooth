@@ -35,8 +35,14 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
+TARGET_RES_M = 90.0  # analysis-grid resolution (matches src.features.compute_grid)
+
 SOLUS_BASE = "/vsicurl/https://storage.googleapis.com/solus100pub"
 SOLUS_NODATA = 255  # uint8 percent fields
+
+# PRISM 30-year (1991–2020) normals web service. date "14" = the annual normal; ppt in mm.
+# res is "800m" (~30 arc-sec) or "4km". Returns a zip of the BIL raster (NAD83 geographic).
+PRISM_NORMALS_URL = "https://services.nacse.org/prism/data/get/normals/us/{res}/ppt/14"
 
 # SOLUS property short-name -> output variable name expected by the models.
 SOLUS_PROPS = {"claytotal": "clay_pct", "sandtotal": "sand_pct"}
@@ -97,6 +103,66 @@ def fetch_solus(
     return out
 
 
+def fetch_prism_ppt(
+    bbox_wgs84: tuple[float, float, float, float], output_dir: Path, res: str = "800m"
+) -> Path:
+    """Fetch the PRISM 30-yr mean-annual-precipitation normal → prism_mean_annual_ppt_wa.tif.
+
+    Output matches ``src.data.fetch_gaia._write_mean_annual_ppt``: single-band mm/yr, EPSG:5070,
+    90 m, nodata −9999 — so ``baseline_regression`` consumes it unchanged. The PRISM annual
+    ppt *normal* (date=14) already IS the long-term mean annual precipitation, so this is
+    equivalent to (and simpler than) the GAIA path that sums monthly PRISM; used because the
+    GAIA prism-stac endpoint is unpublished.
+
+    Note: this static covariate uses the 30-yr normal. The Stage-2 climate-response model
+    needs a monthly PRISM *time series* (prism_monthly_wa.zarr) instead — a separate fetch
+    against the daily/monthly PRISM service, not built here.
+    """
+    import io
+    import tempfile
+    import zipfile
+
+    import requests
+    import rioxarray  # noqa: F401
+    from rasterio.enums import Resampling
+
+    url = PRISM_NORMALS_URL.format(res=res)
+    logger.info("Downloading PRISM annual ppt normal (%s): %s", res, url)
+    r = requests.get(url, timeout=180, headers={"User-Agent": "gwl-space-time-smooth"})
+    r.raise_for_status()
+    if "zip" not in r.headers.get("Content-Type", ""):
+        raise RuntimeError(
+            "PRISM did not return a zip (likely the ~2 downloads/IP/day rate limit); retry later. "
+            f"Body: {r.text[:200]!r}"
+        )
+    tmp = Path(tempfile.mkdtemp())
+    with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+        z.extractall(tmp)
+    # PRISM normals ship as a GeoTIFF (older builds used BIL) — accept either.
+    rasters = sorted(tmp.glob("*.tif")) or sorted(tmp.glob("*.bil"))
+    if not rasters:
+        raise RuntimeError(f"No raster in PRISM zip; contents: {[p.name for p in tmp.iterdir()]}")
+
+    da = rioxarray.open_rasterio(rasters[0], masked=True).squeeze("band", drop=True)
+    # Clip in the native CRS (NAD83 geographic) with a small buffer, then reproject to 90 m 5070.
+    w, s, e, n = bbox_wgs84
+    da = da.rio.clip_box(w - 0.1, s - 0.1, e + 0.1, n + 0.1)
+    da = da.rio.reproject("EPSG:5070", resolution=TARGET_RES_M, resampling=Resampling.average)
+    # masked read leaves a _FillValue attr that clashes with write_nodata on serialization;
+    # drop it, materialise nodata as -9999, and set it cleanly.
+    da = da.fillna(-9999.0)
+    da.attrs.pop("_FillValue", None)
+    da.encoding.pop("_FillValue", None)
+    da.rio.write_nodata(-9999.0, inplace=True)
+    out = Path(output_dir) / "prism_mean_annual_ppt_wa.tif"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    da.rio.to_raster(out, driver="GTiff", dtype="float32", compress="LZW",
+                     tiled=True, blockxsize=256, blockysize=256)
+    logger.info("PRISM mean annual ppt (mm/yr) → %s (median=%.0f mm)", out,
+                float(np.nanmedian(da.values)))
+    return out
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
@@ -104,10 +170,19 @@ def main() -> None:
     ps.add_argument("--bbox", nargs=4, type=float, required=True,
                     metavar=("W", "S", "E", "N"), help="WGS84 bbox: west south east north.")
     ps.add_argument("--output-dir", type=Path, default=Path("data/processed"))
+
+    pp = sub.add_parser("prism", help="PRISM 30-yr mean-annual-ppt normal (mm/yr) from the nacse service.")
+    pp.add_argument("--bbox", nargs=4, type=float, required=True,
+                    metavar=("W", "S", "E", "N"), help="WGS84 bbox: west south east north.")
+    pp.add_argument("--res", choices=["800m", "4km"], default="800m", help="PRISM normal resolution.")
+    pp.add_argument("--output-dir", type=Path, default=Path("data/processed"))
+
     args = p.parse_args()
 
     if args.command == "solus":
         fetch_solus(tuple(args.bbox), args.output_dir)
+    elif args.command == "prism":
+        fetch_prism_ppt(tuple(args.bbox), args.output_dir, res=args.res)
 
 
 if __name__ == "__main__":

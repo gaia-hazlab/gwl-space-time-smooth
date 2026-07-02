@@ -68,3 +68,6 @@ figures/
 # ── Environment / secrets ─────────────────────────────────────────────────────
 .env
 .env.*
+
+# HTTP fetch cache (aiohttp/requests)
+cache/
