@@ -197,8 +197,8 @@ def fig_sm():
     _map(ax4, sm.theta.isel(time=dry_i), "YlGnBu",
          f"θ — driest month ({time[dry_i]:%Y-%m})", "θ (m³/m³)", vmin=vmin, vmax=vmax)
 
-    # θ time series vs TerraClimate soil (independent): standardised on ONE axis. Thin raw
-    # monthly (seasonal) + bold 13-month rolling mean (interannual/drought).
+    # θ time series vs TerraClimate soil (PEER water-balance model, shares our P&PET forcing):
+    # standardised on ONE axis. Thin raw monthly (seasonal) + bold 13-month rolling mean.
     ax5 = fig.add_subplot(gs[1, 2])
     z = lambda a: (a - np.nanmean(a)) / np.nanstd(a)
     r = np.corrcoef(theta_dm, tc)[0, 1]
@@ -206,10 +206,10 @@ def fig_sm():
     roll = lambda a: pd.Series(a).rolling(13, center=True, min_periods=7).mean().values
     ax5.plot(time, zt, color=OI["green"], lw=0.6, alpha=0.4)
     ax5.plot(time, zc, color=OI["purple"], lw=0.6, alpha=0.4)
-    ax5.plot(time, roll(zt), color=OI["green"], lw=2.0, label="our θ (data-driven)")
-    ax5.plot(time, roll(zc), color=OI["purple"], lw=1.6, label="TerraClimate soil (independent)")
+    ax5.plot(time, roll(zt), color=OI["green"], lw=2.0, label="our θ (SOLUS × T-M)")
+    ax5.plot(time, roll(zc), color=OI["purple"], lw=1.6, label="TerraClimate soil (peer model)")
     ax5.set_ylabel("standardised anomaly (z)")
-    ax5.set_title(f"θ vs independent reanalysis  (r = {r:.2f})", fontsize=10.5)
+    ax5.set_title(f"θ vs peer water balance — consistency (r = {r:.2f})", fontsize=10.5)
     ax5.legend(fontsize=7.5, loc="lower left", ncol=1, framealpha=0.9)
     ax5.grid(axis="x", visible=False)
 

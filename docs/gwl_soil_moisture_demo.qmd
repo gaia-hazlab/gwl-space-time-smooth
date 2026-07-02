@@ -66,17 +66,20 @@ observation-anchored pipeline, on real public data.
 ```{=html}
 <div class="tldr"><b>Why this exists.</b> Before the repository rename
 (<a href="https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/24">#24</a>) and the <code>gaia-soil-reanalysis</code> reframe
-(<a href="https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/18">#18</a>), this page shows the science works: <b>GWL and soil moisture
-are both modelled and validated</b> with the same static&nbsp;×&nbsp;dynamic, observation-anchored
-approach. The soil-moisture estimate reproduces an <i>independent</i> reanalysis' soil-water
-field at <b class="sm">r&nbsp;=&nbsp;0.98</b> (per-cell median 0.98) without ever
-being fit to it.</div>
+(<a href="https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/18">#18</a>), this page shows the machinery works end-to-end: <b>GWL and soil
+moisture are both modelled</b> at 90 m with the same static&nbsp;×&nbsp;dynamic, observation-anchored
+approach. Our soil-moisture bucket tracks an established peer product (TerraClimate soil) at
+<b class="sm">r&nbsp;=&nbsp;0.98</b> — a <b>consistency check</b>, not independent validation:
+both are Thornthwaite–Mather water balances driven by the <i>same</i> climate forcing, so this
+confirms a correct, sane implementation, not accuracy against ground truth. See
+<a href="#methods">Methods</a> for exactly what each data source does. Independent validation
+(SMAP, in-situ) is future work (<a href="https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/20">#20</a>).</div>
 
 <div class="grid">
   <div class="stat"><div class="n gwl">863</div><div class="l">QC-clean NWIS wells (WA); 241 in pilot</div></div>
   <div class="stat"><div class="n gwl">30,944</div><div class="l">monthly GWL observations</div></div>
   <div class="stat"><div class="n gwl">43%</div><div class="l">RF importance on HAND (top predictor)</div></div>
-  <div class="stat"><div class="n sm">0.98</div><div class="l">θ vs independent TerraClimate soil</div></div>
+  <div class="stat"><div class="n sm">0.98</div><div class="l">θ vs TerraClimate soil (peer-model consistency)</div></div>
   <div class="stat"><div class="n sm">300</div><div class="l">months of soil moisture (2000–2024)</div></div>
   <div class="stat"><div class="n accent">90 m</div><div class="l">product resolution (both state variables)</div></div>
 </div>
@@ -126,14 +129,17 @@ that envelope through time to give volumetric θ(t) with per-cell θ_std.
 - **Physical envelope** from texture alone: field capacity 0.17–0.25, porosity
   0.45–0.46 m³/m³, available water 101–150 mm — finer valley soils
   hold more, exactly as observed.
-- **Independent validation:** our θ tracks TerraClimate's own soil-water field at r&nbsp;=&nbsp;0.98
-  (domain mean) / 0.98 (per-cell median) — a strong check, since that field never enters the estimator.
+- **Peer-model consistency:** our θ tracks TerraClimate's own soil-water field at r&nbsp;=&nbsp;0.98
+  (domain mean) / 0.98 (per-cell median). We never *fit* to it, but both are Thornthwaite–Mather
+  balances on the same P&PET — so this confirms a correct implementation, not independent accuracy
+  (see [Methods](#methods)).
 - **Right signal:** wet winters (θ≈0.20), late-summer drought (θ≈0.10); driest
-  year 2023, wettest 2010 — the real PNW interannual story.
+  year 2023, wettest 2010 — the real PNW interannual story, inherited from the TerraClimate forcing.
 
 ![Static SOLUS→Saxton-Rawls envelope at 90 m (top: porosity, field capacity, available water
 capacity); modelled θ for the wettest vs driest month (bottom left/centre); and the 2000–2024 θ series
-against the independent TerraClimate soil field (bold = 13-month rolling mean; r&nbsp;=&nbsp;0.98).](../figures/demo/soil_moisture_state.png)
+against the TerraClimate soil field — a *peer* water balance sharing our forcing, not an independent
+reference (bold = 13-month rolling mean; r&nbsp;=&nbsp;0.98).](../figures/demo/soil_moisture_state.png)
 
 ## 3 · The coupled view
 
@@ -163,7 +169,7 @@ so the 90 m detail and its temporal evolution are both visible.
 ![Soil moisture θ — 90 m, monthly. Fine SOLUS texture modulated by the downscaled 4 km wetness.](../figures/demo/theta_90m.gif)
 :::
 
-**Uncertainty is decomposed into three independent components** combined in quadrature —
+**Uncertainty is decomposed into three (assumed-independent) components** combined in quadrature —
 *static* (fine-scale model), *dynamic* (coarse driver), *downscaling* (representativeness of
 the coarse signal within a fine cell). Their variance shares expose where each product's error
 actually comes from:
@@ -203,6 +209,91 @@ split, with downscaling a real ~23% share.](../figures/demo/uncertainty_budget.p
 </table>
 ```
 
+## 5 · Methods — data sources, workflow & physical laws {#methods}
+
+### What each data source actually does
+
+```{=html}
+<table>
+  <tr><th>Source</th><th>Variable</th><th>Native res</th><th>Role in the models</th></tr>
+  <tr><td>USGS NWIS</td><td>monthly depth-to-water at wells</td><td>point</td>
+      <td><b>Ground truth</b> (GWL) — trains the RF baseline and supplies the dynamic anomaly</td></tr>
+  <tr><td>USGS 3DEP</td><td>elevation → HAND, TWI, slope</td><td>90 m</td>
+      <td><b>Static predictor</b> (GWL)</td></tr>
+  <tr><td>SOLUS100</td><td>sand %, clay %</td><td>100 m</td>
+      <td><b>Static envelope</b> (soil moisture) + predictor (GWL)</td></tr>
+  <tr><td class="sm"><b>TerraClimate</b></td><td>precipitation (ppt), reference ET (pet)</td><td>4 km</td>
+      <td><b>Dynamic forcing — INPUT</b> to the soil-moisture water balance</td></tr>
+  <tr><td class="sm"><b>TerraClimate</b></td><td>soil (its own soil-water storage)</td><td>4 km</td>
+      <td><b>Cross-check ONLY</b> — a peer product; never enters the estimator</td></tr>
+</table>
+```
+
+The last two rows are the distinction worth being explicit about: TerraClimate **precipitation and
+reference ET are inputs** that force our water balance; TerraClimate **`soil` is used only for the
+consistency comparison**. Because TerraClimate derives its own `soil` from a Thornthwaite–Mather
+balance on the *same* ppt/pet, the r&nbsp;=&nbsp;0.98 agreement is expected by construction — it
+tests implementation, not accuracy.
+
+### Groundwater level — workflow & assumptions
+
+1. **Static baseline (90 m).** Random forest DTW = *f*(HAND, TWI, slope, clay%, sand%), trained on
+   863 QC-clean wells. *Physical basis:* HAND (Height Above Nearest Drainage; Nobre et al.
+   2011) is a terrain proxy for the unconfined water table — it sits near drainages (HAND ≈ 0) and deep
+   under ridges. *Assumptions:* shallow, unconfined aquifer; DTW set by terrain + soil, **not** absolute
+   position (lat/lon excluded so the model cannot memorise well locations).
+2. **Dynamic anomaly (coarse).** Per well, anomaly = monthly DTW − that well's window mean; ordinary
+   kriging (exponential variogram) interpolates the anomalies onto a ~2 km grid with a kriging variance.
+   *Assumptions:* anomalies are second-order stationary and spatially autocorrelated; kriging σ is capped
+   at the climatological prior, so away from wells the estimate degrades to "no information" — never
+   spurious confidence.
+3. **Downscale & combine.** The coarse anomaly is bilinearly downscaled to 90 m and added to the static
+   baseline:  `DTW(x,t) = baseline(x) + anomaly(x,t)`.
+
+### Soil moisture — workflow & assumptions
+
+1. **Static hydraulic envelope (90 m).** The **Saxton & Rawls (2006)** pedotransfer functions map
+   sand%/clay% (with assumed 2.5% organic matter) to volumetric water contents at fixed matric potentials:
+   θ_wp at −1500 kPa (permanent **wilting point**), θ_fc at −33 kPa (**field capacity**, drained upper
+   limit), θ_sat (**saturation / porosity**), plus saturated conductivity Ksat. *Physical basis:* texture
+   sets pore-size distribution, which sets water retention. *Assumption:* 0–5 cm texture represents the
+   root zone; organic matter fixed at 2.5%.
+2. **Available water capacity:**  `AWC = (θ_fc − θ_wp) · z_root`, with root depth z_root = 1 m.
+3. **Dynamic water balance — Thornthwaite–Mather (1957), monthly, forced by TerraClimate P and PET.**
+   A single vertical bucket S ∈ [0, AWC]:
+
+```
+surplus month (P ≥ PET):   S ← min( S + (P − PET), AWC )                  [recharge]
+deficit month (P < PET):   APWL ← APWL + (PET − P);  S ← AWC · exp(−APWL / AWC)   [drawdown]
+relative wetness:          w  = S / AWC   ∈ [0, 1]
+```
+
+   *Physical basis:* precipitation recharges the store; when potential evaporative demand exceeds supply
+   the store depletes exponentially with the accumulated potential water loss (APWL). *Assumptions:* one
+   vertical bucket, monthly step, no lateral flow or deep percolation beyond AWC, **no explicit snowpack**
+   (winter precipitation enters directly; PET is low then), uniform 1 m root zone.
+4. **Combine & downscale.**  `θ(x,t) = θ_wp + w(t)·(θ_fc − θ_wp)`, capped at θ_sat. Wetness *w* is solved
+   on the 4 km forcing grid and bilinearly downscaled to the 90 m envelope — fine spatial texture from
+   SOLUS, temporal signal from TerraClimate.
+
+### Uncertainty — propagation & the downscaling term
+
+Error components are treated as (assumed) independent and combined in quadrature:
+`σ_total = √(σ_static² + σ_dynamic² + σ_downscaling²)`.
+
+- **σ_static** — pedotransfer RMSE (~0.03 m³/m³) for θ; RF ensemble spread for DTW.
+- **σ_dynamic** — bucket-closure error for θ; kriging σ (≤ prior) for DTW.
+- **σ_downscaling** — *representativeness*: the within-coarse-cell standard deviation of the fine static
+  field — the sub-footprint structure a single coarse dynamic value cannot resolve. This term is what
+  makes the 90 m product honest rather than free.
+
+### What would make this independently validated
+
+The current cross-check shares forcing with the model, so it cannot confirm accuracy. Genuinely
+independent validation needs observations **outside the forcing chain** — **SMAP** satellite soil
+moisture and in-situ probes for θ ([#20](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/20)), and the continuous-recorder network for GWL
+phase/recession ([#6](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/6)).
+
 ## Honest caveats
 
 - Block-CV RMSE (18&nbsp;m) is large because it is a *spatial* hold-out over a hard,
@@ -215,9 +306,11 @@ split, with downscaling a real ~23% share.](../figures/demo/uncertainty_budget.p
 - Kriged GWL σ is bounded by the climatological prior (away from wells it falls back to "know nothing",
   never spurious confidence); the animation window (2010-04–2013-03) is chosen for dense well coverage.
 - θ spans the root-zone available-water range (θ_wp→θ_fc); saturation excess is bounded by porosity, not
-  resolved event-by-event at monthly step.
-- The TerraClimate cross-check is an *independent product*, not independent ground truth; SMAP / in-situ
-  validation is the next step ([#20](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/20)).
+  resolved event-by-event at monthly step. No explicit snowpack — winter precipitation enters the bucket
+  directly, so late-melt recharge timing is approximate.
+- **The r&nbsp;=&nbsp;0.98 agreement is a consistency check, not independent validation** — our bucket and
+  TerraClimate `soil` share the same P&PET forcing and water-balance family (see [Methods](#methods)).
+  Independent validation (SMAP, in-situ) is the next step ([#20](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/20)).
 
 ## Reproduce
 
