@@ -39,6 +39,13 @@ jobs:
         run: |
           mkdir _site
           cp docs/gwl_hybrid_framework.html _site/index.html
+          # The GWL + soil-moisture demo is a pre-rendered, self-contained page (its figures/GIFs
+          # come from gitignored real-data products, so it is not re-rendered on CI — it is served
+          # as committed). Link it from the GAIA soil-reanalysis chapter as:
+          #   https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html
+          if [ -f docs/gwl_soil_moisture_demo.html ]; then
+            cp docs/gwl_soil_moisture_demo.html _site/gwl_soil_moisture_demo.html
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:
