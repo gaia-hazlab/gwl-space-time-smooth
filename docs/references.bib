@@ -1,9 +1,11 @@
 % =============================================================================
-%  references.bib — GWL hybrid framework
+%  references.bib — GWL hybrid framework / gaia-soil-reanalysis
 %  Every DOI in this file was verified against the Crossref REST API and the
-%  DOI handle registry on 2026-06-27. arXiv entries verified via DataCite.
-%  Entries that could not be verified to a real publication were removed.
-%  Do NOT add a citation without first confirming the DOI resolves to the
+%  DOI handle registry. Full re-audit 2026-07-02: all 37 prior entries confirmed
+%  to resolve to the paper actually cited (title + first author + year); the four
+%  soil-moisture references below verified on addition. arXiv entries verified via
+%  arXiv/DataCite. Entries that could not be verified to a real publication were
+%  removed. Do NOT add a citation without first confirming the DOI resolves to the
 %  paper actually being cited (api.crossref.org/works/{doi}).
 % =============================================================================
 
@@ -470,4 +472,60 @@
   year={2017},
   publisher={Elsevier},
   doi={10.1016/j.advwatres.2017.01.011}
+}
+
+% ── Soil-moisture module (gaia-soil-reanalysis) — added + verified 2026-07-02 ──
+
+% Saxton-Rawls pedotransfer functions: SOLUS texture -> theta_wp/fc/sat, Ksat.
+% Crossref-verified: title + authors + SSSAJ 70(5):1569-1578 (2006) match exactly.
+@article{saxton2006soil,
+  title={Soil Water Characteristic Estimates by Texture and Organic Matter for Hydrologic Solutions},
+  author={Saxton, K. E. and Rawls, W. J.},
+  journal={Soil Science Society of America Journal},
+  volume={70},
+  number={5},
+  pages={1569--1578},
+  year={2006},
+  publisher={Wiley},
+  doi={10.2136/sssaj2005.0117}
+}
+
+% TerraClimate monthly climatic water balance — the soil-moisture P&PET forcing.
+% Crossref-verified: all four authors, Scientific Data 5:170191 (2018) match exactly.
+@article{abatzoglou2018terraclimate,
+  title={{TerraClimate}, a high-resolution global dataset of monthly climate and climatic water balance from 1958--2015},
+  author={Abatzoglou, John T. and Dobrowski, Solomon Z. and Parks, Sean A. and Hegewisch, Katherine C.},
+  journal={Scientific Data},
+  volume={5},
+  pages={170191},
+  year={2018},
+  publisher={Nature Publishing Group},
+  doi={10.1038/sdata.2017.191}
+}
+
+% Thornthwaite-Mather monthly soil-water balance — the dynamic bucket.
+% No DOI exists (1957 institute monograph); verified via citing works, not fabricated.
+@techreport{thornthwaite1957water,
+  title={Instructions and Tables for Computing Potential Evapotranspiration and the Water Balance},
+  author={Thornthwaite, C. W. and Mather, J. R.},
+  institution={Drexel Institute of Technology, Laboratory of Climatology},
+  type={Publications in Climatology},
+  number={Vol. 10, No. 3},
+  address={Centerton, NJ},
+  pages={185--311},
+  year={1957}
+}
+
+% SOLUS100 soil property maps — the static-envelope texture source (primary paper,
+% distinct from ramcharan2018soil). Crossref-verified: all 7 authors, SSSAJ 88(6):2046-2065 (2024).
+@article{nauman2024solus,
+  title={Soil landscapes of the United States ({SOLUS}): Developing predictive soil property maps of the conterminous United States using hybrid training sets},
+  author={Nauman, Travis W. and Kienast-Brown, Suzann and Roecker, Stephen M. and Brungard, Colby and White, David and Philippe, Jessica and Thompson, James A.},
+  journal={Soil Science Society of America Journal},
+  volume={88},
+  number={6},
+  pages={2046--2065},
+  year={2024},
+  publisher={Wiley},
+  doi={10.1002/saj2.20769}
 }

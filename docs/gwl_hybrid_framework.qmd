@@ -36,6 +36,13 @@ abstract: |
   liquefaction models and LandLab geomorphological frameworks. We review prior hybrid
   and data-driven DTW modeling work and situate our contribution relative to the two
   dominant paradigms — full numerical flow models and purely statistical interpolations.
+  Finally, we show that the same design — a fine static envelope, a coarse dynamic driver,
+  statistical downscaling to 90 m, and a tracked uncertainty budget — generalizes beyond
+  groundwater into a coupled *soil-reanalysis* framework: we additionally implement a
+  soil-moisture state variable (a SOLUS-derived Saxton–Rawls hydraulic envelope forced by a
+  TerraClimate-driven Thornthwaite–Mather water balance) and outline a third,
+  seismically-constrained soil-mechanics variable (ambient-noise dv/v), each delivered at
+  90 m with an explicit static / dynamic / downscaling error decomposition.
 keywords:
   - groundwater level
   - Height Above Nearest Drainage
@@ -141,6 +148,17 @@ Drainage (HAND)** [@nobre2011hand; @gharari2011toward] as the primary spatial pr
 and the addition of a **β-coefficient map** framework [@bloomfield2013analysis] that
 enables GWL forecasting from climate indices alone via a single matrix multiply —
 without re-running any kriging step.
+
+Although we develop it here for groundwater level, this framework is one instance of a more
+general template — a **fine-resolution static envelope** (terrain and soil) combined with a
+**coarse dynamic driver** (climate or observations), statistically downscaled to a common
+90 m grid and reconciled against observations with an explicit uncertainty budget. The same
+template defines a coupled **soil-reanalysis** of the near surface: groundwater level is the
+mature state variable, but the geotechnical twins also need vadose-zone **soil moisture**
+and **soil mechanical state**. We therefore treat GWL as the first of three coupled
+subsurface states and, in @sec-soilmoisture, describe the now-implemented soil-moisture
+module and the shared downscaling / uncertainty machinery; the third state (soil mechanics,
+constrained by ambient-noise seismic velocity change, dv/v) is in development.
 
 ### Target applications
 
@@ -1367,6 +1385,102 @@ work has combined this with HAND-based regression kriging in a full space-time p
 
 ---
 
+## Companion State Variable: Soil Moisture and the Coupled Soil-Reanalysis Framework {#sec-soilmoisture}
+
+The three-stage framework above is deliberately generic in form: a **fine-resolution static
+envelope** (what the ground can hold, or where water sits, from terrain and soil) combined
+with a **coarse dynamic driver** (how it varies in time), reconciled against observations,
+delivered at 90 m, and reported with a decomposed uncertainty budget. Groundwater level is
+the mature instance of this template — but it is not the only subsurface state the downstream
+hazard models need. This section describes a second, now-implemented instance — **soil
+moisture** — and the coupled *soil-reanalysis* framing that unifies them.
+
+### Three coupled state variables
+
+The geotechnical twins consume three subsurface states, each decomposable into a static
+envelope and a dynamic driver:
+
+| State variable | Static envelope (fine) | Dynamic driver (coarse) | Status |
+|---|---|---|---|
+| Groundwater level | HAND + SOLUS100 → RF baseline (90 m) | kriged monthly well anomalies | mature (this report) |
+| Soil moisture | SOLUS100 → Saxton–Rawls envelope (90 m) | TerraClimate $P$ & PET → Thornthwaite–Mather bucket | implemented |
+| Soil mechanics | Vs30 [@sanger2025parametric] + SOLUS | ambient-noise dv/v | in development |
+
+The differentiator relative to hydrology-only products is the third row: seismic velocity
+change (dv/v) as a dynamic, *observational* constraint on effective stress and saturation,
+jointly informing the water table and the vadose zone. That module is not yet implemented;
+the soil-moisture module below is.
+
+### Soil-moisture static envelope
+
+The static hydraulic envelope is derived from SOLUS100 sand and clay fractions
+[@nauman2024solus] through the Saxton & Rawls [-@saxton2006soil] pedotransfer functions,
+which map texture (with a nominal organic-matter fraction) to volumetric water content at
+fixed matric potentials: the permanent wilting point $\theta_{wp}$ ($-1500$ kPa), field
+capacity $\theta_{fc}$ ($-33$ kPa), saturation/porosity $\theta_{sat}$, and saturated
+conductivity $K_{sat}$. *Physical basis:* texture sets the pore-size distribution, which sets
+water retention. Over the Puget Sound pilot these estimates yield field capacity
+$0.17$–$0.25$, porosity $0.45$–$0.46$ m³ m⁻³, and plant-available water capacity $100$–$150$
+mm, with finer valley soils holding more — consistent with the alluvial setting.
+
+### Soil-moisture dynamic driver — an honest accounting of TerraClimate
+
+The temporal signal comes from a monthly Thornthwaite–Mather [-@thornthwaite1957water]
+soil-water balance. A single root-zone bucket of capacity
+$\mathrm{AWC} = (\theta_{fc}-\theta_{wp})\,z_r$ (root depth $z_r = 1$ m) is forced by
+**TerraClimate** [@abatzoglou2018terraclimate] monthly precipitation $P$ and reference
+evapotranspiration PET:
+
+$$
+S_t = \begin{cases}
+\min\!\big(S_{t-1} + (P_t - \mathrm{PET}_t),\; \mathrm{AWC}\big), & P_t \ge \mathrm{PET}_t \quad \text{(recharge)} \\[4pt]
+\mathrm{AWC}\,\exp\!\big(-\mathrm{APWL}_t / \mathrm{AWC}\big), & P_t < \mathrm{PET}_t \quad \text{(drawdown)}
+\end{cases}
+$$
+
+where APWL is the accumulated potential water loss over the dry run. The relative wetness
+$w_t = S_t/\mathrm{AWC} \in [0,1]$ fills the static envelope,
+$\theta_t = \theta_{wp} + w_t\,(\theta_{fc}-\theta_{wp})$, capped at $\theta_{sat}$.
+
+Two roles of TerraClimate must be kept distinct. Its **precipitation and reference ET are
+forcing inputs** to our water balance. Its own **soil-water-storage product is used only as a
+cross-check** — it never enters the estimator. Because TerraClimate derives that soil field
+from a Thornthwaite–Mather balance driven by the *same* $P$ and PET, the $r = 0.98$ agreement
+between our $\theta$ and TerraClimate soil (domain mean; per-cell median $0.98$) is a
+**consistency check that the envelope and bucket are implemented sensibly — not an
+independent validation of accuracy**, since the two models share both forcing and model
+family. Genuinely independent validation requires observations outside the forcing chain
+(SMAP retrievals, in-situ probes) and is future work. We state this plainly because
+conflating the two would overstate the evidence.
+
+### One downscaling and uncertainty budget for both variables
+
+Each state variable solves its dynamic component at its native coarse resolution — ~4 km for
+the TerraClimate-forced wetness, ~2 km for the kriged GWL anomaly — and bilinearly
+downscales it onto the 90 m static grid. Fine spatial texture therefore comes from the static
+envelope; the temporal signal is coarse and *interpolated*, not independently resolved at
+90 m. Rather than hide this, the per-cell variance is decomposed into three
+assumed-independent components combined in quadrature,
+$$\sigma^2_{\text{total}} = \sigma^2_{\text{static}} + \sigma^2_{\text{dynamic}} + \sigma^2_{\text{downscaling}},$$
+the static-model error (pedotransfer RMSE $\approx 0.03$ m³ m⁻³ for $\theta$; random-forest
+ensemble spread for DTW), the dynamic driver/interpolation error (bucket closure; kriging
+variance, bounded by the climatological prior so it never claims confidence away from data),
+and a **downscaling representativeness** term — the within-coarse-cell standard deviation of
+the fine static field, i.e. the sub-footprint structure that a single coarse value cannot
+resolve. Over the pilot the downscaling term is a real $\sim$23% of the soil-moisture
+variance and $\sim$32% of the DTW variance; it is reported, not folded silently into the
+total, so that "90 m" is an honest label rather than a free lunch.
+
+### Interactive demonstration
+
+A self-contained, reproducible demonstration of both state variables over the Puget Sound
+pilot — the static envelopes, the 90 m animated $\theta$ and DTW products, the peer-model
+consistency comparison, and the full provenance and uncertainty budget — is published
+alongside this report at
+[`gwl_soil_moisture_demo.html`](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html).
+
+---
+
 ## GAIA Ecosystem Integration {#sec-gaia}
 
 The framework is designed for integration with the GAIA HazLab data and modeling
@@ -1531,12 +1645,22 @@ estimation in the Pacific Northwest that:
    s3://cresst, producing STAC-provenance DataTree outputs, and cross-validating with
    GAIA Pillar 1 vadose-zone physics at the water table surface.
 
+5. **Generalizes to a coupled soil-reanalysis** (@sec-soilmoisture): the same
+   static-envelope × dynamic-driver × statistical-downscaling design produces a
+   companion 90 m **soil-moisture** state variable (SOLUS→Saxton–Rawls envelope forced
+   by a TerraClimate-driven Thornthwaite–Mather balance), with a shared, explicitly
+   decomposed static / dynamic / downscaling uncertainty budget across both variables.
+
 The principal remaining gaps are: (a) sparse well density above 500 m in the Cascades,
 driving large uncertainty in exactly the hillslope terrain needed for LandLab; (b)
-the missing AR term pending Stage IV intercomparison; and (c) coastal boundary
-conditions for SoDo sea level and subsidence (Stage 4, deferred). These are honest
-limitations of any observation-anchored product and document the minimum investment in
-monitoring infrastructure needed to close the uncertainty.
+the missing AR term pending Stage IV intercomparison; (c) coastal boundary
+conditions for SoDo sea level and subsidence (Stage 4, deferred); and (d) the third
+coupled state variable — soil mechanics constrained by ambient-noise dv/v — which
+remains in development, and truly *independent* validation of the soil-moisture product
+(SMAP, in-situ), the current cross-check against TerraClimate being a consistency test
+rather than an accuracy test. These are honest limitations of any observation-anchored
+product and document the minimum investment in monitoring infrastructure needed to close
+the uncertainty.
 
 ---
 
