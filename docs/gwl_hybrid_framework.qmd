@@ -1471,12 +1471,35 @@ resolve. Over the pilot the downscaling term is a real $\sim$23% of the soil-moi
 variance and $\sim$32% of the DTW variance; it is reported, not folded silently into the
 total, so that "90 m" is an honest label rather than a free lunch.
 
+### Swappable forcing, modular downscaling, and the dv/v channel
+
+Three seams keep the framework extensible toward data assimilation. First, **forcing is not
+hard-wired**: the bucket needs only precipitation and reference ET, so running it under both
+TerraClimate (reanalysis) and PRISM (station observations; PET via the Hamon method) yields a
+*forcing ensemble* — the two agree at $r = 0.98$ and their spread is an explicit
+forcing-uncertainty term (a fourth budget component), with the observation-based PRISM forcing
+also making the TerraClimate cross-check more independent. Second, **downscaling is modular**:
+the coarse→90 m step is a registry whose default is bilinear resampling — a baseline that adds
+no new fine-scale information (the representativeness term quantifies exactly that) — so smarter,
+data-informed or model-driven downscalers (covariate regression, ML super-resolution,
+TWI/poroelastic redistribution) can be substituted without changing call sites. Third,
+calibration against coarse remote-sensing products (SMAP, NISAR, NLDAS, GRACE) is scored by
+**upscaling** the 90 m field to the sensor's native grid, not by downscaling the sensor — the
+correct scale for assimilation.
+
+Finally, the third state variable's dynamic source, **dv/v** (ambient-noise seismic velocity
+change), is not merely a constraint on soil mechanics: per the soil-hydromechanical memory
+framework, a low-frequency (saturated, poroelastic) band and a high-frequency (vadose,
+Hertz–Mindlin) band let dv/v *derive* both groundwater level and soil moisture. A demonstrative
+forward+inverse closed loop recovers both modelled states; real dv/v (ambient-noise
+cross-correlation, borehole-calibrated parameters) is the coupling's next input.
+
 ### Interactive demonstration
 
 A self-contained, reproducible demonstration of both state variables over the Puget Sound
 pilot — the static envelopes, the 90 m animated $\theta$ and DTW products, the peer-model
-consistency comparison, and the full provenance and uncertainty budget — is published
-alongside this report at
+consistency comparison, the forcing ensemble, the demonstrative dv/v coupling, and the full
+provenance and uncertainty budget — is published alongside this report at
 [`gwl_soil_moisture_demo.html`](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html).
 
 ---

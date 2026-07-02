@@ -296,7 +296,53 @@ split, with downscaling a real ~{sm_fr['downscaling']*100:.0f}% share.](../figur
 </table>
 ```
 
-## 5 · Methods — data sources, workflow & physical laws {{#methods}}
+## 5 · Forcing ensemble, modular downscaling & the dv/v channel
+
+The pieces above are deliberately **swappable**, so the framework can grow toward
+data-assimilation without re-plumbing.
+
+**Forcing is not hard-wired.** The soil-moisture bucket needs only precipitation and reference
+ET, so the forcing is a drop-in. Running the *same* envelope and bucket under **TerraClimate**
+(reanalysis) and **PRISM** (station observations; PET via the Hamon temperature method) gives a
+**forcing ensemble**: the two agree at r&nbsp;=&nbsp;0.98, and their spread is an explicit
+*forcing-uncertainty* term (median ≈ 0.003 m³/m³) — a fourth budget component for
+bootstrapping/UQ. Because PRISM precipitation is independent of TerraClimate's, a PRISM-forced
+estimate also makes the TerraClimate cross-check more genuinely independent.
+
+![Same envelope + Thornthwaite–Mather bucket under two independent forcings (TerraClimate vs
+PRISM): domain-mean θ agreement, the per-cell forcing-σ, and the four-component θ uncertainty
+budget with forcing now explicit.](../figures/demo/forcing_ensemble.png)
+
+**Downscaling is modular — and currently the simplest thing.** The coarse→90 m step is a
+registry, not a hard-coded call. The default is **bilinear resampling**: a baseline that adds
+*no* new fine-scale information (the representativeness σ measures exactly that). Smarter,
+**data-informed or model-driven** downscalers — covariate regression on the fine static field,
+ML super-resolution trained on high-resolution observations, physics-based redistribution
+(TWI/TOPMODEL for θ, poroelastic head propagation for GWL) — can be registered and selected
+without touching any call site. This is stated plainly so the current resampling is not mistaken
+for a fine-scale physical model.
+
+**Calibrate at the sensor's native scale, not ours.** Validation/assimilation against coarse
+products (SMAP, NISAR, NLDAS, GRACE, SWOT) is done by **upscaling** our 90 m field to the
+product's native grid (area-mean) and scoring there — never by downscaling the product to 90 m.
+The upscaling operator and native-scale comparison are in place; the sensor fetchers are the
+next step.
+
+**The dv/v channel — one observable, both states.** The third state variable's dynamic source is
+ambient-noise seismic velocity change (dv/v). Grounded in the gaia-hazlab soil-hydromechanical
+memory framework, the observed change superposes a saturated-zone poroelastic term and a
+vadose-zone effective-stress term, and different frequency bands sense different depths — so with
+the right bands dv/v **derives** both groundwater level (low band → head Δh) and soil moisture
+(high band → saturation). Below, the modelled states are forward-mapped to banded dv/v and then
+inverted back, recovering both (closed loop). Real dv/v comes from ambient-noise cross-correlation
+(codameter) with borehole-calibrated parameters — this demonstrates the operators, pending that
+data.
+
+![Demonstrative dv/v coupling: modelled states → banded dv/v (low band = water table, high band
+= soil moisture) → inverted back to both states (recovery r ≈ 1). Governing relations from the
+soil-hydromechanical memory framework.](../figures/demo/dvv_coupling.png)
+
+## 6 · Methods — data sources, workflow & physical laws {{#methods}}
 
 ### What each data source actually does
 
