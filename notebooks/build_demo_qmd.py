@@ -87,6 +87,8 @@ _snotel_path = PROC / "snotel_validation.json"
 snotel = json.loads(_snotel_path.read_text()) if _snotel_path.exists() else None
 _snowcal_path = PROC / "snow_calibration.json"
 snowcal = json.loads(_snowcal_path.read_text()) if _snowcal_path.exists() else None
+_smap_path = PROC / "smap_validation.json"
+smap = json.loads(_smap_path.read_text()) if _smap_path.exists() else None
 
 gwl_fr = prov["budget_fractions"]["groundwater"]
 sm_fr = prov["budget_fractions"]["soil_moisture"]
@@ -153,6 +155,35 @@ representativeness bias, not dynamics error.](../figures/demo/snow_calibration.p
 else:
     snotel_section = ""
     snotel_ref = f"SMAP / in-situ validation ([#29]({ISSUE}/29))."
+
+if smap:
+    snotel_section += f"""
+### Independent satellite validation against SMAP (native 9 km)
+
+SNOTEL is upland-only, and after the bias correction it became training data — so the genuinely
+independent test over the **lowland pilot** is **SMAP** (NASA L-band satellite surface soil
+moisture, 2015→), which is independent of both our SOLUS texture and our TerraClimate/PRISM
+forcing. Following the scale-aware principle, we **upscale** our model θ to SMAP's native 9 km
+EASE grid (area-mean) and score there — we do not downscale SMAP to 90 m.
+
+Over {smap['period'][0]}–{smap['period'][1]} the model tracks SMAP with domain-mean
+r&nbsp;=&nbsp;{smap['domain_mean_r']:.2f} (per-cell median r&nbsp;=&nbsp;{smap['median_cell_r']:.2f});
+as with SNOTEL there is an absolute **bias** ({smap['bias']:+.2f} m³/m³) because SMAP senses the
+0–5 cm surface while our θ is a 0–1 m root zone — so correlation, not the offset, is the honest
+skill. This is the first independent check over the well-instrumented lowland where the product
+is actually used.
+
+![Model θ upscaled to SMAP's native 9 km grid vs the SMAP satellite retrieval: domain-mean series,
+the pooled 9 km-cell scatter, and the skill/bias breakdown. Compared at the sensor's native scale
+(upscale-then-compare).](../figures/demo/smap_validation.png)
+
+```{{=html}}
+<div class="grid">
+  <div class="stat"><div class="n sm">{smap['domain_mean_r']:.2f}</div><div class="l">independent SMAP satellite validation (native 9 km, lowland pilot)</div></div>
+  <div class="stat"><div class="n accent">9 km</div><div class="l">scored at SMAP's native scale (upscale-then-compare, not downscaled)</div></div>
+</div>
+```
+"""
 
 CSS = """
 ```{=html}
