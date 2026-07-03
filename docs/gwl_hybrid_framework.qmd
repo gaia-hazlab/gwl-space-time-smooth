@@ -1466,6 +1466,15 @@ operational anchor that consumes SNOTEL as training) reduces from RMSE $0.107$ t
 m³ m⁻³ while preserving the correlation. Genuinely independent validation therefore now points to
 SMAP retrievals and a Cascade domain extension.
 
+Over the lowland pilot and the recent period of interest (2024–2025, including 2025), the model
+is compared against **MERRA-2** reanalysis at its native 0.5°×0.625° scale (upscale-then-compare).
+MERRA-2 is a model cross-check rather than an independent satellite retrieval, but its *root-zone*
+field is depth-matched to the bucket: the model tracks it at domain-mean $r \approx 0.81$ (per-cell
+$r \approx 0.79$), with the seasonal cycle and the 2024/2025 interannual swing lining up and only
+the familiar field-capacity dry bias ($-0.11$ m³ m⁻³) remaining. The independent-satellite check
+(SMAP, ~9 km) is implemented and stands as the next step. All remote products are cached locally as
+small monthly subsets so the comparison can be re-aggregated without repeating the fetch.
+
 ### One downscaling and uncertainty budget for both variables
 
 Each state variable solves its dynamic component at its native coarse resolution — ~4 km for

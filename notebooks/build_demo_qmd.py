@@ -89,6 +89,8 @@ _snowcal_path = PROC / "snow_calibration.json"
 snowcal = json.loads(_snowcal_path.read_text()) if _snowcal_path.exists() else None
 _smap_path = PROC / "smap_validation.json"
 smap = json.loads(_smap_path.read_text()) if _smap_path.exists() else None
+_merra_path = PROC / "merra2_validation.json"
+merra = json.loads(_merra_path.read_text()) if _merra_path.exists() else None
 
 gwl_fr = prov["budget_fractions"]["groundwater"]
 sm_fr = prov["budget_fractions"]["soil_moisture"]
@@ -155,6 +157,34 @@ representativeness bias, not dynamics error.](../figures/demo/snow_calibration.p
 else:
     snotel_section = ""
     snotel_ref = f"SMAP / in-situ validation ([#29]({ISSUE}/29))."
+
+if merra:
+    _rz = merra["root_zone"]
+    snotel_section += f"""
+### Depth-matched validation against MERRA-2 reanalysis (native 0.5°, incl. 2025)
+
+The 2024–2025 comparison uses **MERRA-2** (NASA reanalysis) — a model cross-check rather than an
+independent satellite retrieval, but its **root-zone** field (~0–1 m) is *depth-matched* to our
+bucket and it covers **2025**, the period of interest. It's a lightweight, locally-cached fetch
+(one small file per month) rather than SMAP's ~650 MB global granules. Upscaling our θ to MERRA-2's
+native 0.5°×0.625° grid, the model tracks the reanalysis at **domain-mean
+r&nbsp;=&nbsp;{merra['domain_mean_r_rootzone']:.2f}** (per-cell r&nbsp;=&nbsp;{_rz['r']:.2f}) over
+{merra['period'][0]}–{merra['period'][1]} — the seasonal cycle and its 2024/2025 interannual swing
+line up closely. The residual is the familiar dry **bias** ({_rz['bias']:+.2f} m³/m³): the bucket
+caps near field capacity while the reanalysis root zone reads wetter — the same representativeness
+offset seen against SNOTEL, not a timing error.
+
+![Model θ upscaled to MERRA-2's native 0.5° grid vs MERRA-2 root-zone (and surface) soil moisture,
+2024–2025: the seasonal phase and interannual swing match (r≈{merra['domain_mean_r_rootzone']:.2f});
+the offset is the field-capacity dry bias.](../figures/demo/merra2_validation.png)
+
+```{{=html}}
+<div class="grid">
+  <div class="stat"><div class="n sm">{merra['domain_mean_r_rootzone']:.2f}</div><div class="l">vs MERRA-2 root-zone reanalysis (depth-matched, native 0.5°, incl. 2025)</div></div>
+  <div class="stat"><div class="n accent">2024–25</div><div class="l">recent period incl. 2025; MERRA-2 cached locally for cheap re-aggregation</div></div>
+</div>
+```
+"""
 
 if smap:
     snotel_section += f"""

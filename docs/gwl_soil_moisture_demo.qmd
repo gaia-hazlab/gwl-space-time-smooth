@@ -80,7 +80,7 @@ confirms a correct, sane implementation, not accuracy against ground truth. See
   <div class="stat"><div class="n gwl">30,944</div><div class="l">monthly GWL observations</div></div>
   <div class="stat"><div class="n gwl">43%</div><div class="l">RF importance on HAND (top predictor)</div></div>
   <div class="stat"><div class="n sm">0.98</div><div class="l">θ vs TerraClimate soil (peer-model consistency)</div></div>
-  <div class="stat"><div class="n sm">300</div><div class="l">months of soil moisture (2000–2024)</div></div>
+  <div class="stat"><div class="n sm">312</div><div class="l">months of soil moisture (2000–2024)</div></div>
   <div class="stat"><div class="n accent">90 m</div><div class="l">product resolution (both state variables)</div></div>
 </div>
 ```
@@ -186,6 +186,30 @@ m³/m³ while preserving the correlation.
 ![Snow-parameter calibration (per-station r, default vs calibrated; LOSO generalisation) and the
 per-site bias correction anchoring the level to the in-situ measurements — the offset is a fixable
 representativeness bias, not dynamics error.](../figures/demo/snow_calibration.png)
+
+### Depth-matched validation against MERRA-2 reanalysis (native 0.5°, incl. 2025)
+
+The 2024–2025 comparison uses **MERRA-2** (NASA reanalysis) — a model cross-check rather than an
+independent satellite retrieval, but its **root-zone** field (~0–1 m) is *depth-matched* to our
+bucket and it covers **2025**, the period of interest. It's a lightweight, locally-cached fetch
+(one small file per month) rather than SMAP's ~650 MB global granules. Upscaling our θ to MERRA-2's
+native 0.5°×0.625° grid, the model tracks the reanalysis at **domain-mean
+r&nbsp;=&nbsp;0.81** (per-cell r&nbsp;=&nbsp;0.79) over
+2024-01–2025-12 — the seasonal cycle and its 2024/2025 interannual swing
+line up closely. The residual is the familiar dry **bias** (-0.11 m³/m³): the bucket
+caps near field capacity while the reanalysis root zone reads wetter — the same representativeness
+offset seen against SNOTEL, not a timing error.
+
+![Model θ upscaled to MERRA-2's native 0.5° grid vs MERRA-2 root-zone (and surface) soil moisture,
+2024–2025: the seasonal phase and interannual swing match (r≈0.81);
+the offset is the field-capacity dry bias.](../figures/demo/merra2_validation.png)
+
+```{=html}
+<div class="grid">
+  <div class="stat"><div class="n sm">0.81</div><div class="l">vs MERRA-2 root-zone reanalysis (depth-matched, native 0.5°, incl. 2025)</div></div>
+  <div class="stat"><div class="n accent">2024–25</div><div class="l">recent period incl. 2025; MERRA-2 cached locally for cheap re-aggregation</div></div>
+</div>
+```
 
 ## 3 · The coupled view
 
