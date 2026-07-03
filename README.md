@@ -30,8 +30,25 @@ Four signals modelled:
 3. La Niña/El Niño multi-year variations via PDO index
 4. Coastal SoDo subsidence and sea level rise (Stage 4, deferred)
 
+## Demo — coupled GWL + soil moisture
+
+**[📊 Open the demo dashboard →](docs/gwl_soil_moisture_demo.html)** (self-contained; published to
+`gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html`)
+
+Shows two of the three gaia-soil-hydromechanics state variables modelled from one data-driven
+pipeline over the Puget Sound pilot: the mature **groundwater-level** module and the new
+**soil-moisture** module (`src/models/soil_moisture.py`). Soil moisture combines a static
+SOLUS100 → Saxton-Rawls hydraulic envelope with a dynamic TerraClimate (P & PET)
+Thornthwaite-Mather water balance; the estimate reproduces TerraClimate's *independent*
+soil-water field at **r = 0.98**. Both products are delivered at **90 m** — the coarse dynamic
+signal is statistically downscaled onto the fine static envelope, with a tracked
+**static / dynamic / downscaling** uncertainty budget and **animated GIFs** of GWL and θ evolving
+month-by-month. Rebuild the whole page with `pixi run terraclimate && pixi run soil-moisture && pixi run demo`.
+
 ## Outputs
 
+- `soil_hydraulic_envelope_90m.zarr` — static θ_wp/θ_fc/θ_sat/AWC/Ksat (SOLUS → Saxton-Rawls)
+- `soil_moisture_monthly_puget.zarr` — monthly volumetric θ + θ_std (2000–2024)
 - `gwl_wte.zarr` — monthly WTE (m NAVD88), 90 m EPSG:5070
 - `gwl_dtw.zarr` — monthly DTW (m below surface)
 - `gwl_climate_response.zarr` — Stage 2 climate-response anomaly
@@ -226,20 +243,59 @@ make baseline-legacy   # Old co-kriging MM1
 make anomalies-legacy  # Old ordinary kriging of anomalies
 ```
 
-#### Soil-hydromechanics state modules (scaffolds)
+#### gaia-soil-hydromechanics state modules — coupled subsurface state
 
 This repo is being repositioned as **`gaia-soil-hydromechanics`** — a coupled
 subsurface-state estimator (soil moisture + groundwater level + soil mechanics) for the
-liquefaction / landslide / flood digital twins. GWL is the mature module; the other two
-are interface scaffolds (not yet implemented — they exit with a message):
+liquefaction / landslide / flood digital twins. Each state variable is built the same way:
+a **fine 90 m static envelope** (what the ground can hold / where water sits) combined with a
+**coarse dynamic driver** (how it varies in time), statistically downscaled to 90 m with a
+tracked uncertainty budget.
+
+| State variable | Static (fine) | Dynamic (coarse) | Status |
+|---|---|---|---|
+| Groundwater level | HAND + SOLUS → RF baseline (90 m) | kriged monthly well anomalies | **live** |
+| Soil moisture | SOLUS100 → Saxton-Rawls envelope (90 m) | TerraClimate P&PET → T-M bucket (4 km) | **live** |
+| Soil mechanics | Vs30 (Sanger & Maurer) + SOLUS | dv/v ambient-noise seismic | scaffold (#19) |
+
+**Run the soil-moisture + 90 m coupled demo** (needs `baseline` and `terrain` outputs first):
 
 ```bash
-make soil-moisture     # θ(x,t): SOLUS/POLARIS static envelope + reanalysis/RS driver — SCAFFOLD
-make soil-mechanics    # stiffness/strength: Vs30 + effective stress + dv/v constraint — SCAFFOLD
+# 1. Dynamic driver — TerraClimate monthly precip/PET/soil over the pilot (2000→), via THREDDS NCSS.
+pixi run terraclimate          # → data/processed/terraclimate_monthly_puget.zarr
+
+# 2. Soil-moisture state — SOLUS→Saxton-Rawls static envelope × Thornthwaite-Mather dynamic bucket.
+pixi run soil-moisture         # → soil_hydraulic_envelope_90m.zarr, soil_moisture_monthly_puget.zarr
+
+# 3. 90 m time-varying products — statistical downscaling → GWL + θ GIFs + tracked σ budget.
+pixi run products-90m          # → figures/demo/{gwl_90m,theta_90m}.gif, uncertainty_budget.png, provenance.json
+
+# 3b. Alternative forcing (PRISM obs + Hamon PET) for the forcing ensemble; dv/v-coupling figs.
+pixi run prism && pixi run ensemble-dvv
+
+# 3c. Independent θ validation vs SNOTEL in-situ soil moisture (uplands; NRCS AWDB, no auth).
+pixi run snotel && pixi run snotel-validate   # → snotel_soil_moisture_monthly.parquet, snotel_validation.{json,png}
+
+# 4. Assemble the self-contained demo page (static figures + GIFs + provenance → Quarto HTML).
+pixi run demo                  # → docs/gwl_soil_moisture_demo.html  (also re-runs 1-panel figures)
+
+# soil mechanics (dv/v) is still a scaffold — exits with a message:
+pixi run soil-mechanics        # SCAFFOLD (#19)
 ```
 
+Each stage is independent Python (`src/data/fetch_terraclimate.py`, `src/models/soil_moisture.py`,
+`src/models/gwl_dynamic.py`, `src/models/downscale.py`) with a validated unit test
+(`tests/test_soil_moisture.py`). Tests run standalone: `pixi run python -m tests.test_soil_moisture`.
+
+**Outputs & validation.** The soil-moisture θ reproduces TerraClimate's *independent* soil-water
+field at **r = 0.98**; the uncertainty budget separates static / dynamic / **downscaling**
+representativeness for both products (see `data/processed/provenance.json`). The demo page —
+`docs/gwl_soil_moisture_demo.html`, published to
+`gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html` — is a self-contained
+Quarto dashboard (all figures/GIFs embedded) suitable for linking from the GAIA soil-reanalysis chapter.
+
 See [`docs/intermediate-staging-plan.md`](docs/intermediate-staging-plan.md) for the scope,
-the static/dynamic sources, and the (deferred) rename checklist.
+the static/dynamic sources, and the (deferred) rename checklist (#24).
 
 ### 3. Outputs
 
@@ -261,6 +317,12 @@ the static/dynamic sources, and the (deferred) rename checklist.
 | `data/processed/gwl_dtw.zarr` | Final monthly DTW (m, positive = below surface) |
 | `data/processed/gwl_wte.zarr` | Final monthly WTE (m NAVD88) |
 | `data/processed/well_density_mask.tif` | 1 = within 50 km of usable well |
+| `data/processed/terraclimate_monthly_puget.zarr` | Monthly TerraClimate P/PET/soil driver (2000→) |
+| `data/processed/soil_hydraulic_envelope_90m.zarr` | Static θ_wp/θ_fc/θ_sat/AWC/Ksat (SOLUS → Saxton-Rawls) |
+| `data/processed/soil_moisture_monthly_puget.zarr` | Monthly volumetric θ + θ_std |
+| `data/processed/provenance.json` | Per-product source → operation → resolution + σ budget |
+| `figures/demo/{gwl,theta}_90m.gif` | Animated 90 m GWL and θ products |
+| `docs/gwl_soil_moisture_demo.html` | Self-contained demo dashboard (Quarto) |
 
 ---
 

@@ -36,6 +36,8 @@ requests = "*"
 richdem = "*"
 numba = "*"
 llvmlite = "*"
+earthaccess = ">=0.17.0,<0.18"
+h5netcdf = ">=1.8.1,<2"
 
 [pypi-dependencies]
 dataretrieval = "*"
@@ -68,9 +70,29 @@ residuals = "python -m src.models.interpolate_residuals --monthly data/processed
 # === Lithology (intermediate/local, until DataHub lithology-stac is live) ===
 list-geology-units = "python -m src.data.rasterize_geology --geology data/raw/geology/wa_dnr_geol.gpkg --crosswalk data/processed/lithology_crosswalk.json --list-units"
 lithology-local = "python -m src.data.rasterize_geology --geology data/raw/geology/wa_dnr_geol.gpkg --crosswalk data/processed/lithology_crosswalk.json --like data/processed/terrain_hand_90m.tif --output data/processed/lithology_90m.tif"
-# === gaia-soil-hydromechanics state modules (SCAFFOLDS — not yet implemented) ===
+# === gaia-soil-hydromechanics state modules ===
+# Dynamic climate forcing for soil moisture — two interchangeable sources (forcing ensemble):
+terraclimate = "python -m src.data.fetch_terraclimate --output data/processed/terraclimate_monthly_puget.zarr"
+prism = "python -m src.data.fetch_prism_monthly --output data/processed/prism_monthly_puget.zarr"  # obs-based; ppt+tmean→Hamon PET
+# SNOTEL in-situ soil-moisture stations (NRCS AWDB) — independent θ validation anchors (#28).
+snotel = "python -m src.data.fetch_snotel --output data/processed/snotel_soil_moisture_monthly.parquet"
+snotel-validate = "python notebooks/validate_snotel.py"
+snow-calibrate = "python notebooks/calibrate_snow.py"   # grid + LOSO snow calibration + bias decomposition
+# SMAP satellite soil moisture (NASA Earthdata; needs ~/.netrc) — independent native-scale θ validation (#29).
+smap = "python -m src.data.fetch_smap --output data/processed/smap_soil_moisture_monthly_puget.zarr"
+smap-validate = "python notebooks/validate_smap.py"
+# MERRA-2 reanalysis root-zone soil moisture (GES DISC; ~/.netrc) — depth-matched, incl. 2025; cached locally.
+merra2 = "python -m src.data.fetch_merra2 --output data/processed/merra2_soil_moisture_monthly_puget.zarr"
+merra2-validate = "python notebooks/validate_merra2.py"
+# Soil-moisture state: SOLUS→Saxton-Rawls static envelope × Thornthwaite-Mather dynamic bucket.
 soil-moisture = "python -m src.models.soil_moisture --output-dir data/processed"
-soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"
+soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"  # SCAFFOLD (#19)
+# 90 m time-varying products: GWL + θ GIFs and the tracked downscaling uncertainty budget.
+products-90m = "python notebooks/make_products_90m.py"
+# Forcing-ensemble (TerraClimate vs PRISM) + demonstrative dv/v coupling figures.
+ensemble-dvv = "python notebooks/make_ensemble_dvv_figures.py"
+# Demo: static figures + GIFs + provenance, assembled into the self-contained Quarto page.
+demo = "python notebooks/demo_gwl_sm.py && python notebooks/make_products_90m.py && python notebooks/make_ensemble_dvv_figures.py && python notebooks/build_demo_qmd.py && quarto render docs/gwl_soil_moisture_demo.qmd --to html"
 # === Legacy (comparison only) ===
 baseline-legacy = "python -m src.models.interpolate_baseline"
 anomalies-legacy = "python -m src.models.interpolate_anomalies"
