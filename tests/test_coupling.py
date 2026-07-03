@@ -19,6 +19,7 @@ from src.models.downscale import (
     upscale_to_grid,
 )
 from src.models.dvv_coupling import coupling_envelope, forward_dvv, invert_dvv
+from src.models.soil_moisture import snowmelt_liquid_input
 
 
 def test_hamon_pet_positive_and_seasonal():
@@ -29,6 +30,20 @@ def test_hamon_pet_positive_and_seasonal():
     assert pet.shape == (2, 1, 1)
     assert np.all(pet >= 0)
     assert pet[1, 0, 0] > pet[0, 0, 0]        # July PET > January PET (warmer, longer days)
+
+
+def test_snow_module_conserves_and_redistributes():
+    # One cold snowy month then warm months: precip falls in month 0, temperature rises.
+    nt = 6
+    precip = np.zeros((nt, 1, 1)); precip[0, 0, 0] = 100.0     # 100 mm all in a cold month
+    tmean = np.array([-5, -2, 1, 4, 8, 12], dtype="float64")[:, None, None]
+    days = np.full(nt, 30)
+    W, swe_end = snowmelt_liquid_input(precip, tmean, days)
+    # Water is conserved over the run (rain+melt total ≈ precip total, up to leftover SWE).
+    assert abs(W.sum() + swe_end.sum() - precip.sum()) < 1e-6
+    # Redistribution: the cold precip month yields ~no liquid input; melt appears in warm months.
+    assert W[0, 0, 0] < 5.0
+    assert W[3:, 0, 0].sum() > 50.0
 
 
 def test_dvv_forward_inverse_closed_loop():

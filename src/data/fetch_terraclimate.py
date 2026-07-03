@@ -50,6 +50,8 @@ _VAR_META = {
     "def": ("deficit_mm", "mm/month", "Climatic water deficit"),
     "swe": ("swe_mm", "mm", "Snow water equivalent"),
     "q": ("runoff_mm", "mm/month", "Runoff"),
+    "tmax": ("tmax_c", "degC", "Monthly mean daily maximum temperature"),
+    "tmin": ("tmin_c", "degC", "Monthly mean daily minimum temperature"),
 }
 
 
@@ -103,6 +105,11 @@ def fetch_terraclimate(
     arrays = [_fetch_var(v, bbox, start, end) for v in variables]
     ds = xr.merge(arrays)
 
+    # Mean temperature (for the snow module) when tmax & tmin are present.
+    if "tmax_c" in ds and "tmin_c" in ds:
+        ds["tmean_c"] = ((ds["tmax_c"] + ds["tmin_c"]) / 2.0)
+        ds["tmean_c"].attrs = {"units": "degC", "long_name": "Monthly mean temperature (tmax+tmin)/2"}
+
     # Normalise the time axis to month-start timestamps for clean joins downstream.
     ds = ds.assign_coords(time=pd.DatetimeIndex(ds["time"].values).to_period("M").to_timestamp())
     ds.attrs.update(
@@ -142,8 +149,8 @@ def main() -> None:
     p.add_argument("--start", default="2000-01-01", help="Start date (YYYY-MM-DD).")
     p.add_argument("--end", default="2024-12-01", help="End date (YYYY-MM-DD); NCSS clips to available.")
     p.add_argument(
-        "--vars", nargs="+", default=["ppt", "pet", "soil"],
-        help="TerraClimate variables to fetch (ppt pet soil [aet def swe q]).",
+        "--vars", nargs="+", default=["ppt", "pet", "soil", "tmax", "tmin"],
+        help="TerraClimate variables to fetch (ppt pet soil tmax tmin [aet def swe q]).",
     )
     p.add_argument(
         "--output", type=Path, default=Path("data/processed/terraclimate_monthly_puget.zarr"),

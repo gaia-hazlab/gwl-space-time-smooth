@@ -109,25 +109,32 @@ at each station and comparing to the in-situ θ gives the project's **first genu
 validation**.
 
 The result is a sobering, useful one: **pooled r&nbsp;=&nbsp;{snotel['pooled_r']:.2f}**
-({snotel['n_station_months']} station-months), with the best sites (e.g. {best['name']},
-r&nbsp;=&nbsp;{best['r']:.2f}) capturing the seasonal *phase* but a systematic dry bias at the
-highest, snowiest sites. This is exactly what an honest independent check should surface — the
-bucket has **no explicit snowpack**, so it cannot hold the alpine snowmelt signal — and it
-motivates a snow module and a domain extension ([#28]({ISSUE}/28)).
+({snotel['n_station_months']} station-months) — far below the shared-forcing r=0.98, exactly as
+an honest independent check should read. It also pinpointed the missing physics: the bare bucket
+has **no snowpack**, so a **temperature-index snow module** (accumulate winter precip as SWE,
+release it by degree-day spring melt) was added. It lifts the snowiest sites' seasonal skill
+— e.g. {best['name']} r&nbsp;=&nbsp;{best['r_nosnow']:.2f}&nbsp;→&nbsp;{best['r']:.2f} — while the
+*pooled* r stays bias-limited ({snotel['pooled_r_nosnow']:.2f}&nbsp;→&nbsp;{snotel['pooled_r']:.2f}):
+the remaining gap is a texture/sensor-depth **bias**, not snow timing, motivating parameter
+calibration against SNOTEL SWE and a Cascade domain extension ([#28]({ISSUE}/28)).
 
-![Model θ (SOLUS×TerraClimate bucket) vs SNOTEL in-situ θ at upland stations: pooled scatter, a
-best-site hydrograph (phase captured, magnitude/bias off at the snowy alpine site), and per-station
-skill. The independent r is far below the shared-forcing r=0.98 — as it should be.](../figures/demo/snotel_validation.png)
+![Model θ vs SNOTEL in-situ θ at upland stations: pooled scatter (bias-limited), a best-site
+hydrograph showing the snow module recovering the snowmelt phase (grey no-snow → green snow),
+and per-station r (snow off→on). The independent r sits far below the shared-forcing r=0.98 — as
+it should.](../figures/demo/snotel_validation.png)
 
 ```{{=html}}
 <div class="grid">
   <div class="stat"><div class="n accent">{snotel['pooled_r']:.2f}</div><div class="l">independent θ validation (SNOTEL in-situ, uplands) — vs {r_dm:.2f} shared-forcing consistency</div></div>
-  <div class="stat"><div class="n sm">{snotel['n_stations']}</div><div class="l">SNOTEL soil-moisture stations, {snotel['n_station_months']} station-months</div></div>
+  <div class="stat"><div class="n sm">{best['r_nosnow']:.2f}→{best['r']:.2f}</div><div class="l">best-site seasonal r, snow module off → on ({best['name']})</div></div>
 </div>
 ```
 """
+    snotel_ref = (f"the SNOTEL comparison above (pooled r≈{snotel['pooled_r']:.2f}); "
+                  f"SMAP is next ([#29]({ISSUE}/29)).")
 else:
     snotel_section = ""
+    snotel_ref = f"SMAP / in-situ validation ([#29]({ISSUE}/29))."
 
 CSS = """
 ```{=html}
@@ -441,9 +448,12 @@ relative wetness:          w  = S / AWC   ∈ [0, 1]
 ```
 
    *Physical basis:* precipitation recharges the store; when potential evaporative demand exceeds supply
-   the store depletes exponentially with the accumulated potential water loss (APWL). *Assumptions:* one
-   vertical bucket, monthly step, no lateral flow or deep percolation beyond AWC, **no explicit snowpack**
-   (winter precipitation enters directly; PET is low then), uniform 1 m root zone.
+   the store depletes exponentially with the accumulated potential water loss (APWL). When the driver
+   carries temperature, a **temperature-index snow module** runs first — winter precipitation accumulates
+   as SWE and is released by degree-day spring melt, so the bucket sees a redistributed liquid input (this
+   is what lifts the upland SNOTEL skill above). *Assumptions:* one vertical bucket, monthly step, no
+   lateral flow or deep percolation beyond AWC, uniform 1 m root zone; snow parameters nominal (calibration
+   vs SNOTEL SWE pending).
 4. **Combine & downscale.**  `θ(x,t) = θ_wp + w(t)·(θ_fc − θ_wp)`, capped at θ_sat. Wetness *w* is solved
    on the 4 km forcing grid and bilinearly downscaled to the 90 m envelope — fine spatial texture from
    SOLUS, temporal signal from TerraClimate.
@@ -478,11 +488,12 @@ phase/recession ([#6]({ISSUE}/6)).
 - Kriged GWL σ is bounded by the climatological prior (away from wells it falls back to "know nothing",
   never spurious confidence); the animation window ({win0}–{win1}) is chosen for dense well coverage.
 - θ spans the root-zone available-water range (θ_wp→θ_fc); saturation excess is bounded by porosity, not
-  resolved event-by-event at monthly step. No explicit snowpack — winter precipitation enters the bucket
-  directly, so late-melt recharge timing is approximate.
+  resolved event-by-event at monthly step. Snow is now handled by a temperature-index module, but its
+  parameters are nominal (calibration vs SNOTEL SWE pending), and a texture/sensor-depth bias remains at
+  the alpine SNOTEL sites.
 - **The r&nbsp;=&nbsp;{r_dm:.2f} agreement is a consistency check, not independent validation** — our bucket and
   TerraClimate `soil` share the same P&PET forcing and water-balance family (see [Methods](#methods)).
-  Independent validation (SMAP, in-situ) is the next step ([#20]({ISSUE}/20)).
+  The independent check is {snotel_ref}
 
 ## Reproduce
 

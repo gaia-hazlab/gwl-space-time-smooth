@@ -1452,11 +1452,14 @@ independent validation of accuracy**, since the two models share both forcing an
 family. A genuinely *independent* check requires observations outside the forcing chain. A
 first such check is now in hand: running the model at five NRCS **SNOTEL** stations (in-situ
 capacitance soil-moisture sensors in the adjacent Cascades, independent of SOLUS and
-TerraClimate) gives a **pooled $r \approx 0.33$** against the measured $\theta$ — with the best
-sites reaching $r \approx 0.67$ on the seasonal phase but a systematic dry bias at the highest,
-snowiest stations. That the independent number is far below the $r = 0.98$ shared-forcing
-consistency is exactly the point: these are snowmelt-driven uplands and the bucket has no
-explicit snowpack, so the check both bounds the honest skill and localises the missing physics.
+TerraClimate) gives a **pooled $r \approx 0.33$** against the measured $\theta$ — far below the
+$r = 0.98$ shared-forcing consistency, which is exactly the point. The check also localised the
+missing physics: because these are snowmelt-driven uplands and the bucket had no explicit
+snowpack, we added a **temperature-index snow module** (winter precipitation accumulates as SWE
+and is released by degree-day spring melt). It lifts the snowiest sites' seasonal skill (e.g.
+Park Creek Ridge $r: 0.66 \rightarrow 0.76$; Cayuse Pass $0.67 \rightarrow 0.71$), while the
+*pooled* score stays bias-limited — the residual gap is a texture / sensor-depth **bias**, not
+snow timing, motivating parameter calibration against SNOTEL SWE and a Cascade domain extension.
 Further independent validation (SMAP retrievals, denser in-situ probes) remains future work.
 
 ### One downscaling and uncertainty budget for both variables

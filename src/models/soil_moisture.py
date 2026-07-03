@@ -156,6 +156,48 @@ def thornthwaite_mather_wetness(
 
 
 # ---------------------------------------------------------------------------
+# Snow — temperature-index (degree-day) redistribution of winter precipitation
+# ---------------------------------------------------------------------------
+# Nominal parameters (documented; calibration-pending against SNOTEL SWE):
+_DDF_MM_PER_C_DAY = 3.0   # degree-day melt factor
+_T_SNOW_HI = 3.0          # ≥ this °C → all precip falls as rain
+_T_SNOW_LO = -1.0         # ≤ this °C → all precip falls as snow (linear between)
+_T_MELT = 0.0             # melt threshold (°C)
+
+
+def snowmelt_liquid_input(precip_mm, tmean_c, days_in_month, ddf=_DDF_MM_PER_C_DAY):
+    """Monthly temperature-index snow model → liquid water input W = rain + snowmelt (mm).
+
+    Precip is partitioned into rain and snow by temperature; snow accumulates as SWE and is
+    released by degree-day melt, so winter precipitation is **redistributed** into a spring
+    melt pulse — the missing physics the SNOTEL validation exposed. Arrays are (time, y, x);
+    ``days_in_month`` is (time,). Returns (W, final SWE).
+    """
+    P = np.asarray(precip_mm, dtype="float64")
+    T = np.asarray(tmean_c, dtype="float64")
+    swe = np.zeros(P.shape[1:], dtype="float64")
+    W = np.empty_like(P)
+    for t in range(P.shape[0]):
+        snowfrac = np.clip((_T_SNOW_HI - T[t]) / (_T_SNOW_HI - _T_SNOW_LO), 0.0, 1.0)
+        snowfall = snowfrac * P[t]
+        rain = P[t] - snowfall
+        swe = swe + snowfall
+        melt = np.minimum(swe, ddf * np.maximum(T[t] - _T_MELT, 0.0) * days_in_month[t])
+        swe = swe - melt
+        W[t] = rain + melt
+    return W.astype("float32"), swe
+
+
+def apply_snow_if_available(driver_ds, precip_values):
+    """Return liquid water input from precip, applying the snow module iff tmean_c is present."""
+    if "tmean_c" not in driver_ds:
+        return precip_values
+    days = np.array([pd.Timestamp(t).days_in_month for t in driver_ds["time"].values])
+    W, _ = snowmelt_liquid_input(precip_values, driver_ds["tmean_c"].values, days)
+    return W
+
+
+# ---------------------------------------------------------------------------
 # Estimator — combine static envelope with the dynamic wetness
 # ---------------------------------------------------------------------------
 def estimate_soil_moisture(inp: SoilMoistureInputs) -> tuple[np.ndarray, np.ndarray]:
@@ -200,12 +242,14 @@ def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times
         representativeness_sigma,
     )
 
-    # Wetness w(time) on the coarse driver grid (its native ~4 km resolution).
+    # Wetness w(time) on the coarse driver grid (its native ~4 km resolution). The snow module
+    # redistributes winter precip → spring melt when the driver carries temperature (tmean_c).
     env_d = _regrid_envelope_to_driver(env90, driver_ds)
     awc_mm = np.clip(env_d["theta_fc"].values - env_d["theta_wp"].values, 0.02, None) \
         * (root_depth_m * 1000.0)
+    liquid_in = apply_snow_if_available(driver_ds, driver_ds["precip_mm"].values)
     w_coarse_full = thornthwaite_mather_wetness(
-        driver_ds["precip_mm"].values, driver_ds["pet_mm"].values, awc_mm
+        liquid_in, driver_ds["pet_mm"].values, awc_mm
     )
     w_coarse = xr.DataArray(
         w_coarse_full, dims=("time", "lat", "lon"),
@@ -360,7 +404,8 @@ def main() -> None:
     awc_mm = np.clip((env_d["theta_fc"].values - env_d["theta_wp"].values), 0.02, None) \
         * (args.root_depth_m * 1000.0)
 
-    w = thornthwaite_mather_wetness(driver["precip_mm"].values, driver["pet_mm"].values, awc_mm)
+    liquid_in = apply_snow_if_available(driver, driver["precip_mm"].values)
+    w = thornthwaite_mather_wetness(liquid_in, driver["pet_mm"].values, awc_mm)
     inp = SoilMoistureInputs(
         field_capacity=env_d["theta_fc"].values,
         wilting_point=env_d["theta_wp"].values,

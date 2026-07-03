@@ -88,9 +88,9 @@
   ],
   "budget_fractions": {
     "soil_moisture": {
-      "static_pedotransfer": 0.5653394702120162,
-      "dynamic_driver": 0.20223632777808398,
-      "downscaling": 0.2324242020098998
+      "static_pedotransfer": 0.5653384004821199,
+      "dynamic_driver": 0.2022368254957996,
+      "downscaling": 0.23242477402208056
     },
     "groundwater": {
       "static_rf_baseline": 0.6745898563674956,
@@ -99,7 +99,7 @@
     }
   },
   "median_total_sigma": {
-    "soil_moisture_m3m3": 0.029469409970267486,
+    "soil_moisture_m3m3": 0.02946913307788735,
     "groundwater_m": 17.357157899843433
   }
 }
