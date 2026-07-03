@@ -82,6 +82,10 @@ def _prov_rows(steps):
         f'<td>{s["method"]}</td></tr>' for s in steps)
 
 
+# Optional SNOTEL independent-validation block (present only if fetched + validated).
+_snotel_path = PROC / "snotel_validation.json"
+snotel = json.loads(_snotel_path.read_text()) if _snotel_path.exists() else None
+
 gwl_fr = prov["budget_fractions"]["groundwater"]
 sm_fr = prov["budget_fractions"]["soil_moisture"]
 sig_sm = prov["median_total_sigma"]["soil_moisture_m3m3"]
@@ -89,6 +93,41 @@ sig_gwl = prov["median_total_sigma"]["groundwater_m"]
 win0, win1 = prov["window"]
 
 ISSUE = "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues"
+
+# Conditional SNOTEL independent-validation section (empty if not run).
+if snotel:
+    best = max(snotel["per_station"], key=lambda s: s["r"])
+    snotel_section = f"""
+### Independent validation against SNOTEL in-situ θ
+
+The r&nbsp;=&nbsp;{r_dm:.2f} agreement with TerraClimate above is a *consistency check* — shared
+forcing. The honest test is against measurements **outside the forcing chain**: NRCS **SNOTEL**
+stations carry in-situ soil-moisture sensors, independent of SOLUS and TerraClimate. There are
+none in the lowland pilot, but **{snotel['n_stations']} sit in the adjacent Cascades** — the sparse,
+snowmelt-driven *upland* regime the model is weakest in. Running the same SOLUS×TerraClimate model
+at each station and comparing to the in-situ θ gives the project's **first genuinely independent
+validation**.
+
+The result is a sobering, useful one: **pooled r&nbsp;=&nbsp;{snotel['pooled_r']:.2f}**
+({snotel['n_station_months']} station-months), with the best sites (e.g. {best['name']},
+r&nbsp;=&nbsp;{best['r']:.2f}) capturing the seasonal *phase* but a systematic dry bias at the
+highest, snowiest sites. This is exactly what an honest independent check should surface — the
+bucket has **no explicit snowpack**, so it cannot hold the alpine snowmelt signal — and it
+motivates a snow module and a domain extension ([#28]({ISSUE}/28)).
+
+![Model θ (SOLUS×TerraClimate bucket) vs SNOTEL in-situ θ at upland stations: pooled scatter, a
+best-site hydrograph (phase captured, magnitude/bias off at the snowy alpine site), and per-station
+skill. The independent r is far below the shared-forcing r=0.98 — as it should be.](../figures/demo/snotel_validation.png)
+
+```{{=html}}
+<div class="grid">
+  <div class="stat"><div class="n accent">{snotel['pooled_r']:.2f}</div><div class="l">independent θ validation (SNOTEL in-situ, uplands) — vs {r_dm:.2f} shared-forcing consistency</div></div>
+  <div class="stat"><div class="n sm">{snotel['n_stations']}</div><div class="l">SNOTEL soil-moisture stations, {snotel['n_station_months']} station-months</div></div>
+</div>
+```
+"""
+else:
+    snotel_section = ""
 
 CSS = """
 ```{=html}
@@ -236,7 +275,7 @@ that envelope through time to give volumetric θ(t) with per-cell θ_std.
 capacity); modelled θ for the wettest vs driest month (bottom left/centre); and the 2000–2024 θ series
 against the TerraClimate soil field — a *peer* water balance sharing our forcing, not an independent
 reference (bold = 13-month rolling mean; r&nbsp;=&nbsp;{r_dm:.2f}).](../figures/demo/soil_moisture_state.png)
-
+{snotel_section}
 ## 3 · The coupled view
 
 Both fields come out of one pipeline over the same grid — the groundwater table from below and the

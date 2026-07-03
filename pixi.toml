@@ -72,6 +72,9 @@ lithology-local = "python -m src.data.rasterize_geology --geology data/raw/geolo
 # Dynamic climate forcing for soil moisture — two interchangeable sources (forcing ensemble):
 terraclimate = "python -m src.data.fetch_terraclimate --output data/processed/terraclimate_monthly_puget.zarr"
 prism = "python -m src.data.fetch_prism_monthly --output data/processed/prism_monthly_puget.zarr"  # obs-based; ppt+tmean→Hamon PET
+# SNOTEL in-situ soil-moisture stations (NRCS AWDB) — independent θ validation anchors (#28).
+snotel = "python -m src.data.fetch_snotel --output data/processed/snotel_soil_moisture_monthly.parquet"
+snotel-validate = "python notebooks/validate_snotel.py"
 # Soil-moisture state: SOLUS→Saxton-Rawls static envelope × Thornthwaite-Mather dynamic bucket.
 soil-moisture = "python -m src.models.soil_moisture --output-dir data/processed"
 soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"  # SCAFFOLD (#19)

@@ -270,6 +270,12 @@ pixi run soil-moisture         # → soil_hydraulic_envelope_90m.zarr, soil_mois
 # 3. 90 m time-varying products — statistical downscaling → GWL + θ GIFs + tracked σ budget.
 pixi run products-90m          # → figures/demo/{gwl_90m,theta_90m}.gif, uncertainty_budget.png, provenance.json
 
+# 3b. Alternative forcing (PRISM obs + Hamon PET) for the forcing ensemble; dv/v-coupling figs.
+pixi run prism && pixi run ensemble-dvv
+
+# 3c. Independent θ validation vs SNOTEL in-situ soil moisture (uplands; NRCS AWDB, no auth).
+pixi run snotel && pixi run snotel-validate   # → snotel_soil_moisture_monthly.parquet, snotel_validation.{json,png}
+
 # 4. Assemble the self-contained demo page (static figures + GIFs + provenance → Quarto HTML).
 pixi run demo                  # → docs/gwl_soil_moisture_demo.html  (also re-runs 1-panel figures)
 

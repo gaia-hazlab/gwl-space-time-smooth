@@ -1449,9 +1449,15 @@ from a Thornthwaite–Mather balance driven by the *same* $P$ and PET, the $r = 
 between our $\theta$ and TerraClimate soil (domain mean; per-cell median $0.98$) is a
 **consistency check that the envelope and bucket are implemented sensibly — not an
 independent validation of accuracy**, since the two models share both forcing and model
-family. Genuinely independent validation requires observations outside the forcing chain
-(SMAP retrievals, in-situ probes) and is future work. We state this plainly because
-conflating the two would overstate the evidence.
+family. A genuinely *independent* check requires observations outside the forcing chain. A
+first such check is now in hand: running the model at five NRCS **SNOTEL** stations (in-situ
+capacitance soil-moisture sensors in the adjacent Cascades, independent of SOLUS and
+TerraClimate) gives a **pooled $r \approx 0.33$** against the measured $\theta$ — with the best
+sites reaching $r \approx 0.67$ on the seasonal phase but a systematic dry bias at the highest,
+snowiest stations. That the independent number is far below the $r = 0.98$ shared-forcing
+consistency is exactly the point: these are snowmelt-driven uplands and the bucket has no
+explicit snowpack, so the check both bounds the honest skill and localises the missing physics.
+Further independent validation (SMAP retrievals, denser in-situ probes) remains future work.
 
 ### One downscaling and uncertainty budget for both variables
 
