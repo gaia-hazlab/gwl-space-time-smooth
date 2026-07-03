@@ -151,13 +151,13 @@ snowmelt-driven *upland* regime the model is weakest in. Running the same SOLUS�
 at each station and comparing to the in-situ θ gives the project's **first genuinely independent
 validation**.
 
-The result is a sobering, useful one: **pooled r&nbsp;=&nbsp;0.34**
+The result is a sobering, useful one: **pooled r&nbsp;=&nbsp;0.35**
 (788 station-months) — far below the shared-forcing r=0.98, exactly as
 an honest independent check should read. It also pinpointed the missing physics: the bare bucket
 has **no snowpack**, so a **temperature-index snow module** (accumulate winter precip as SWE,
 release it by degree-day spring melt) was added. It lifts the snowiest sites' seasonal skill
-— e.g. Park Creek Ridge r&nbsp;=&nbsp;0.66&nbsp;→&nbsp;0.76 — while the
-*pooled* r stays bias-limited (0.33&nbsp;→&nbsp;0.34):
+— e.g. Park Creek Ridge r&nbsp;=&nbsp;0.66&nbsp;→&nbsp;0.78 — while the
+*pooled* r stays bias-limited (0.33&nbsp;→&nbsp;0.35):
 the remaining gap is a texture/sensor-depth **bias**, not snow timing, motivating parameter
 calibration against SNOTEL SWE and a Cascade domain extension ([#28](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/28)).
 
@@ -168,10 +168,24 @@ it should.](../figures/demo/snotel_validation.png)
 
 ```{=html}
 <div class="grid">
-  <div class="stat"><div class="n accent">0.34</div><div class="l">independent θ validation (SNOTEL in-situ, uplands) — vs 0.98 shared-forcing consistency</div></div>
-  <div class="stat"><div class="n sm">0.66→0.76</div><div class="l">best-site seasonal r, snow module off → on (Park Creek Ridge)</div></div>
+  <div class="stat"><div class="n accent">0.35</div><div class="l">independent θ validation (SNOTEL in-situ, uplands) — vs 0.98 shared-forcing consistency</div></div>
+  <div class="stat"><div class="n sm">0.66→0.78</div><div class="l">best-site seasonal r, snow module off → on (Park Creek Ridge)</div></div>
 </div>
 ```
+
+The snow parameters were then **calibrated** against SNOTEL (grid search + leave-one-station-out,
+so the numbers are out-of-sample): the degree-day factor and rain/snow thresholds lift the mean
+per-station skill and — crucially — **generalise** (held-out LOSO r
+0.52&nbsp;→&nbsp;0.54). The
+dominant residual is not phase but a per-site *representativeness bias* (our 0–1 m bucket saturates
+near field capacity; the shallow sensors read higher): a per-station bias correction — an
+operational anchor that **consumes SNOTEL as training**, leaving SMAP ([#29](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/29)) the
+independent test — collapses RMSE 0.107&nbsp;→&nbsp;0.070
+m³/m³ while preserving the correlation.
+
+![Snow-parameter calibration (per-station r, default vs calibrated; LOSO generalisation) and the
+per-site bias correction anchoring the level to the in-situ measurements — the offset is a fixable
+representativeness bias, not dynamics error.](../figures/demo/snow_calibration.png)
 
 ## 3 · The coupled view
 
@@ -392,7 +406,7 @@ phase/recession ([#6](https://github.com/gaia-hazlab/gwl-space-time-smooth/issue
   the alpine SNOTEL sites.
 - **The r&nbsp;=&nbsp;0.98 agreement is a consistency check, not independent validation** — our bucket and
   TerraClimate `soil` share the same P&PET forcing and water-balance family (see [Methods](#methods)).
-  The independent check is the SNOTEL comparison above (pooled r≈0.34); SMAP is next ([#29](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/29)).
+  The independent check is the SNOTEL comparison above (pooled r≈0.35); SMAP is next ([#29](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/29)).
 
 ## Reproduce
 

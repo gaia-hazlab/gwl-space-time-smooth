@@ -85,6 +85,8 @@ def _prov_rows(steps):
 # Optional SNOTEL independent-validation block (present only if fetched + validated).
 _snotel_path = PROC / "snotel_validation.json"
 snotel = json.loads(_snotel_path.read_text()) if _snotel_path.exists() else None
+_snowcal_path = PROC / "snow_calibration.json"
+snowcal = json.loads(_snowcal_path.read_text()) if _snowcal_path.exists() else None
 
 gwl_fr = prov["budget_fractions"]["groundwater"]
 sm_fr = prov["budget_fractions"]["soil_moisture"]
@@ -132,6 +134,22 @@ it should.](../figures/demo/snotel_validation.png)
 """
     snotel_ref = (f"the SNOTEL comparison above (pooled r≈{snotel['pooled_r']:.2f}); "
                   f"SMAP is next ([#29]({ISSUE}/29)).")
+    if snowcal:
+        snotel_section += f"""
+The snow parameters were then **calibrated** against SNOTEL (grid search + leave-one-station-out,
+so the numbers are out-of-sample): the degree-day factor and rain/snow thresholds lift the mean
+per-station skill and — crucially — **generalise** (held-out LOSO r
+{snowcal['loso_mean_r_default']:.2f}&nbsp;→&nbsp;{snowcal['loso_mean_r_calibrated']:.2f}). The
+dominant residual is not phase but a per-site *representativeness bias* (our 0–1 m bucket saturates
+near field capacity; the shallow sensors read higher): a per-station bias correction — an
+operational anchor that **consumes SNOTEL as training**, leaving SMAP ([#29]({ISSUE}/29)) the
+independent test — collapses RMSE {snowcal['rmse_raw']:.3f}&nbsp;→&nbsp;{snowcal['rmse_bias_corrected']:.3f}
+m³/m³ while preserving the correlation.
+
+![Snow-parameter calibration (per-station r, default vs calibrated; LOSO generalisation) and the
+per-site bias correction anchoring the level to the in-situ measurements — the offset is a fixable
+representativeness bias, not dynamics error.](../figures/demo/snow_calibration.png)
+"""
 else:
     snotel_section = ""
     snotel_ref = f"SMAP / in-situ validation ([#29]({ISSUE}/29))."

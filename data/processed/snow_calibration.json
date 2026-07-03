@@ -1,0 +1,32 @@
+{
+  "default_params": {
+    "ddf": 3.0,
+    "t_snow_hi": 3.0,
+    "t_melt": 0.0
+  },
+  "calibrated_params": {
+    "ddf": 2.5,
+    "t_snow_hi": 2.0,
+    "t_melt": 1.0
+  },
+  "mean_r_default": 0.5150936759044482,
+  "mean_r_calibrated": 0.5431461929783644,
+  "loso_mean_r_default": 0.5150936759044482,
+  "loso_mean_r_calibrated": 0.5406396665653812,
+  "rmse_raw": 0.10689618807801193,
+  "rmse_bias_corrected": 0.07049898969758467,
+  "per_site_r_default": {
+    "Burnt Mountain": 0.3914611187442804,
+    "Cayuse Pass": 0.7082809339449221,
+    "Meadows Pass": 0.14286894336035663,
+    "Park Creek Ridge": 0.7597302258202672,
+    "Sasse Ridge": 0.5731271576524145
+  },
+  "per_site_r_calibrated": {
+    "Burnt Mountain": 0.3914611187442804,
+    "Cayuse Pass": 0.7425768019739566,
+    "Meadows Pass": 0.21991630525299127,
+    "Park Creek Ridge": 0.7759838881166077,
+    "Sasse Ridge": 0.5857928508039861
+  }
+}

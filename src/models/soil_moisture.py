@@ -158,31 +158,35 @@ def thornthwaite_mather_wetness(
 # ---------------------------------------------------------------------------
 # Snow — temperature-index (degree-day) redistribution of winter precipitation
 # ---------------------------------------------------------------------------
-# Nominal parameters (documented; calibration-pending against SNOTEL SWE):
-_DDF_MM_PER_C_DAY = 3.0   # degree-day melt factor
-_T_SNOW_HI = 3.0          # ≥ this °C → all precip falls as rain
+# Snow parameters — calibrated against SNOTEL by grid search + leave-one-station-out
+# (notebooks/calibrate_snow.py; LOSO mean per-site r 0.52→0.54, so the values generalise):
+_DDF_MM_PER_C_DAY = 2.5   # degree-day melt factor (mm/°C/day)
+_T_SNOW_HI = 2.0          # ≥ this °C → all precip falls as rain
 _T_SNOW_LO = -1.0         # ≤ this °C → all precip falls as snow (linear between)
-_T_MELT = 0.0             # melt threshold (°C)
+_T_MELT = 1.0             # melt threshold (°C)
 
 
-def snowmelt_liquid_input(precip_mm, tmean_c, days_in_month, ddf=_DDF_MM_PER_C_DAY):
+def snowmelt_liquid_input(precip_mm, tmean_c, days_in_month, ddf=_DDF_MM_PER_C_DAY,
+                          t_snow_hi=_T_SNOW_HI, t_snow_lo=_T_SNOW_LO, t_melt=_T_MELT):
     """Monthly temperature-index snow model → liquid water input W = rain + snowmelt (mm).
 
     Precip is partitioned into rain and snow by temperature; snow accumulates as SWE and is
     released by degree-day melt, so winter precipitation is **redistributed** into a spring
     melt pulse — the missing physics the SNOTEL validation exposed. Arrays are (time, y, x);
-    ``days_in_month`` is (time,). Returns (W, final SWE).
+    ``days_in_month`` is (time,). Parameters (ddf, thresholds) default to the module constants,
+    which are calibrated against SNOTEL (see notebooks/calibrate_snow.py). Returns (W, final SWE).
     """
     P = np.asarray(precip_mm, dtype="float64")
     T = np.asarray(tmean_c, dtype="float64")
     swe = np.zeros(P.shape[1:], dtype="float64")
     W = np.empty_like(P)
+    span = max(t_snow_hi - t_snow_lo, 0.1)
     for t in range(P.shape[0]):
-        snowfrac = np.clip((_T_SNOW_HI - T[t]) / (_T_SNOW_HI - _T_SNOW_LO), 0.0, 1.0)
+        snowfrac = np.clip((t_snow_hi - T[t]) / span, 0.0, 1.0)
         snowfall = snowfrac * P[t]
         rain = P[t] - snowfall
         swe = swe + snowfall
-        melt = np.minimum(swe, ddf * np.maximum(T[t] - _T_MELT, 0.0) * days_in_month[t])
+        melt = np.minimum(swe, ddf * np.maximum(T[t] - t_melt, 0.0) * days_in_month[t])
         swe = swe - melt
         W[t] = rain + melt
     return W.astype("float32"), swe
