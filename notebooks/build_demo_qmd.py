@@ -161,6 +161,8 @@ else:
     snotel_ref = f"SMAP / in-situ validation ([#29]({ISSUE}/29))."
 
 if anchor:
+    _num, _den = abs(anchor["loso_bias_raw"]), abs(anchor["loso_bias_anchored"])
+    _reduction = f"a {_num/_den:.0f}× reduction" if _den > 1e-4 else "a near-total reduction"
     snotel_section += f"""
 ### Observation-anchoring θ to SNOTEL (like GWL to wells)
 
@@ -172,8 +174,8 @@ reverting to the model (with inflated σ) away from stations. This is the soil-m
 the GWL Stage-3 well anchoring.
 
 A **leave-one-station-out** test shows the anchor generalises: the held-out systematic bias falls
-from {anchor['loso_bias_raw']:+.3f} to {anchor['loso_bias_anchored']:+.3f} m³/m³ (a
-{abs(anchor['loso_bias_raw']/anchor['loso_bias_anchored']):.0f}× reduction). RMSE is essentially
+from {anchor['loso_bias_raw']:+.3f} to {anchor['loso_bias_anchored']:+.3f} m³/m³ ({_reduction}).
+RMSE is essentially
 flat ({anchor['loso_rmse_raw']:.3f}→{anchor['loso_rmse_anchored']:.3f}) — with only
 {anchor['n_stations']} sparse upland stations, one alpine outlier's bias can't be resolved
 spatially, so the anchor fixes the *systematic* offset but not station-specific representativeness.

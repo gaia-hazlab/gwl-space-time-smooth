@@ -134,6 +134,9 @@ def test_upscale_and_native_scale_comparison():
 
 if __name__ == "__main__":
     test_hamon_pet_positive_and_seasonal()
+    test_snow_module_conserves_and_redistributes()
+    test_residual_anchor_pulls_to_obs_and_fades()
+    test_loso_anchor_reduces_bias()
     test_dvv_forward_inverse_closed_loop()
     test_modular_downscaler_registry()
     test_upscale_and_native_scale_comparison()

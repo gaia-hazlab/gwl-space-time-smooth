@@ -197,8 +197,8 @@ reverting to the model (with inflated σ) away from stations. This is the soil-m
 the GWL Stage-3 well anchoring.
 
 A **leave-one-station-out** test shows the anchor generalises: the held-out systematic bias falls
-from -0.045 to -0.010 m³/m³ (a
-4× reduction). RMSE is essentially
+from -0.045 to -0.010 m³/m³ (a 4× reduction).
+RMSE is essentially
 flat (0.102→0.108) — with only
 5 sparse upland stations, one alpine outlier's bias can't be resolved
 spatially, so the anchor fixes the *systematic* offset but not station-specific representativeness.

@@ -42,8 +42,8 @@ def residual_anchor(grid_x, grid_y, obs_x, obs_y, residuals, length_scale_m, pri
     wsum = w.sum(axis=-1)
     anchor = np.where(wsum > 1e-9, (w * r).sum(axis=-1) / np.maximum(wsum, 1e-9), 0.0)
 
-    # Support ∈ [0,1]: ~1 next to a station, →0 far away. σ interpolates obs_sigma↔prior.
-    support = 1.0 - np.exp(-w.max(axis=-1))                   # w.max→1 near a station, →0 far
+    # Support ∈ [0,1]: 1 at a station (w.max→1), →0 far away. σ interpolates obs_sigma↔prior.
+    support = np.clip(w.max(axis=-1), 0.0, 1.0)
     sigma = obs_sigma * support + prior_sigma * (1.0 - support)
     # Fade the correction out where there is no support, so the product reverts to the model.
     anchor = anchor * support
