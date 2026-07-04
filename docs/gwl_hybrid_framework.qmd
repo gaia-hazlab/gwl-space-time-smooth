@@ -1464,7 +1464,17 @@ then not phase but a per-site **representativeness bias** — the 0–1 m bucket
 capacity while the shallow sensors read higher — which a per-station bias correction (an
 operational anchor that consumes SNOTEL as training) reduces from RMSE $0.107$ to $0.070$
 m³ m⁻³ while preserving the correlation. Genuinely independent validation therefore now points to
-SMAP retrievals and a Cascade domain extension.
+SMAP retrievals.
+
+Finally, the soil-moisture field is **observation-anchored** to SNOTEL in the same spirit that the
+groundwater field is anchored to wells. Because the soil-moisture envelope needs only SOLUS texture
+(not the 90 m terrain), θ is extended east to the Puget+Cascade domain where the stations sit, and a
+residual anchor — the distance-weighted (obs − model) residual added to the field, with σ inflating
+away from stations — pulls θ toward the in-situ data. A leave-one-station-out test confirms the
+anchor generalises out-of-sample: the held-out systematic bias falls from $-0.045$ to $-0.010$
+m³ m⁻³. RMSE is unchanged, however — with only five sparse upland stations (one an alpine outlier)
+the anchor corrects the systematic offset but cannot resolve station-specific representativeness, so
+a denser soil-moisture network is what unlocks the rest.
 
 Over the lowland pilot and the recent period of interest (2024–2025, including 2025), the model
 is compared against **MERRA-2** reanalysis at its native 0.5°×0.625° scale (upscale-then-compare).

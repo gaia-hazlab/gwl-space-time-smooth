@@ -78,6 +78,7 @@ prism = "python -m src.data.fetch_prism_monthly --output data/processed/prism_mo
 snotel = "python -m src.data.fetch_snotel --output data/processed/snotel_soil_moisture_monthly.parquet"
 snotel-validate = "python notebooks/validate_snotel.py"
 snow-calibrate = "python notebooks/calibrate_snow.py"   # grid + LOSO snow calibration + bias decomposition
+snotel-anchor = "python notebooks/anchor_snotel.py"     # obs-anchor θ to SNOTEL over Puget+Cascade (residual anchor + LOSO)
 # SMAP satellite soil moisture (NASA Earthdata; needs ~/.netrc) — independent native-scale θ validation (#29).
 smap = "python -m src.data.fetch_smap --output data/processed/smap_soil_moisture_monthly_puget.zarr"
 smap-validate = "python notebooks/validate_smap.py"
