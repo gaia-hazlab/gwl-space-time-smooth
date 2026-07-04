@@ -18,6 +18,7 @@ from src.models.downscale import (
     register_downscaler,
     upscale_to_grid,
 )
+from src.models.anchor import loso_anchor_skill, residual_anchor
 from src.models.dvv_coupling import coupling_envelope, forward_dvv, invert_dvv
 from src.models.soil_moisture import snowmelt_liquid_input
 
@@ -30,6 +31,26 @@ def test_hamon_pet_positive_and_seasonal():
     assert pet.shape == (2, 1, 1)
     assert np.all(pet >= 0)
     assert pet[1, 0, 0] > pet[0, 0, 0]        # July PET > January PET (warmer, longer days)
+
+
+def test_residual_anchor_pulls_to_obs_and_fades():
+    # one station with a +0.1 residual at the grid centre; anchor should be ~0.1 there and →0 far.
+    gy, gx = np.meshgrid(np.linspace(0, 100_000, 11), np.linspace(0, 100_000, 11), indexing="ij")
+    anchor, sigma = residual_anchor(gx, gy, np.array([50_000.0]), np.array([50_000.0]),
+                                    np.array([0.1]), length_scale_m=10_000.0, prior_sigma=0.05)
+    ci = 5  # centre index
+    assert anchor[ci, ci] > 0.09                       # near the station → full correction
+    assert abs(anchor[0, 0]) < 0.02                    # far corner → correction fades out
+    assert sigma[ci, ci] < sigma[0, 0]                 # σ small at the station, large far away
+
+
+def test_loso_anchor_reduces_bias():
+    # four stations with a shared systematic model bias → LOSO anchoring should shrink |bias|.
+    x = np.array([0.0, 30_000, 0.0, 30_000]); y = np.array([0.0, 0.0, 30_000, 30_000])
+    model = np.array([0.15, 0.16, 0.15, 0.16]); obs = model + 0.10   # uniform +0.10 residual
+    rb, rr, ab, ar = loso_anchor_skill(x, y, model, obs, length_scale_m=40_000.0)
+    assert abs(ab) < abs(rb)                           # held-out bias reduced
+    assert ar < rr                                     # and RMSE reduced for a uniform bias
 
 
 def test_snow_module_conserves_and_redistributes():
@@ -113,6 +134,9 @@ def test_upscale_and_native_scale_comparison():
 
 if __name__ == "__main__":
     test_hamon_pet_positive_and_seasonal()
+    test_snow_module_conserves_and_redistributes()
+    test_residual_anchor_pulls_to_obs_and_fades()
+    test_loso_anchor_reduces_bias()
     test_dvv_forward_inverse_closed_loop()
     test_modular_downscaler_registry()
     test_upscale_and_native_scale_comparison()

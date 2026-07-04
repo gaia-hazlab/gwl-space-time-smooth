@@ -187,6 +187,28 @@ m³/m³ while preserving the correlation.
 per-site bias correction anchoring the level to the in-situ measurements — the offset is a fixable
 representativeness bias, not dynamics error.](../figures/demo/snow_calibration.png)
 
+### Observation-anchoring θ to SNOTEL (like GWL to wells)
+
+Groundwater is anchored to wells; the soil-moisture bucket was model-only. Since the envelope
+needs only SOLUS texture (not the 90 m terrain), we extend θ east to the **Puget+Cascade** domain
+— where the SNOTEL stations actually sit — and apply a **residual anchor**: the (obs − model)
+residual is distance-weighted onto the grid and added, pulling θ toward the in-situ data and
+reverting to the model (with inflated σ) away from stations. This is the soil-moisture analogue of
+the GWL Stage-3 well anchoring.
+
+A **leave-one-station-out** test shows the anchor generalises: the held-out systematic bias falls
+from -0.045 to -0.010 m³/m³ (a 4× reduction).
+RMSE is essentially
+flat (0.102→0.108) — with only
+5 sparse upland stations, one alpine outlier's bias can't be resolved
+spatially, so the anchor fixes the *systematic* offset but not station-specific representativeness.
+The machinery (a reusable residual-anchor operator, `src/models/anchor.py`) is in place; denser
+coverage or a Cascade station network is what unlocks the rest.
+
+![Model θ vs SNOTEL-anchored θ over the Puget+Cascade domain (orange = SNOTEL soil-moisture
+stations); the anchor wets the station neighbourhoods. Right: leave-one-station-out skill — the
+systematic bias is corrected out-of-sample.](../figures/demo/snotel_anchor.png)
+
 ### Depth-matched validation against MERRA-2 reanalysis (native 0.5°, incl. 2025)
 
 The 2024–2025 comparison uses **MERRA-2** (NASA reanalysis) — a model cross-check rather than an

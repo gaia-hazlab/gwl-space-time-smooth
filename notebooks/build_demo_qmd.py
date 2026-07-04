@@ -91,6 +91,8 @@ _smap_path = PROC / "smap_validation.json"
 smap = json.loads(_smap_path.read_text()) if _smap_path.exists() else None
 _merra_path = PROC / "merra2_validation.json"
 merra = json.loads(_merra_path.read_text()) if _merra_path.exists() else None
+_anchor_path = PROC / "snotel_anchor.json"
+anchor = json.loads(_anchor_path.read_text()) if _anchor_path.exists() else None
 
 gwl_fr = prov["budget_fractions"]["groundwater"]
 sm_fr = prov["budget_fractions"]["soil_moisture"]
@@ -157,6 +159,33 @@ representativeness bias, not dynamics error.](../figures/demo/snow_calibration.p
 else:
     snotel_section = ""
     snotel_ref = f"SMAP / in-situ validation ([#29]({ISSUE}/29))."
+
+if anchor:
+    _num, _den = abs(anchor["loso_bias_raw"]), abs(anchor["loso_bias_anchored"])
+    _reduction = f"a {_num/_den:.0f}× reduction" if _den > 1e-4 else "a near-total reduction"
+    snotel_section += f"""
+### Observation-anchoring θ to SNOTEL (like GWL to wells)
+
+Groundwater is anchored to wells; the soil-moisture bucket was model-only. Since the envelope
+needs only SOLUS texture (not the 90 m terrain), we extend θ east to the **Puget+Cascade** domain
+— where the SNOTEL stations actually sit — and apply a **residual anchor**: the (obs − model)
+residual is distance-weighted onto the grid and added, pulling θ toward the in-situ data and
+reverting to the model (with inflated σ) away from stations. This is the soil-moisture analogue of
+the GWL Stage-3 well anchoring.
+
+A **leave-one-station-out** test shows the anchor generalises: the held-out systematic bias falls
+from {anchor['loso_bias_raw']:+.3f} to {anchor['loso_bias_anchored']:+.3f} m³/m³ ({_reduction}).
+RMSE is essentially
+flat ({anchor['loso_rmse_raw']:.3f}→{anchor['loso_rmse_anchored']:.3f}) — with only
+{anchor['n_stations']} sparse upland stations, one alpine outlier's bias can't be resolved
+spatially, so the anchor fixes the *systematic* offset but not station-specific representativeness.
+The machinery (a reusable residual-anchor operator, `src/models/anchor.py`) is in place; denser
+coverage or a Cascade station network is what unlocks the rest.
+
+![Model θ vs SNOTEL-anchored θ over the Puget+Cascade domain (orange = SNOTEL soil-moisture
+stations); the anchor wets the station neighbourhoods. Right: leave-one-station-out skill — the
+systematic bias is corrected out-of-sample.](../figures/demo/snotel_anchor.png)
+"""
 
 if merra:
     _rz = merra["root_zone"]
