@@ -74,6 +74,7 @@ execute:
   echo: false
   warning: false
   message: false
+jupyter: gwl-pixi
 ---
 
 ```{python}
@@ -1665,10 +1666,16 @@ over a densely-instrumented window.
 ### Soil moisture
 
 The static SOLUS→Saxton-Rawls envelope sets the physical bounds at 90 m (wilting point, field
-capacity, porosity, available water); a Thornthwaite-Mather bucket forced by TerraClimate fills
-it through time. The modelled θ reproduces the peer TerraClimate soil-water field at r = 0.98
-(a consistency check, shared forcing), with the correct Pacific Northwest signal: wet winters,
-late-summer drought, driest 2023, wettest 2010.
+capacity, porosity, available water); a **total-water bucket** forced by TerraClimate fills it
+through time. Unlike a plant-available Thornthwaite-Mather store, which caps θ at field capacity
+and biases the product dry, the total-water store spans wilting point to porosity: wet months
+saturate above field capacity and drain gravitationally, so θ ranges from ≈0.05 to ≈0.46 m³ m⁻³
+with the correct Pacific Northwest signal (wet winters ≈0.30, late-summer drought ≈0.09). The
+coarse dynamic field is downscaled to 90 m by a **topographic-wetness-index** operator rather than
+plain bilinear resampling, which redistributes moisture along the terrain and resolves the drainage
+network instead of leaving 4 km blocks; it is one entry in a modular downscaler registry that also
+admits statistical and machine-learning methods. The modelled θ reproduces the peer TerraClimate
+soil-water field at r = 0.94 (a consistency check, shared forcing).
 
 ![Soil-moisture state: the SOLUS→Saxton-Rawls envelope at 90 m, wet vs dry θ maps, and the
 2000–2024 θ series against the TerraClimate soil field.](assets/soil_moisture_state.png){#fig-sm-results}
@@ -1676,16 +1683,18 @@ late-summer drought, driest 2023, wettest 2010.
 ![Soil moisture θ evolving month by month at 90 m (2010–2013).](assets/theta_90m.gif){#fig-sm-anim}
 
 Independent validation uses data outside the model's forcing chain. NRCS SNOTEL in-situ sensors
-in the adjacent Cascades give a first independent check: after adding a temperature-index snow
-module and calibrating it by leave-one-station-out, the snowiest sites reach r ≈ 0.7–0.8 on the
-seasonal phase, with a residual field-capacity dry bias.
+in the adjacent Cascades give a first independent check: with the temperature-index snow module
+at nominal degree-day parameters, the snowiest sites reach r ≈ 0.7–0.8 on the seasonal phase.
+Leave-one-station-out shows that tuning the snow constants on only five stations overfits (held-out
+r 0.49 default vs 0.44 tuned), so the nominal parameters are adopted.
 
 ![Independent validation against SNOTEL in-situ θ (upland stations), with the snow module.](assets/snotel_validation.png){#fig-snotel}
 
 Over the recent period of interest, including 2025, the model is compared against MERRA-2
 reanalysis at its native 0.5° scale (upscale-then-compare). Its root-zone field is depth-matched
-to the bucket: the model tracks it at domain-mean r = 0.81, the seasonal and 2024/2025
-interannual swings lining up, leaving the familiar dry bias.
+to the bucket: with the total-water store the model tracks it at domain-mean r = 0.85 (bias
+−0.08 m³ m⁻³, RMSE 0.095), up from r = 0.81 under the plant-available store, with the seasonal
+and 2024/2025 interannual swings lining up.
 
 ![Depth-matched validation against MERRA-2 root-zone reanalysis at native 0.5°, 2024–2025 incl. 2025.](assets/merra2_validation.png){#fig-merra2}
 

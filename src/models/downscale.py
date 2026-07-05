@@ -128,6 +128,33 @@ def _bilinear(coarse: xr.DataArray, target_like: xr.DataArray, covariates=None) 
     return coarse.rio.reproject_match(target_like, resampling=Resampling.bilinear)
 
 
+@register_downscaler("twi")
+def _twi(coarse: xr.DataArray, target_like: xr.DataArray, covariates=None) -> xr.DataArray:
+    """PHYSICAL downscaler: add 90 m structure from the topographic wetness index.
+
+    Bilinear only smears the coarse footprint; this redistributes moisture within each footprint
+    by terrain. High TWI (convergent, flat, valley) holds more water; low TWI (steep, divergent,
+    ridge) less. We take the fine-minus-coarse TWI anomaly (mean ≈ 0 per footprint, so the coarse
+    mean is preserved) and add a proportional θ perturbation, clipped to the physical envelope.
+    Needs ``covariates['twi']`` (a 90 m TWI raster); falls back to bilinear if absent.
+    """
+    from rasterio.enums import Resampling
+
+    base = _bilinear(coarse, target_like)
+    cov = covariates or {}
+    twi = cov.get("twi")
+    if twi is None:
+        return base
+    twi = _ensure_spatial_dims(twi).rio.reproject_match(target_like)
+    twi_smooth = upscale_to_grid(twi, coarse).rio.reproject_match(target_like, resampling=Resampling.bilinear)
+    anom = np.asarray(twi.values, "float64") - np.asarray(twi_smooth.values, "float64")
+    std = np.nanstd(anom)
+    if not np.isfinite(std) or std < 1e-9:
+        return base
+    delta = 0.035 * np.clip(anom / std, -3.0, 3.0)         # terrain perturbation (caller bounds it)
+    return base.copy(data=(base.values + delta).astype("float32"))
+
+
 def downscale(coarse: xr.DataArray, target_like: xr.DataArray, method: str = "bilinear",
               covariates=None) -> xr.DataArray:
     """Downscale ``coarse`` onto ``target_like`` using a registered method (default bilinear).

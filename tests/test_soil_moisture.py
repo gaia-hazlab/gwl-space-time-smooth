@@ -12,7 +12,19 @@ from src.models.soil_moisture import (
     estimate_soil_moisture,
     saxton_rawls_envelope,
     thornthwaite_mather_wetness,
+    total_water_bucket,
 )
+
+
+def test_total_water_bucket_spans_full_range_and_drains():
+    wp = np.array([[0.10]]); fc = np.array([[0.25]]); sat = np.array([[0.45]])
+    # a very wet month then dry months (with ET)
+    P = np.array([300.0, 0, 0, 0, 0, 0])[:, None, None]
+    PET = np.array([10.0, 60, 60, 60, 60, 60])[:, None, None]
+    th = total_water_bucket(P, PET, wp, fc, sat, root_depth_m=1.0)
+    assert np.all(th >= wp - 1e-6) and np.all(th <= sat + 1e-6)   # within physical envelope
+    assert th[0, 0, 0] > fc[0, 0]                                  # wet month exceeds field capacity
+    assert th[-1, 0, 0] < th[0, 0, 0]                             # drains/dries over time
 
 
 def test_envelope_ordering_and_ranges():
@@ -65,6 +77,7 @@ def test_theta_stays_within_envelope():
 
 if __name__ == "__main__":
     test_envelope_ordering_and_ranges()
+    test_total_water_bucket_spans_full_range_and_drains()
     test_bucket_responds_to_forcing()
     test_theta_stays_within_envelope()
     print("all soil-moisture tests passed")

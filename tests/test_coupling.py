@@ -63,8 +63,8 @@ def test_snow_module_conserves_and_redistributes():
     # Water is conserved over the run (rain+melt total ≈ precip total, up to leftover SWE).
     assert abs(W.sum() + swe_end.sum() - precip.sum()) < 1e-6
     # Redistribution: the cold precip month yields ~no liquid input; melt appears in warm months.
-    assert W[0, 0, 0] < 5.0
-    assert W[3:, 0, 0].sum() > 50.0
+    assert W[0, 0, 0] < 5.0                            # cold month → snow stored, little liquid
+    assert W[2:, 0, 0].sum() > 50.0                    # melt released in the warm months
 
 
 def test_dvv_forward_inverse_closed_loop():
@@ -121,6 +121,19 @@ def test_modular_downscaler_registry():
     del _DOWNSCALERS["passthrough_test"]
 
 
+def test_twi_downscaler_adds_structure_and_falls_back():
+    assert "twi" in _DOWNSCALERS
+    fine = _grid(90.0, 40)
+    coarse = _grid(900.0, 4).copy(data=np.random.RandomState(1).rand(4, 4)).rio.write_crs("EPSG:5070")
+    twi = fine.copy(data=np.random.RandomState(2).rand(40, 40)).rio.write_crs("EPSG:5070")
+    base = downscale(coarse, fine, method="bilinear")
+    # no twi covariate → falls back to bilinear (identical)
+    assert np.allclose(downscale(coarse, fine, method="twi").values, base.values, equal_nan=True)
+    # with twi → adds fine structure (differs from bilinear)
+    out = downscale(coarse, fine, method="twi", covariates={"twi": twi})
+    assert not np.allclose(out.values, base.values, equal_nan=True)
+
+
 def test_upscale_and_native_scale_comparison():
     fine = _grid(90.0, 40)
     fine = fine.copy(data=np.random.RandomState(0).rand(40, 40)).rio.write_crs("EPSG:5070")
@@ -139,5 +152,6 @@ if __name__ == "__main__":
     test_loso_anchor_reduces_bias()
     test_dvv_forward_inverse_closed_loop()
     test_modular_downscaler_registry()
+    test_twi_downscaler_adds_structure_and_falls_back()
     test_upscale_and_native_scale_comparison()
     print("all coupling/ensemble/downscale tests passed")

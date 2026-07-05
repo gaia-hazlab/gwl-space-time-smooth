@@ -33,7 +33,7 @@ from src.models.soil_moisture import (
     DEFAULT_ROOT_DEPTH_M,
     saxton_rawls_envelope,
     snowmelt_liquid_input,
-    thornthwaite_mather_wetness,
+    total_water_bucket,
 )
 
 mpl.use("Agg")
@@ -47,14 +47,13 @@ SOLUS = "/vsicurl/https://storage.googleapis.com/solus100pub"
 
 def _model_theta(sand, clay, precip, pet, tmean=None, days=None, snow=False, root_m=DEFAULT_ROOT_DEPTH_M):
     env = saxton_rawls_envelope(np.array([sand]), np.array([clay]))
-    wp, fc = float(env["theta_wp"][0]), float(env["theta_fc"][0])
-    awc = np.array([[max(fc - wp, 0.02) * root_m * 1000.0]])
+    wp = np.array([[float(env["theta_wp"][0])]]); fc = np.array([[float(env["theta_fc"][0])]])
+    sat = np.array([[float(env["theta_sat"][0])]])
     liquid = precip
     if snow and tmean is not None:
         liquid, _ = snowmelt_liquid_input(precip[:, None, None], tmean[:, None, None], days)
         liquid = liquid[:, 0, 0]
-    w = thornthwaite_mather_wetness(liquid[:, None, None], pet[:, None, None], awc)[:, 0, 0]
-    return wp + w * (fc - wp)
+    return total_water_bucket(liquid[:, None, None], pet[:, None, None], wp, fc, sat, root_m)[:, 0, 0]
 
 
 def main():

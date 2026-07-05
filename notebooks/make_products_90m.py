@@ -139,7 +139,7 @@ def main():
     drv_t = pd.DatetimeIndex(drv.time.values)
     idx = [int(np.where((drv_t.year == pd.Timestamp(t).year) & (drv_t.month == pd.Timestamp(t).month))[0][0])
            for t in g_times]
-    t_times, theta, th_budget = soil_moisture_90m(env, drv, times=idx)
+    t_times, theta, th_budget = soil_moisture_90m(env, drv, times=idx, downscaler="twi")
 
     # --- GIFs (fixed colour limits across frames) ---
     tv = theta[np.isfinite(theta)]

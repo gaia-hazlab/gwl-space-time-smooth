@@ -142,19 +142,18 @@ it should.](../figures/demo/snotel_validation.png)
                   f"SMAP is next ([#29]({ISSUE}/29)).")
     if snowcal:
         snotel_section += f"""
-The snow parameters were then **calibrated** against SNOTEL (grid search + leave-one-station-out,
-so the numbers are out-of-sample): the degree-day factor and rain/snow thresholds lift the mean
-per-station skill and — crucially — **generalise** (held-out LOSO r
-{snowcal['loso_mean_r_default']:.2f}&nbsp;→&nbsp;{snowcal['loso_mean_r_calibrated']:.2f}). The
-dominant residual is not phase but a per-site *representativeness bias* (our 0–1 m bucket saturates
-near field capacity; the shallow sensors read higher): a per-station bias correction — an
-operational anchor that **consumes SNOTEL as training**, leaving SMAP ([#29]({ISSUE}/29)) the
-independent test — collapses RMSE {snowcal['rmse_raw']:.3f}&nbsp;→&nbsp;{snowcal['rmse_bias_corrected']:.3f}
+Snow-parameter tuning was attempted against SNOTEL (grid search + leave-one-station-out). With only
+{snotel['n_stations']} stations it **overfits** — the held-out LOSO skill does not beat the nominal
+parameters ({snowcal['loso_mean_r_default']:.2f} default vs {snowcal['loso_mean_r_calibrated']:.2f}
+tuned) — so nominal snow parameters are used and a denser network or direct SNOTEL snow-water-equivalent
+calibration is left to the roadmap. The residual gap is a per-site *representativeness bias*: a
+per-station linear correction — an operational anchor that **consumes SNOTEL as training**, leaving the
+satellite test independent — collapses RMSE {snowcal['rmse_raw']:.3f}&nbsp;→&nbsp;{snowcal['rmse_bias_corrected']:.3f}
 m³/m³ while preserving the correlation.
 
-![Snow-parameter calibration (per-station r, default vs calibrated; LOSO generalisation) and the
-per-site bias correction anchoring the level to the in-situ measurements — the offset is a fixable
-representativeness bias, not dynamics error.](../figures/demo/snow_calibration.png)
+![Snow-parameter grid search (per-station r) and the per-site bias correction anchoring the level to
+the in-situ measurements. Tuning overfits with 5 stations; the offset is a fixable representativeness
+bias, not a dynamics error.](../figures/demo/snow_calibration.png)
 """
 else:
     snotel_section = ""
@@ -173,18 +172,17 @@ residual is distance-weighted onto the grid and added, pulling θ toward the in-
 reverting to the model (with inflated σ) away from stations. This is the soil-moisture analogue of
 the GWL Stage-3 well anchoring.
 
-A **leave-one-station-out** test shows the anchor generalises: the held-out systematic bias falls
-from {anchor['loso_bias_raw']:+.3f} to {anchor['loso_bias_anchored']:+.3f} m³/m³ ({_reduction}).
-RMSE is essentially
-flat ({anchor['loso_rmse_raw']:.3f}→{anchor['loso_rmse_anchored']:.3f}) — with only
-{anchor['n_stations']} sparse upland stations, one alpine outlier's bias can't be resolved
-spatially, so the anchor fixes the *systematic* offset but not station-specific representativeness.
-The machinery (a reusable residual-anchor operator, `src/models/anchor.py`) is in place; denser
-coverage or a Cascade station network is what unlocks the rest.
+With the total-water bucket the model is already close to the in-situ level (held-out bias
+{anchor['loso_bias_raw']:+.3f} m³/m³), so the anchor mainly provides a fine correction: a
+**leave-one-station-out** test brings the held-out bias to {anchor['loso_bias_anchored']:+.3f} m³/m³,
+with RMSE roughly flat ({anchor['loso_rmse_raw']:.3f}→{anchor['loso_rmse_anchored']:.3f}). With only
+{anchor['n_stations']} sparse upland stations the anchor can slightly over-shoot and cannot resolve
+station-specific representativeness. The value here is the **reusable operator**
+(`src/models/anchor.py`) — the soil-moisture analogue of the GWL well anchoring — ready for a denser
+Cascade network.
 
 ![Model θ vs SNOTEL-anchored θ over the Puget+Cascade domain (orange = SNOTEL soil-moisture
-stations); the anchor wets the station neighbourhoods. Right: leave-one-station-out skill — the
-systematic bias is corrected out-of-sample.](../figures/demo/snotel_anchor.png)
+stations). Right: leave-one-station-out skill.](../figures/demo/snotel_anchor.png)
 """
 
 if merra:
