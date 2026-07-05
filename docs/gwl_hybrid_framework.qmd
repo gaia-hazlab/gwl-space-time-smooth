@@ -1639,6 +1639,90 @@ downstream liquefaction and LandLab models rather than hidden.
 
 ---
 
+## Results: Real-Data Modeling and Validation {#sec-results}
+
+The framework is exercised on real data over the Puget Sound pilot: monthly, 90 m, 2000–2025,
+with the coupled soil-moisture state. The figures below are the actual products and their
+validation, not the synthetic demonstration used above.
+
+### Groundwater level
+
+The observation-anchored baseline recovers depth-to-water with HAND as the dominant predictor
+(≈43% of the random-forest importance, no latitude or longitude), and its uncertainty is mapped
+per cell. Spatially blocked cross-validation gives a deliberately hard pooled RMSE of ≈18.5 m,
+the honest metric over a heterogeneous domain rather than an at-well interpolation error. A
+24-year monthly hydrograph at the best-recorded pilot well shows the seasonal cycle and the
+2021 drought draw-down.
+
+![Groundwater level over the Puget Sound pilot: baseline depth-to-water and 1σ uncertainty,
+random-forest feature importance, spatial block cross-validation, and a 24-year well hydrograph.](assets/gwl_state.png){#fig-gwl-results}
+
+The monthly product is time-varying; the animation steps through depth-to-water month by month
+over a densely-instrumented window.
+
+![Depth-to-water evolving month by month at 90 m (2010–2013).](assets/gwl_90m.gif){#fig-gwl-anim}
+
+### Soil moisture
+
+The static SOLUS→Saxton-Rawls envelope sets the physical bounds at 90 m (wilting point, field
+capacity, porosity, available water); a Thornthwaite-Mather bucket forced by TerraClimate fills
+it through time. The modelled θ reproduces the peer TerraClimate soil-water field at r = 0.98
+(a consistency check, shared forcing), with the correct Pacific Northwest signal: wet winters,
+late-summer drought, driest 2023, wettest 2010.
+
+![Soil-moisture state: the SOLUS→Saxton-Rawls envelope at 90 m, wet vs dry θ maps, and the
+2000–2024 θ series against the TerraClimate soil field.](assets/soil_moisture_state.png){#fig-sm-results}
+
+![Soil moisture θ evolving month by month at 90 m (2010–2013).](assets/theta_90m.gif){#fig-sm-anim}
+
+Independent validation uses data outside the model's forcing chain. NRCS SNOTEL in-situ sensors
+in the adjacent Cascades give a first independent check: after adding a temperature-index snow
+module and calibrating it by leave-one-station-out, the snowiest sites reach r ≈ 0.7–0.8 on the
+seasonal phase, with a residual field-capacity dry bias.
+
+![Independent validation against SNOTEL in-situ θ (upland stations), with the snow module.](assets/snotel_validation.png){#fig-snotel}
+
+Over the recent period of interest, including 2025, the model is compared against MERRA-2
+reanalysis at its native 0.5° scale (upscale-then-compare). Its root-zone field is depth-matched
+to the bucket: the model tracks it at domain-mean r = 0.81, the seasonal and 2024/2025
+interannual swings lining up, leaving the familiar dry bias.
+
+![Depth-matched validation against MERRA-2 root-zone reanalysis at native 0.5°, 2024–2025 incl. 2025.](assets/merra2_validation.png){#fig-merra2}
+
+Finally, θ is observation-anchored to SNOTEL over the Puget+Cascade domain, the soil-moisture
+analogue of the groundwater well anchoring. A leave-one-station-out test confirms the anchor
+removes the systematic bias out-of-sample.
+
+![Observation-anchored soil moisture: model vs SNOTEL-anchored θ over the Cascades, with
+leave-one-station-out skill.](assets/snotel_anchor.png){#fig-anchor}
+
+### Coupled state and uncertainty budget
+
+Both state variables come from one pipeline over the same grid, and every product's uncertainty
+is decomposed into static, dynamic, and downscaling components rather than folded into a single
+number.
+
+![Coupled subsurface state: groundwater depth-to-water and mean soil moisture with the shared
+seasonal cycle.](assets/coupled_overview.png){#fig-coupled}
+
+![Uncertainty budget: per-product 1σ maps and the static / dynamic / downscaling variance
+split.](assets/uncertainty_budget.png){#fig-budget}
+
+## Roadmap {#sec-roadmap}
+
+The pilot demonstrates the coupled machinery; the path to an operational product is staged.
+The **independent-satellite check** against SMAP (≈9 km surface soil moisture) is implemented
+and awaits a full multi-year run; it is the truly independent validation the reanalysis
+cross-check cannot supply. A **denser Cascade soil-moisture network** is what lets the anchor
+correct station-specific representativeness rather than only the systematic bias. The
+**snow module** should be calibrated against SNOTEL snow-water-equivalent directly, not only
+through soil-moisture correlation. On the dynamics side, the demonstrative **dv/v coupling**
+awaits real ambient-noise velocity change and borehole-calibrated poroelastic parameters, at
+which point it becomes a third, independent estimate of both state variables. Groundwater level
+gains a **forcing and method ensemble** to match the soil-moisture forcing-uncertainty term.
+Together these carry the pilot from a demonstration to a calibrated, observation-anchored,
+uncertainty-aware coupled reanalysis.
+
 ## Discussion and Open Questions {#sec-discussion}
 
 ### Can a purely data-driven product replace physics?
