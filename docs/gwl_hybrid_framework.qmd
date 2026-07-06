@@ -1405,12 +1405,14 @@ envelope and a dynamic driver:
 |---|---|---|---|
 | Groundwater level | HAND + SOLUS100 → RF baseline (90 m) | kriged monthly well anomalies | mature (this report) |
 | Soil moisture | SOLUS100 → Saxton–Rawls envelope (90 m) | TerraClimate $P$ & PET → Thornthwaite–Mather bucket | implemented |
-| Soil mechanics | Vs30 [@sanger2025parametric] + SOLUS | ambient-noise dv/v | in development |
+| Soil mechanics | Vs30 [@sanger2025parametric] + SOLUS | ambient-noise dv/v | implemented (module) |
 
 The differentiator relative to hydrology-only products is the third row: seismic velocity
 change (dv/v) as a dynamic, *observational* constraint on effective stress and saturation,
-jointly informing the water table and the vadose zone. That module is not yet implemented;
-the soil-moisture module below is.
+jointly informing the water table and the vadose zone. Both the soil-moisture module and the
+dv/v module are now implemented; each is described below, with the dv/v module resolving the
+depth ambiguity by separating shallow (vadose, soil moisture) from deep (saturated, water
+table) contributions.
 
 ### Soil-moisture static envelope
 
@@ -1705,6 +1707,34 @@ removes the systematic bias out-of-sample.
 ![Observation-anchored soil moisture: model vs SNOTEL-anchored θ over the Cascades, with
 leave-one-station-out skill.](assets/snotel_anchor.png){#fig-anchor}
 
+### dv/v module: depth-separated soil moisture and relative water table
+
+The third state variable is measured, not modelled. Ambient-noise seismic velocity change
+$\delta v/v$ is a depth-averaged, frequency-dependent probe of the subsurface mechanical state
+[@denolle2026unified], with peak sensitivity depth $L \approx V_S/(3f)$: high frequencies sense
+the shallow vadose zone, low frequencies the deeper saturated zone. The module turns this into
+two hydrological states along one modular chain. Continuous waveforms for the UW (Pacific
+Northwest Seismic Network) and CC (Cascades Volcano Observatory) networks are pulled through
+`seisfetch` — 74 stations fall in the Puget/Cascade pilot bbox (52 UW, 22 CC). Daily
+cross-correlations are stacked and a relative velocity change is measured per frequency band by
+coda-wave stretching. The **companion methods package `codameter`** then marginalises a
+*processing ensemble* — the defensible choices of coda window, reference epoch, and estimator —
+into an honest time-dependent data covariance $C_d$ that carries the methodological spread a
+single processing choice hides, not just the Weaver coherence floor. Feeding the banded
+$\delta v/v$ and $C_d$ to `codameter`'s Rayleigh depth kernels inverts a depth profile of
+$\delta V_S/V_S(z)$ with propagated uncertainty, which is split at the water-table depth:
+the shallow part is **soil moisture** (vadose capillary stiffness), the deep part is a
+**relative water-table change** (saturated poroelastic head). Consistent with the literature,
+$\delta v/v$ constrains a *relative* groundwater change, not an absolute level.
+
+![dv/v module: UW + CC station inventory (`seisfetch`), the frequency→depth Rayleigh kernels
+(peak depth $\approx V_S/3f$) with the water-table split, banded $\delta v/v(t)$ recovered by
+coda stretching with the processing-ensemble uncertainty band, and the depth-separated profile
+partitioned into soil moisture (shallow) and relative water table (deep). The station inventory
+is live; the $\delta v/v$ panels run the pipeline on a controlled synthetic with a known imposed
+velocity change (the same calls run on cached real correlations), validating recovery and
+uncertainty propagation before the multi-year compute.](assets/dvv_module.png){#fig-dvv}
+
 ### Coupled state and uncertainty budget
 
 Both state variables come from one pipeline over the same grid, and every product's uncertainty
@@ -1725,9 +1755,12 @@ and awaits a full multi-year run; it is the truly independent validation the rea
 cross-check cannot supply. A **denser Cascade soil-moisture network** is what lets the anchor
 correct station-specific representativeness rather than only the systematic bias. The
 **snow module** should be calibrated against SNOTEL snow-water-equivalent directly, not only
-through soil-moisture correlation. On the dynamics side, the demonstrative **dv/v coupling**
-awaits real ambient-noise velocity change and borehole-calibrated poroelastic parameters, at
-which point it becomes a third, independent estimate of both state variables. Groundwater level
+through soil-moisture correlation. On the dynamics side, the **dv/v module** is now implemented
+end to end (correlation → uncertainty-aware measurement → depth-separated soil moisture and
+relative water table); what remains is the multi-year real-data run over the UW/CC networks and
+borehole-calibrated poroelastic parameters to convert the relative water-table change to head in
+metres, at which point it becomes a third, independent estimate of both state variables.
+Groundwater level
 gains a **forcing and method ensemble** to match the soil-moisture forcing-uncertainty term.
 Together these carry the pilot from a demonstration to a calibrated, observation-anchored,
 uncertainty-aware coupled reanalysis.
