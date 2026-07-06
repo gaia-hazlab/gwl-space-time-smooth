@@ -16,5 +16,10 @@
   "soil_moisture_dvv": -0.0033525087174054325,
   "soil_moisture_dvv_std": 0.0007530068233950776,
   "wtd_relative_dvv": -0.00044716866178644987,
-  "wtd_relative_dvv_std": 0.00028636725486161547
+  "wtd_relative_dvv_std": 0.00028636725486161547,
+  "assimilation": {
+    "n_stations": 74,
+    "wtd_sigma_reduction": 0.18710821866989136,
+    "theta_sigma_reduction": 0.9123663902282715
+  }
 }

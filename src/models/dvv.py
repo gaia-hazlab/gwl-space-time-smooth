@@ -47,6 +47,32 @@ def peak_depth_km(f_hz, vs_ms=1500.0):
     return vs_ms / (3.0 * np.asarray(f_hz, dtype="float64")) / 1000.0
 
 
+# --- Convert depth-separated dv/v to model state units (for assimilation) --------------------
+# Nominal, calibration-pending sensitivities (documented; anchor to boreholes/lab).
+from src.models.dvv_coupling import K_SAT           # dv/v per metre of head (5e-4)
+
+# dv/v per unit volumetric θ; NEGATIVE because wetting softens the frame (v drops). Nominal.
+S_THETA = -2.0
+
+
+def dvv_to_wtd_change(dvv_wtd, dvv_wtd_std, k_sat=K_SAT):
+    """Deep (saturated-band) dv/v -> RELATIVE water-table depth change in metres, with sigma.
+
+    Poroelastic head sensitivity (dvv_coupling): dv/v = k_sat * ΔWTD, deeper table positive.
+    Returns (delta_wtd_m, sigma_m). This is a *relative* change, not an absolute level.
+    """
+    return np.asarray(dvv_wtd) / k_sat, np.abs(np.asarray(dvv_wtd_std) / k_sat)
+
+
+def dvv_to_theta_change(dvv_sm, dvv_sm_std, sensitivity=S_THETA):
+    """Shallow (vadose-band) dv/v -> volumetric soil-moisture change Δθ, with sigma.
+
+    dv/v = sensitivity * Δθ (sensitivity < 0: wetter -> softer -> lower velocity). Nominal
+    sensitivity; calibrate against the SOLUS/Saxton-Rawls vadose operator per site.
+    """
+    return np.asarray(dvv_sm) / sensitivity, np.abs(np.asarray(dvv_sm_std) / sensitivity)
+
+
 # ---------------------------------------------------------------------------
 # 1. Correlation layer (new code)
 # ---------------------------------------------------------------------------

@@ -57,6 +57,16 @@ def test_stretching_recovers_known_dvv():
     assert r > 0.95 and rmse < 5e-4
 
 
+def test_dvv_to_state_conversions_and_signs():
+    # deep band: dv/v = k_sat * ΔWTD  ->  a positive dv/v means a deeper table (head drop)
+    wtd, wtd_sd = dvv.dvv_to_wtd_change(np.array([5e-4]), np.array([1e-4]))
+    assert abs(wtd[0] - 1.0) < 1e-6                    # 5e-4 dv/v -> +1 m with k_sat=5e-4
+    assert wtd_sd[0] > 0
+    # shallow band: wetting softens (dv/v < 0) -> positive Δθ
+    dth, dth_sd = dvv.dvv_to_theta_change(np.array([-0.02]), np.array([0.004]))
+    assert dth[0] > 0 and dth_sd[0] > 0
+
+
 def _codameter_available():
     try:
         import codameter  # noqa: F401
@@ -101,6 +111,7 @@ if __name__ == "__main__":
     test_peak_depth_relation()
     test_cross_correlate_shapes_and_symmetry()
     test_stretching_recovers_known_dvv()
+    test_dvv_to_state_conversions_and_signs()
     test_processing_ensemble_covariance_exceeds_weaver_floor()
     test_depth_separation_orders_and_splits_at_water_table()
     print("all dv/v tests passed")

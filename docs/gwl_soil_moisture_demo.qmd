@@ -315,14 +315,15 @@ estimate also makes the TerraClimate cross-check more genuinely independent.
 PRISM): domain-mean θ agreement, the per-cell forcing-σ, and the four-component θ uncertainty
 budget with forcing now explicit.](../figures/demo/forcing_ensemble.png)
 
-**Downscaling is modular — and currently the simplest thing.** The coarse→90 m step is a
-registry, not a hard-coded call. The default is **bilinear resampling**: a baseline that adds
-*no* new fine-scale information (the representativeness σ measures exactly that). Smarter,
-**data-informed or model-driven** downscalers — covariate regression on the fine static field,
-ML super-resolution trained on high-resolution observations, physics-based redistribution
-(TWI/TOPMODEL for θ, poroelastic head propagation for GWL) — can be registered and selected
-without touching any call site. This is stated plainly so the current resampling is not mistaken
-for a fine-scale physical model.
+**Downscaling is modular — and now more than resampling.** The coarse→90 m step is a registry,
+not a hard-coded call. The default **bilinear** baseline adds *no* new fine-scale information (the
+representativeness σ measures exactly that). Four methods are now registered and selectable
+without touching any call site: `bilinear` (baseline), `twi` (physical — redistributes moisture by
+the topographic wetness index), `regression` (statistical — mean-preserving multilinear fit of the
+coarse field on the fine static covariates), and `ml` (RandomForest on the same covariates). The
+regression and ML methods are *exactly mean-preserving*: area-averaging the 90 m output back over a
+coarse footprint recovers the coarse value, so they redistribute sub-footprint structure without
+inventing a coarse-scale bias. ML gains most from denser fine-resolution labels (SMAP/NISAR).
 
 **Calibrate at the sensor's native scale, not ours.** Validation/assimilation against coarse
 products (SMAP, NISAR, NLDAS, GRACE, SWOT) is done by **upscaling** our 90 m field to the
@@ -343,6 +344,37 @@ data.
 ![Demonstrative dv/v coupling: modelled states → banded dv/v (low band = water table, high band
 = soil moisture) → inverted back to both states (recovery r ≈ 1). Governing relations from the
 soil-hydromechanical memory framework.](../figures/demo/dvv_coupling.png)
+
+**The dv/v module — measured, not modelled.** The coupling above is closed-loop; the module below
+measures dv/v from real seismic data and inverts it for depth. Continuous ambient noise for the UW
+(Pacific Northwest Seismic Network) and CC (Cascades Volcano Observatory) networks is pulled through
+`seisfetch` — 74 stations fall in the pilot bbox (52 UW, 22 CC). Daily cross-correlations are stacked
+and a velocity change is measured per frequency band by coda-wave stretching. The companion package
+**codameter** then marginalises a *processing ensemble* (coda window, reference, estimator) into an
+honest time-dependent data covariance — the methodological spread a single processing choice hides,
+not just the coherence floor — and inverts the banded dv/v for a depth profile of δV_S/V_S with
+propagated uncertainty. Splitting that profile at the water-table depth (peak sensitivity depth
+≈ V_S/3f) yields **soil moisture** (shallow, vadose) and a **relative water table** (deep, saturated);
+dv/v constrains a *relative* groundwater change, per the literature.
+
+![dv/v module: real UW+CC station inventory (seisfetch), frequency→depth Rayleigh kernels with the
+water-table split, banded dv/v(t) recovered by coda stretching with the processing-ensemble
+uncertainty band, and the depth-separated profile partitioned into soil moisture (shallow) and
+relative water table (deep). Station inventory is live; the dv/v panels run on a controlled
+synthetic with a known imposed velocity change, validating recovery before the multi-year
+compute.](../figures/demo/dvv_module.png)
+
+**dv/v as a new assimilated observation.** The depth-separated relative water table and soil
+moisture are folded into the GWL and soil-moisture models exactly as wells and SNOTEL are — a
+precision-weighted, uncertainty-aware update where each station carries its own σ (from codameter's
+data covariance), so the dv/v estimates are fused *alongside* the existing observations, not in
+place of them. The update reverts to the model where there is no station and shrinks the posterior σ
+where dv/v constrains the state.
+
+![dv/v assimilated at the real UW/CC geometry: the depth-separated relative water-table and
+soil-moisture anomalies (left) folded into the state models with their posterior σ (right); σ
+shrinks where stations constrain the field and reverts to the model
+elsewhere.](../figures/demo/dvv_assimilation.png)
 
 ## 6 · Methods — data sources, workflow & physical laws {#methods}
 

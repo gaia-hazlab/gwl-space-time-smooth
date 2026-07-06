@@ -31,6 +31,7 @@ from scipy import signal
 
 from src.data.fetch_seismic import PUGET_CASCADES_BBOX, fetch_inventory
 from src.models import dvv
+from src.models.anchor import assimilate_points
 
 mpl.use("Agg")
 OUT = Path("figures/demo"); OUT.mkdir(parents=True, exist_ok=True)
@@ -132,6 +133,72 @@ def panel_separation(ax, ens, prof, epoch):
     return part
 
 
+def make_assimilation_figure(ens):
+    """Assimilate dv/v-derived relative WTD and Δθ at the real UW/CC geometry (new data source).
+
+    Demonstrates the operator that folds the dv/v estimates into the GWL and soil-moisture models
+    the same way wells and SNOTEL are assimilated: a precision-weighted, uncertainty-aware update
+    that reverts to the model where there is no station. Uses real station coordinates; the
+    per-station dv/v values/uncertainties are the depth-separated synthetic estimates.
+    """
+    from pyproj import Transformer
+    try:
+        inv = fetch_inventory(PUGET_CASCADES_BBOX)
+    except Exception:
+        return None
+    tf = Transformer.from_crs("EPSG:4326", "EPSG:5070", always_xy=True)
+    sx, sy = tf.transform(inv.lon.values, inv.lat.values)
+    rng = np.random.RandomState(1)
+
+    # depth-separated dv/v per station (spatial pattern + noise), then -> state units + sigma.
+    fcs = sorted(ens)
+    sm_std = float(np.median(ens[fcs[-1]]["ensemble"].total_std))     # shallow band sigma
+    wt_std = float(np.median(ens[fcs[0]]["ensemble"].total_std))      # deep band sigma
+    lon0 = inv.lon.values
+    dvv_wtd = 8e-4 * (lon0 - lon0.mean()) / (np.ptp(lon0) or 1) + rng.normal(0, wt_std, len(inv))
+    dvv_sm = -2e-2 * (inv.lat.values - inv.lat.mean()) / (np.ptp(inv.lat.values) or 1) \
+        + rng.normal(0, sm_std, len(inv))
+    wtd, wtd_sig = dvv.dvv_to_wtd_change(dvv_wtd, np.full(len(inv), wt_std))
+    dth, dth_sig = dvv.dvv_to_theta_change(dvv_sm, np.full(len(inv), sm_std))
+    # representativeness floor: the nominal dv/v->state conversion sensitivity is itself uncertain,
+    # so a single-season station estimate is not cm/0.001-tight. Honest per-station sigma.
+    wtd_sig = np.maximum(wtd_sig, 0.4)          # m
+    dth_sig = np.maximum(dth_sig, 0.02)         # m3/m3
+
+    w, s, e, n = PUGET_CASCADES_BBOX
+    xg = np.linspace(*tf.transform([w, e], [s, s])[0], 80)
+    yg = np.linspace(*tf.transform([w, w], [s, n])[1], 80)
+    GX, GY = np.meshgrid(xg, yg)
+
+    wtd_f, wtd_sg = assimilate_points(GX, GY, sx, sy, wtd, wtd_sig,
+                                      length_scale_m=25_000.0, prior_sigma=0.5)
+    dth_f, dth_sg = assimilate_points(GX, GY, sx, sy, dth, dth_sig,
+                                      length_scale_m=25_000.0, prior_sigma=0.05)
+
+    fig, ax = plt.subplots(2, 2, figsize=(12, 9))
+    ext = [xg.min(), xg.max(), yg.min(), yg.max()]
+    specs = [(ax[0, 0], wtd_f, "RdBu_r", "assimilated relative WTD anomaly (m)", wtd, sx, sy),
+             (ax[0, 1], wtd_sg, "viridis", "posterior sigma WTD (m)", None, sx, sy),
+             (ax[1, 0], dth_f, "BrBG", "assimilated soil-moisture anomaly Δθ", dth, sx, sy),
+             (ax[1, 1], dth_sg, "viridis", "posterior sigma θ", None, sx, sy)]
+    for a, fld, cmap, title, vals, xx, yy in specs:
+        vmax = np.nanmax(np.abs(fld)) if "anomaly" in title else None
+        im = a.imshow(fld, extent=ext, origin="lower", cmap=cmap,
+                      vmin=(-vmax if vmax else None), vmax=vmax, aspect="auto")
+        a.scatter(xx, yy, s=10, c="k", alpha=0.5, marker="o", linewidths=0)
+        fig.colorbar(im, ax=a, shrink=0.8)
+        a.set_title(title, fontsize=10); a.set_xticks([]); a.set_yticks([])
+    fig.suptitle("dv/v as a new assimilated observation: depth-separated relative water table and "
+                 "soil moisture folded into the state models (precision-weighted, uncertainty-aware)",
+                 fontsize=12, fontweight="bold", y=0.99)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    for p in (OUT / "dvv_assimilation.png", ASSETS / "dvv_assimilation.png"):
+        fig.savefig(p, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return dict(n_stations=int(len(inv)), wtd_sigma_reduction=float(1 - np.nanmin(wtd_sg) / 0.5),
+                theta_sigma_reduction=float(1 - np.nanmin(dth_sg) / 0.05))
+
+
 def main():
     lags, ref, series, dvv_true, t, sr = _synthetic()
     banded = dvv.measure_banded_dvv(series, ref, lags, sr, coda_s=(5.0, 30.0), times=t)
@@ -158,8 +225,12 @@ def main():
                    soil_moisture_dvv_std=part["soil_moisture_dvv_std"],
                    wtd_relative_dvv=part["wtd_relative_dvv"],
                    wtd_relative_dvv_std=part["wtd_relative_dvv_std"])
+    assim = make_assimilation_figure(ens)
+    if assim:
+        summary["assimilation"] = assim
     (PROC / "dvv_summary.json").write_text(json.dumps(summary, indent=2))
-    print("wrote", OUT / "dvv_module.png", "and", PROC / "dvv_summary.json")
+    print("wrote", OUT / "dvv_module.png", OUT / "dvv_assimilation.png", "and",
+          PROC / "dvv_summary.json")
     print(json.dumps(summary, indent=2))
 
 

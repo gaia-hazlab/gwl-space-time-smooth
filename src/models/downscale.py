@@ -155,6 +155,89 @@ def _twi(coarse: xr.DataArray, target_like: xr.DataArray, covariates=None) -> xr
     return base.copy(data=(base.values + delta).astype("float32"))
 
 
+def _regression_downscale(coarse, target_like, covariates, make_estimator, min_samples=12):
+    """Mean-preserving covariate downscaling (area-to-point regression kriging skeleton).
+
+    1. Train ``make_estimator()`` at the *coarse* scale: upscale each fine covariate to the
+       coarse grid and regress the coarse value on them.
+    2. Predict at the *fine* scale from the fine covariates -> a covariate-informed field.
+    3. Add back the bilinearly-interpolated coarse residual so the coarse-cell mean is exactly
+       preserved (the fine prediction only redistributes structure within each footprint).
+
+    Falls back to bilinear if there are no usable covariates or too few coarse training samples.
+    Shared by the linear ("regression") and RandomForest ("ml") downscalers.
+    """
+    base = _bilinear(coarse, target_like)
+    cov = {k: v for k, v in (covariates or {}).items() if v is not None}
+    if not cov:
+        return base
+    coarse = _ensure_spatial_dims(coarse)
+
+    fine_covs, coarse_covs = [], []
+    for v in cov.values():
+        cf = _ensure_spatial_dims(v).rio.reproject_match(target_like)
+        fine_covs.append(np.asarray(cf.values, "float64"))
+        cc = upscale_to_grid(cf, coarse)
+        coarse_covs.append(np.asarray(cc.values, "float64"))
+    Xf = np.stack([f.ravel() for f in fine_covs], axis=1)
+    Xc = np.stack([c.ravel() for c in coarse_covs], axis=1)
+    yc = np.asarray(coarse.values, "float64").ravel()
+
+    train = np.isfinite(yc) & np.all(np.isfinite(Xc), axis=1)
+    if int(train.sum()) < min_samples:
+        return base
+    est = make_estimator()
+    est.fit(Xc[train], yc[train])
+
+    okf = np.all(np.isfinite(Xf), axis=1)
+    yf = np.full(Xf.shape[0], np.nan)
+    yf[okf] = est.predict(Xf[okf])
+    pred_fine = base.copy(data=yf.reshape(base.shape).astype("float32"))
+
+    # mean-preserving residual correction: distribute the coarse residual as a constant within
+    # each footprint (nearest), so area-averaging the output back recovers the coarse cell exactly
+    # (bilinear residual interpolation is not conservative).
+    from rasterio.enums import Resampling
+
+    resid_coarse = coarse - upscale_to_grid(pred_fine, coarse)
+    resid_fine = resid_coarse.rio.reproject_match(target_like, resampling=Resampling.nearest)
+    out = np.asarray(pred_fine.values, "float64") + np.asarray(resid_fine.values, "float64")
+    out = np.where(np.isfinite(out), out, base.values)
+    return base.copy(data=out.astype("float32"))
+
+
+@register_downscaler("regression")
+def _regression(coarse: xr.DataArray, target_like: xr.DataArray, covariates=None) -> xr.DataArray:
+    """STATISTICAL downscaler: multilinear regression of the coarse field on fine covariates.
+
+    Data-informed and mean-preserving: learns the linear coarse-scale relation between the
+    dynamic value and the static covariates (envelope, terrain, TWI, baseline), applies it at
+    90 m, and re-adds the coarse residual. Needs at least one ``covariates`` field; else bilinear.
+    """
+    from sklearn.linear_model import LinearRegression
+
+    return _regression_downscale(coarse, target_like, covariates, LinearRegression)
+
+
+@register_downscaler("ml")
+def _ml(coarse: xr.DataArray, target_like: xr.DataArray, covariates=None) -> xr.DataArray:
+    """ML downscaler: RandomForest of the coarse field on fine covariates (mean-preserving).
+
+    Captures nonlinear covariate->value structure a linear fit misses. Trained on the coarse
+    pairs, so it is only as good as the coarse sample count and covariate relevance; denser
+    fine-resolution labels (SMAP/NISAR) would let it learn true sub-footprint structure. Same
+    mean-preserving residual step as the regression method; falls back to bilinear without
+    covariates. Registered and ready to swap in without touching any call site.
+    """
+    from sklearn.ensemble import RandomForestRegressor
+
+    def _mk():
+        return RandomForestRegressor(n_estimators=200, max_depth=12, min_samples_leaf=3,
+                                     n_jobs=-1, random_state=0)
+
+    return _regression_downscale(coarse, target_like, covariates, _mk)
+
+
 def downscale(coarse: xr.DataArray, target_like: xr.DataArray, method: str = "bilinear",
               covariates=None) -> xr.DataArray:
     """Downscale ``coarse`` onto ``target_like`` using a registered method (default bilinear).

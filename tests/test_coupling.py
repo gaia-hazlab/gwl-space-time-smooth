@@ -18,7 +18,7 @@ from src.models.downscale import (
     register_downscaler,
     upscale_to_grid,
 )
-from src.models.anchor import loso_anchor_skill, residual_anchor
+from src.models.anchor import assimilate_points, loso_anchor_skill, residual_anchor
 from src.models.dvv_coupling import coupling_envelope, forward_dvv, invert_dvv
 from src.models.soil_moisture import snowmelt_liquid_input
 
@@ -134,6 +134,41 @@ def test_twi_downscaler_adds_structure_and_falls_back():
     assert not np.allclose(out.values, base.values, equal_nan=True)
 
 
+def test_regression_and_ml_downscalers_are_mean_preserving():
+    # a fine covariate with structure; coarse value is a function of its footprint mean.
+    rng = np.random.RandomState(3)
+    fine = _grid(90.0, 40).copy(data=np.ones((40, 40))).rio.write_crs("EPSG:5070")
+    coarse = _grid(900.0, 4)
+    cov = fine.copy(data=rng.rand(40, 40).astype("float32")).rio.write_crs("EPSG:5070")
+    coarse = coarse.copy(
+        data=(upscale_to_grid(cov, coarse).values * 3.0 + 1.0).astype("float32")
+    ).rio.write_crs("EPSG:5070")
+    for method in ("regression", "ml"):
+        out = downscale(coarse, fine, method=method, covariates={"cov": cov})
+        assert out.shape == fine.shape
+        up = upscale_to_grid(out, coarse.rio.write_crs("EPSG:5070"))
+        assert np.nanmax(np.abs(up.values - coarse.values)) < 1e-4     # exactly mean-preserving
+        assert np.nanstd(out.values) > 0                                # added fine structure
+    # no covariates -> falls back to bilinear (identical)
+    b = downscale(coarse, fine, method="bilinear")
+    assert np.allclose(downscale(coarse, fine, method="regression").values, b.values,
+                       equal_nan=True)
+
+
+def test_assimilate_points_precision_weighting_and_posterior_sigma():
+    gy, gx = np.meshgrid(np.linspace(0, 100_000, 21), np.linspace(0, 100_000, 21), indexing="ij")
+    # two co-located sources: a precise obs (+0.10, σ=0.01) and a noisy obs (−0.10, σ=0.20).
+    ox = np.array([50_000.0, 50_000.0]); oy = np.array([50_000.0, 50_000.0])
+    val = np.array([0.10, -0.10]); sig = np.array([0.01, 0.20])
+    field, sigma = assimilate_points(gx, gy, ox, oy, val, sig,
+                                     length_scale_m=15_000.0, prior_sigma=0.05)
+    ci = 10  # centre
+    assert field[ci, ci] > 0.08                        # precise obs dominates the fusion
+    assert sigma[ci, ci] < 0.05                         # posterior σ below prior near the station
+    assert abs(field[0, 0]) < 0.01                      # reverts to model far away
+    assert sigma[0, 0] > sigma[ci, ci]                  # σ largest far from data
+
+
 def test_upscale_and_native_scale_comparison():
     fine = _grid(90.0, 40)
     fine = fine.copy(data=np.random.RandomState(0).rand(40, 40)).rio.write_crs("EPSG:5070")
@@ -153,5 +188,7 @@ if __name__ == "__main__":
     test_dvv_forward_inverse_closed_loop()
     test_modular_downscaler_registry()
     test_twi_downscaler_adds_structure_and_falls_back()
+    test_regression_and_ml_downscalers_are_mean_preserving()
+    test_assimilate_points_precision_weighting_and_posterior_sigma()
     test_upscale_and_native_scale_comparison()
     print("all coupling/ensemble/downscale tests passed")
