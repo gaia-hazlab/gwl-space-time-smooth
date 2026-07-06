@@ -38,6 +38,7 @@ numba = "*"
 llvmlite = "*"
 earthaccess = ">=0.17.0,<0.18"
 h5netcdf = ">=1.8.1,<2"
+obspy = ">=1.5.0,<2"
 
 [pypi-dependencies]
 dataretrieval = "*"
@@ -54,6 +55,9 @@ py3dep = "*"
 pystac = "*"
 s3fs = "*"
 pystac-client = "*"
+seisfetch = { git = "https://github.com/Denolle-Lab/seisfetch.git", extras = ["fdsn", "auth", "pandas", "xarray"] }
+disba = ">=0.7, <0.8"
+codameter = { git = "https://github.com/Denolle-Lab/codameter.git" }
 
 [tasks]
 # === Primary pipeline ===
@@ -92,6 +96,11 @@ soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30
 products-90m = "python notebooks/make_products_90m.py"
 # Forcing-ensemble (TerraClimate vs PRISM) + demonstrative dv/v coupling figures.
 ensemble-dvv = "python notebooks/make_ensemble_dvv_figures.py"
+# === dv/v state module (seismic ambient noise -> depth-separated SM + relative WTD) ===
+# UW + CC station metadata via seisfetch (cheap; add --waveforms for a bounded download).
+seismic = "python -m src.data.fetch_seismic --output data/processed/seismic_stations.parquet"
+# dv/v module figure: stations -> freq/depth kernels -> banded dv/v (UQ, codameter) -> SM & WTD.
+dvv-demo = "python notebooks/make_dvv_figures.py"
 # Demo: static figures + GIFs + provenance, assembled into the self-contained Quarto page.
 demo = "python notebooks/demo_gwl_sm.py && python notebooks/make_products_90m.py && python notebooks/make_ensemble_dvv_figures.py && python notebooks/build_demo_qmd.py && quarto render docs/gwl_soil_moisture_demo.qmd --to html"
 # === Legacy (comparison only) ===
