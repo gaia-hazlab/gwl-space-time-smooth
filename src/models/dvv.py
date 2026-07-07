@@ -310,9 +310,13 @@ def separate_depth(ens_by_band, velocity_profile, water_table_depth_km,
     shallow = z <= water_table_depth_km
 
     def _agg(vals, err):
+        # The depth nodes are prior-correlated (corr_length_km), so we do NOT divide the RMS node
+        # error by sqrt(N) -- that would treat correlated samples as independent and understate the
+        # aggregated uncertainty that then sets the assimilation precision. Report the RMS (the
+        # fully-correlated, conservative bound) instead.
         if not len(vals):
             return np.nan, np.nan
-        return float(np.mean(vals)), float(np.sqrt(np.mean(err ** 2)) / np.sqrt(len(vals)))
+        return float(np.mean(vals)), float(np.sqrt(np.mean(err ** 2)))
 
     sm, sm_sd = _agg(m[shallow], sd[shallow])
     wtd, wtd_sd = _agg(m[~shallow], sd[~shallow])
@@ -335,8 +339,12 @@ def separate_depth(ens_by_band, velocity_profile, water_table_depth_km,
 # softens the vadose zone -> NEGATIVE shallow-band dv/v.
 
 
+# Fraction of a hydrologic year (Oct 1 start) at the late-summer dry/stiff peak (~mid-Aug).
+DRY_PEAK = 0.85
+
+
 def synthetic_depth_time_truth(depths_km, n_epoch=73, dt_days=5.0, water_table_km=0.03,
-                               shallow_max_km=0.05, gwl_seasonal=1.5e-3, gwl_trend=-1.0e-3,
+                               shallow_max_km=0.05, gwl_seasonal=1.5e-3, gwl_trend=1.0e-3,
                                et_seasonal=2.0e-3, storm_amp=3.0e-3, storm_rate=0.18,
                                ar1_rho=0.6, seed=0):
     """Depth-time truth m(z,t)=dVs/Vs on the kernel depth grid; deep=slow GWL, shallow=fast ET/rain.
@@ -355,13 +363,15 @@ def synthetic_depth_time_truth(depths_km, n_epoch=73, dt_days=5.0, water_table_k
     w_deep = 0.5 * (1.0 + np.tanh((z - water_table_km) / 0.02))
     w_shal = 0.5 * (1.0 - np.tanh((z - shallow_max_km) / 0.02))
 
-    # deep GWL: smooth low-frequency, positive when the table is deepest (mid dry season).
-    s_deep = gwl_trend * (t / T) - gwl_seasonal * np.cos(2.0 * np.pi * t / T)
-    # shallow ET/storms: seasonal ET (drier/stiffer in summer -> positive) + AR(1) wetting pulses.
-    et = et_seasonal * np.cos(2.0 * np.pi * t / T)
+    # One shared seasonal cycle so the deep (GWL) and shallow (ET) zones stiffen together in the dry
+    # season: season = +1 at the late-summer dry peak (fraction DRY_PEAK of a hydrologic year),
+    # -1 in the wet winter half. Deep = drying trend + seasonal; shallow = seasonal ET + AR(1) storms.
+    season = np.cos(2.0 * np.pi * (t / T - DRY_PEAK))          # +1 dry/stiff, -1 wet/soft
+    s_deep = gwl_trend * (t / T) + gwl_seasonal * season
+    et = et_seasonal * season
     e = np.zeros(n_epoch)
     for k in range(1, n_epoch):
-        shock = -storm_amp if rng.rand() < storm_rate else 0.0
+        shock = -storm_amp if rng.rand() < storm_rate else 0.0  # storms wet -> soften (negative)
         e[k] = ar1_rho * e[k - 1] + shock
     s_shallow = et + e
 

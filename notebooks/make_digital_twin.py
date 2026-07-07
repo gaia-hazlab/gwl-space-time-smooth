@@ -67,27 +67,39 @@ REMOTE = [("SMAP", "9 km", "validation"), ("MERRA-2", "0.5°", "validation"),
 
 
 # --------------------------------------------------------------------------- static fields
+def _masked(sigma, base):
+    """Keep sigma only where the base field has data (else NaN -> transparent panels over no-data)."""
+    return np.where(np.isfinite(np.asarray(base.values, dtype="float64")), sigma, np.nan)
+
+
 def _load_static():
-    """Real 90 m static base + per-cell static sigma for gwl (DTW m), theta, Vs30 (m/s), EPSG:5070."""
+    """Real 90 m static base + per-cell static sigma for gwl (DTW m), theta, Vs30 (m/s), EPSG:5070.
+
+    Sigma is masked to each field's data footprint so the uncertainty panels go transparent over
+    no-data cells rather than fabricating a finite sigma there.
+    """
     out = {}
     base = rxr.open_rasterio(PROC / "baseline_dtw_m.tif", masked=True).squeeze("band", drop=True)
     rfs = rxr.open_rasterio(PROC / "baseline_rf_std_m.tif", masked=True).squeeze("band", drop=True)
     g_ds = representativeness_sigma(base, 2000.0, 90.0)
     # DTW: shallow water table -> blue (water near surface), deep -> pale (dry). Sequential and
     # colorblind-safe; pairs with theta so BLUE=water and PALE=dry read the same on both panels.
-    out["gwl"] = dict(base=base, sigma=np.sqrt(np.nan_to_num(rfs.values) ** 2 + np.nan_to_num(g_ds) ** 2),
+    gsig = np.sqrt(np.nan_to_num(rfs.values) ** 2 + np.nan_to_num(g_ds) ** 2)
+    out["gwl"] = dict(base=base, sigma=_masked(gsig, base),
                       cmap="YlGnBu_r", label="depth-to-water (m)  ·  shallow=blue", units="m")
 
     env = xr.open_zarr(PROC / "soil_hydraulic_envelope_90m.zarr").rio.write_crs("EPSG:5070")
     theta_ref = env["theta_fc"]
     t_ds = representativeness_sigma(theta_ref, 4000.0, 90.0)
-    out["theta"] = dict(base=theta_ref, sigma=np.sqrt(0.03 ** 2 + np.nan_to_num(t_ds) ** 2),
+    tsig = np.sqrt(0.03 ** 2 + np.nan_to_num(t_ds) ** 2)
+    out["theta"] = dict(base=theta_ref, sigma=_masked(tsig, theta_ref),
                         cmap="YlGnBu", label="soil moisture θ (m³/m³)  ·  wet=blue", units="")
 
     vs30 = _vs30_field(base)
     v_ds = representativeness_sigma(vs30, 2000.0, 90.0)
     # Vs30: turbo -- the colorblind-improved "jet"/rainbow geotechnical engineers recognize for Vs30.
-    out["vs30"] = dict(base=vs30, sigma=np.sqrt((0.15 * np.nan_to_num(vs30.values)) ** 2 + np.nan_to_num(v_ds) ** 2),
+    vsig = np.sqrt((0.15 * np.nan_to_num(vs30.values)) ** 2 + np.nan_to_num(v_ds) ** 2)
+    out["vs30"] = dict(base=vs30, sigma=_masked(vsig, vs30),
                        cmap="turbo", label="Vs30 (m/s)  ·  soft=blue, stiff=red", units="m/s")
     return out
 
@@ -100,7 +112,8 @@ def _vs30_field(like):
         return v.rio.reproject_match(like)
     hand = rxr.open_rasterio(PROC / "terrain_hand_90m.tif", masked=True).squeeze("band", drop=True)
     hand = hand.rio.reproject_match(like)
-    vs = 180.0 + 520.0 * (1.0 - np.exp(-np.nan_to_num(hand.values) / 30.0))
+    h = np.asarray(hand.values, dtype="float64")             # keep HAND's NaN mask (no fabrication)
+    vs = 180.0 + 520.0 * (1.0 - np.exp(-h / 30.0))           # NaN where HAND is no-data
     return like.copy(data=vs.astype("float32")).rio.write_crs(like.rio.crs)
 
 
@@ -136,8 +149,12 @@ def _to_display(field5070, grid):
 
 # --------------------------------------------------------------------------- sensors
 def _seismic():
-    df = pd.read_parquet(CACHE / "inventory_UW-CC.parquet")
-    return df
+    """Read the cached UW+CC inventory (any hash suffix); fetch if absent."""
+    hits = sorted(CACHE.glob("inventory_UW-CC*.parquet"))
+    if hits:
+        return pd.read_parquet(hits[0])
+    from src.data.fetch_seismic import fetch_inventory
+    return fetch_inventory(PUGET_CASCADES_BBOX)
 
 
 def _wells():

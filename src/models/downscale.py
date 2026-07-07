@@ -161,11 +161,14 @@ def _regression_downscale(coarse, target_like, covariates, make_estimator, min_s
     1. Train ``make_estimator()`` at the *coarse* scale: upscale each fine covariate to the
        coarse grid and regress the coarse value on them.
     2. Predict at the *fine* scale from the fine covariates -> a covariate-informed field.
-    3. Add back the bilinearly-interpolated coarse residual so the coarse-cell mean is exactly
-       preserved (the fine prediction only redistributes structure within each footprint).
+    3. Add back the coarse residual, distributed as a constant within each footprint (nearest),
+       so the fine prediction only redistributes structure within each cell.
 
-    Falls back to bilinear if there are no usable covariates or too few coarse training samples.
-    Shared by the linear ("regression") and RandomForest ("ml") downscalers.
+    Mean-preserving in the nested-grid case (area-averaging the output recovers the coarse cell
+    exactly); under CRS reprojection with a non-integer ratio, or where a covariate is missing and
+    the cell reverts to bilinear, it is only approximately mean-preserving. Falls back to bilinear
+    if there are no usable covariates or too few coarse training samples. Shared by the linear
+    ("regression") and RandomForest ("ml") downscalers.
     """
     base = _bilinear(coarse, target_like)
     cov = {k: v for k, v in (covariates or {}).items() if v is not None}

@@ -54,10 +54,15 @@ def fetch_inventory(bbox=PUGET_CASCADES_BBOX, networks=NETWORKS, channels=CHANNE
     """
     from seisfetch import SeisfetchClient
 
+    import hashlib
+
     cache = Path(cache)
     cache.mkdir(parents=True, exist_ok=True)
     tag = "-".join(networks)
-    pq = cache / f"inventory_{tag}.parquet"
+    # Cache key includes the query parameters so a different bbox/channels/window is not served a
+    # stale frame; a short hash keeps the filename readable.
+    key = hashlib.md5(f"{bbox}|{channels}|{start}|{end}".encode()).hexdigest()[:8]
+    pq = cache / f"inventory_{tag}_{key}.parquet"
     if pq.exists():
         logger.info("Loaded cached inventory %s", pq)
         return pd.read_parquet(pq)
@@ -82,7 +87,8 @@ def fetch_inventory(bbox=PUGET_CASCADES_BBOX, networks=NETWORKS, channels=CHANNE
         logger.info("Network %s: %d channels in bbox", net, sum(r["network"] == net for r in rows))
 
     if not rows:
-        return pd.DataFrame(columns=["network", "station", "channels", "lat", "lon", "elev_m"])
+        return pd.DataFrame(columns=["network", "station", "lat", "lon", "elev_m",
+                                     "channels", "location"])
     ch = pd.DataFrame(rows)
     # Collapse channels to one row per station (keep the channel list).
     agg = (ch.groupby(["network", "station"])

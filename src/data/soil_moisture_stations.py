@@ -72,9 +72,11 @@ def read_ismn(export_dir, variable="soil_moisture") -> pd.DataFrame:
 
     ISMN requires free registration (ismn.earth) and a manual download; point ``export_dir`` at the
     unzipped export. Each ``*.stm`` file is one sensor: a header line with network/station/lat/lon/
-    elevation/depths, then whitespace rows ``YYYY/MM/DD HH:MM value flag flag``. We keep the
-    shallowest soil-moisture sensor per station and aggregate to monthly means. Best-effort parser
-    for the common format; returns an empty frame if the directory has no parseable files.
+    elevation/depths, then whitespace rows ``YYYY/MM/DD HH:MM value flag flag``. This best-effort
+    parser reads every sensor and averages them per station-month (it does NOT depth-select), keeps
+    only values in [0, 1], and ignores the ISMN quality flags. VERIFY the header column order and
+    add depth selection / flag filtering against a real export before scientific use; returns an
+    empty frame if the directory has no parseable files.
     """
     export_dir = Path(export_dir)
     rows = []

@@ -22,7 +22,8 @@ def feature_attribution(target, features, sample=20000, n_estimators=200, max_de
 
     ``target``: 2-D field. ``features``: dict name -> 2-D field on the same grid. Cells finite in
     the target and all features are used (subsampled to ``sample`` for speed). Returns dict
-    name -> importance share (non-negative, sums to 1), most-informative feature largest.
+    name -> importance share (non-negative, sums to 1), most-informative feature largest. If no
+    feature is informative (all permutation importances <= 0) the shares are equal (undetermined).
     """
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.inspection import permutation_importance
@@ -43,5 +44,7 @@ def feature_attribution(target, features, sample=20000, n_estimators=200, max_de
     rf.fit(X, y)
     imp = permutation_importance(rf, X, y, n_repeats=n_repeats, random_state=seed, n_jobs=-1)
     vals = np.clip(imp.importances_mean, 0.0, None)
-    total = vals.sum() or 1.0
+    total = vals.sum()
+    if total <= 0:                                           # nothing informative -> undetermined
+        return {n: 1.0 / len(names) for n in names}
     return {n: float(v / total) for n, v in zip(names, vals)}
