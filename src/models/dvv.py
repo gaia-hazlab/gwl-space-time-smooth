@@ -81,11 +81,14 @@ def dvv_to_wtd_change(dvv_wtd, dvv_wtd_std, k_sat=K_SAT):
 def dvv_to_theta_change(dvv_sm, dvv_sm_std, sensitivity=S_THETA):
     """Shallow (vadose-band) dv/v -> volumetric soil-moisture change Δθ, with sigma.
 
-    dv/v = sensitivity * Δθ (sensitivity < 0: wetter -> softer -> lower velocity). The default
-    ``S_THETA ≈ -0.08`` is the material vadose sensitivity (~-1 per unit θ, Hertz-Mindlin + suction)
-    diluted by the fraction (~0.08) of the shallow band's kernel that lies in the θ-active top ~1 m,
-    which reproduces the observed ~0.1-1% seasonal dv/v. Calibrate per site from the band kernel and
-    the local Saxton-Rawls / van Genuchten vadose envelope.
+    dv/v = sensitivity * Δθ (sensitivity < 0: wetter -> softer -> lower velocity). The default is the
+    **material** vadose sensitivity ``S_THETA = -1.0`` per unit θ (Hertz-Mindlin + suction), which
+    applies to the depth-*inverted* θ profile (the inversion already deconvolves the kernel dilution,
+    see :func:`invert_states_from_bands`). For a raw, *non-inverted* single band dv/v, pass
+    ``sensitivity=S_THETA_BAND`` (≈ -0.08): the material value diluted by the fraction (~0.08) of the
+    shallow band's kernel in the θ-active top ~1 m, which reproduces the observed ~0.1-1% seasonal
+    band dv/v. Calibrate per site from the band kernel and the local Saxton-Rawls / van Genuchten
+    vadose envelope.
     """
     return np.asarray(dvv_sm) / sensitivity, np.abs(np.asarray(dvv_sm_std) / sensitivity)
 

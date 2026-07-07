@@ -72,22 +72,31 @@ def nehrp_class_probabilities(vs30_mean, vs30_std, lognormal=False):
     differencing the CDF, P(Vs30 crossing 180 / 360 / 760 m/s) -- rather than a raw percent sigma.
 
     ``lognormal=True`` treats ``vs30_std`` as the sigma of ln(Vs30) (the field-standard multiplicative
-    error model); otherwise ``vs30_std`` is a linear m/s sigma (matching the dv/v-propagated 1-sigma).
-    A zero sigma collapses to a one-hot class assignment.
+    error model, and requires ``vs30_mean > 0``); otherwise ``vs30_std`` is a linear m/s sigma
+    (matching the dv/v-propagated 1-sigma). A zero sigma collapses to a one-hot class assignment
+    (the deterministic bin of the mean). ``vs30_std`` must be non-negative.
     """
     from scipy.stats import norm
 
     mu = np.asarray(vs30_mean, dtype="float64")
     sd = np.asarray(vs30_std, dtype="float64")
+    if np.any(sd < 0):
+        raise ValueError("vs30_std must be non-negative")
+    if lognormal and np.any(mu <= 0):
+        raise ValueError("lognormal=True requires vs30_mean > 0")
+    mu, sd = np.broadcast_arrays(mu, sd)                   # common shape so the zero-sd mask lines up
     with np.errstate(divide="ignore", invalid="ignore"):
-        if lognormal:
-            z = (np.log(NEHRP_BOUNDS) - np.log(mu)[..., None]) / sd[..., None]
-        else:
-            z = (NEHRP_BOUNDS - mu[..., None]) / sd[..., None]
-        cdf = norm.cdf(z)                                  # P(Vs30 <= each boundary), shape (..., 4)
+        loc = np.log(mu)[..., None] if lognormal else mu[..., None]
+        bnd = np.log(NEHRP_BOUNDS) if lognormal else NEHRP_BOUNDS
+        cdf = norm.cdf((bnd - loc) / sd[..., None])        # P(Vs30 <= each boundary), shape (..., 4)
     lower = np.concatenate([np.zeros(cdf.shape[:-1] + (1,)), cdf], axis=-1)
     upper = np.concatenate([cdf, np.ones(cdf.shape[:-1] + (1,))], axis=-1)
-    return upper - lower                                  # P in (E, D, C, B, A), shape (..., 5)
+    probs = upper - lower                                  # P in (E, D, C, B, A), shape (..., 5)
+    zero = sd == 0                                         # sd==0 -> 0/0 NaN on an exact boundary
+    if np.any(zero):
+        onehot = np.eye(len(NEHRP_CLASSES))[np.digitize(mu, NEHRP_BOUNDS)]
+        probs = np.where(zero[..., None], onehot, probs)
+    return probs
 
 
 def most_likely_nehrp_class(vs30_mean, vs30_std, lognormal=False):

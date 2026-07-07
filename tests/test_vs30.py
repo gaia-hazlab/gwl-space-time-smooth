@@ -73,6 +73,32 @@ def test_nehrp_lognormal_option_runs_and_normalizes():
     assert abs(p.sum() - 1.0) < 1e-9 and NEHRP_CLASSES[int(p.argmax())] == "D"
 
 
+def test_nehrp_zero_sigma_is_one_hot_even_on_a_boundary():
+    # zero sigma -> deterministic class, no NaN (0/0) even exactly on a boundary
+    p = nehrp_class_probabilities(300.0, 0.0)
+    assert np.array_equal(p, [0, 1, 0, 0, 0])                # class D, one-hot
+    pb = nehrp_class_probabilities(360.0, 0.0)               # exactly on the D|C boundary
+    assert np.all(np.isfinite(pb)) and abs(pb.sum() - 1.0) < 1e-9
+    # digitize puts the boundary value in the upper bin (C)
+    assert NEHRP_CLASSES[int(pb.argmax())] == "C"
+    # mixed field: zero-sigma cell stays one-hot, finite-sigma cell stays a distribution
+    field = nehrp_class_probabilities(np.array([300.0, 300.0]), np.array([0.0, 60.0]))
+    assert np.array_equal(field[0], [0, 1, 0, 0, 0]) and 0.0 < field[1, 1] < 1.0
+
+
+def _raises(fn, exc=ValueError):
+    try:
+        fn()
+    except exc:
+        return True
+    return False
+
+
+def test_nehrp_rejects_negative_sigma_and_nonpositive_lognormal_mean():
+    assert _raises(lambda: nehrp_class_probabilities(300.0, -10.0))
+    assert _raises(lambda: nehrp_class_probabilities(0.0, 0.2, lognormal=True))
+
+
 if __name__ == "__main__":
     test_monotone_and_nehrp_range()
     test_bins_map_to_expected_classes()
@@ -82,4 +108,6 @@ if __name__ == "__main__":
     test_nehrp_wider_sigma_spreads_probability()
     test_nehrp_array_broadcasts_per_cell()
     test_nehrp_lognormal_option_runs_and_normalizes()
+    test_nehrp_zero_sigma_is_one_hot_even_on_a_boundary()
+    test_nehrp_rejects_negative_sigma_and_nonpositive_lognormal_mean()
     print("all Vs30 tests passed")

@@ -1942,7 +1942,7 @@ compute-free MVP (the wells, SNOTEL, and seismic geometry are real).
 | ISMN networks | ISMN registered export (`read_ismn`) | point | soil-moisture assimilation (aggregates SCAN, mesonets, ...) |
 | Seismic UW + CC (74) | EarthScope/IRIS FDSN via `seisfetch` | point | dv/v -> ΔWTD, Δθ, ΔVs30 (assimilated) |
 | SOLUS100 (clay, sand) | USDA-NRCS SOLUS100, GAIA STAC / public COGs | 100 m | soil-hydraulic envelope; GWL predictor |
-| USGS 3DEP DEM | 3DEP (`py3dep`) -> HAND/TWI/slope | 10 m -> 90 m | terrain prior; Vs30 HAND proxy |
+| USGS 3DEP DEM | 3DEP (`py3dep`) -> HAND/TWI/slope | 10 m -> 90 m | terrain prior (HAND, TWI); slope feeds the Vs30 row below |
 | Vs30 (Wald-Allen slope proxy) | 3DEP slope → `fetch_vs30` (Wald & Allen 2007); USGS grid / Sanger-Maurer optional | 90 m | Vs30 static base (real site-condition estimate) |
 | TerraClimate; PRISM | Climatology Lab THREDDS; PRISM web service | ~4 km | dynamic forcing (P, PET) |
 
