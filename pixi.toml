@@ -101,6 +101,10 @@ ensemble-dvv = "python notebooks/make_ensemble_dvv_figures.py"
 seismic = "python -m src.data.fetch_seismic --output data/processed/seismic_stations.parquet"
 # dv/v module figure: stations -> freq/depth kernels -> banded dv/v (UQ, codameter) -> SM & WTD.
 dvv-demo = "python notebooks/make_dvv_figures.py"
+# Vs30 near-surface stiffness (GAIA Sanger-Maurer; synth-from-HAND fallback) for the digital twin.
+vs30 = "python -m src.data.fetch_gaia vs30 --bbox -123.3 46.8 -120.8 48.5 --output-dir data/processed"
+# Digital-twin MVP: 2x3 animated GIF (GWL, soil moisture, Vs30 + uncertainty) with dv/v assimilation.
+digital-twin = "python notebooks/make_digital_twin.py"
 # Demo: static figures + GIFs + provenance, assembled into the self-contained Quarto page.
 demo = "python notebooks/demo_gwl_sm.py && python notebooks/make_products_90m.py && python notebooks/make_ensemble_dvv_figures.py && python notebooks/build_demo_qmd.py && quarto render docs/gwl_soil_moisture_demo.qmd --to html"
 # === Legacy (comparison only) ===

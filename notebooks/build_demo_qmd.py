@@ -526,7 +526,45 @@ soil-moisture anomalies (left) folded into the state models with their posterior
 shrinks where stations constrain the field and reverts to the model
 elsewhere.](../figures/demo/dvv_assimilation.png)
 
-## 6 · Methods — data sources, workflow & physical laws {{#methods}}
+## 6 · Digital-twin MVP — the coupled state, animated
+
+Everything above composes into a **digital twin**: a coupled, uncertainty-aware 90 m estimate of the
+near-surface state that evolves as data are assimilated. The animation runs one hydrologic year at
+5-day cadence. Top row: groundwater depth-to-water, soil moisture, and Vs30 (the near-surface
+stiffness the geotechnical models consume). Bottom row: their per-cell 1σ. The static structure is
+real 90 m data; the time evolution and its high-frequency content come from assimilating the
+depth-separated dv/v — so the state updates and σ shrinks where and when sensors constrain it.
+
+![Digital-twin MVP: 90 m GWL, soil moisture, and Vs30 (top) with per-cell uncertainty (bottom),
+assimilating depth-separated dv/v at the real UW/CC geometry over one hydrologic year. Markers:
+wells (GWL), SNOTEL (soil moisture), seismic UW/CC (Vs30); remote-sensing inputs listed below the
+panels.](../figures/demo/digital_twin.gif)
+
+GWL and soil moisture are shown as **anomalies** (Δ from the per-frame geospatial mean, printed as a
+text insert) so the assimilated signal is visible; Vs30 is absolute (turbo, the jet-like ramp
+geotechnical models expect).
+
+Because the assimilation is precision-weighted, we can attribute every estimate **exactly** to its
+data streams: each observation's contribution is its share of the total precision. Groundwater is
+set ~94% by the dense well network, soil moisture ~95% by the seismic dv/v (more stations than the
+sparse SNOTEL set), and Vs30 ~99% by seismic dv/v — with the maps showing where each stream wins and
+where the twin reverts to the model prior between sensors.
+
+![Data-stream attribution: the dominant sensor per cell (top) and the domain-mean share per state
+(bottom), computed exactly from the assimilation weights.](../figures/demo/digital_twin_attribution.png)
+
+This is an **MVP with no big-data compute**: the dv/v is a physically realistic synthetic — low
+frequencies track slow groundwater, high frequencies track fast ET and rainfall — while the wells,
+SNOTEL, and seismic geometry are real. **Data**: NWIS wells, NRCS SNOTEL, UW+CC seismic, SOLUS100,
+3DEP, TerraClimate/PRISM forcing, MERRA-2/SMAP validation. **Assumptions**: dv/v depth sensitivity
+`L≈Vs/3f`; poroelastic head for GWL (relative, not absolute); dynamic-capillary stiffening for soil
+moisture; `Vs30(t)=base·(1+⟨dVs/Vs⟩_0-30m)`; precision-weighted assimilation reverting to the model
+off-station. **Evaluation**: GWL block-CV RMSE ≈18.5 m, soil moisture vs MERRA-2 r=0.85 (bias −0.08,
+RMSE 0.095), dv/v band recovery r>0.95, assimilation σ reduction ~53% (WTD) / ~91% (θ) near stations.
+**Next**: real multi-year waveform dv/v, borehole poroelastic calibration to head in metres, SNOTEL
+SWE assimilation, and Earth2Studio weather-forecast forcing to turn the twin forward in time.
+
+## 7 · Methods — data sources, workflow & physical laws {{#methods}}
 
 ### What each data source actually does
 

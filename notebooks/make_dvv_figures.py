@@ -39,24 +39,29 @@ ASSETS = Path("docs/assets"); ASSETS.mkdir(parents=True, exist_ok=True)
 PROC = Path("data/processed")
 INK, MUTED, GRID = "#1a1a2e", "#5a5a6e", "#d9d9e0"
 OI = {"uw": "#0072B2", "cc": "#D55E00", "sm": "#E69F00", "wtd": "#009E73", "band": "#CC79A7"}
-plt.rcParams.update({"font.family": "DejaVu Sans", "axes.titlecolor": INK, "axes.titleweight": "bold",
+from src.viz.fonts import register_inter
+register_inter(size=11)
+plt.rcParams.update({"axes.titlecolor": INK, "axes.titleweight": "bold",
                      "axes.edgecolor": MUTED, "figure.dpi": 130})
 WATER_TABLE_KM = 0.03          # 30 m nominal vadose/saturated boundary for the demo
 
 
-def _synthetic(n_epoch=36, sr=25.0, maxlag=60.0, noise=0.15, seed=0):
-    rng = np.random.RandomState(seed)
-    lags = np.arange(-int(maxlag * sr), int(maxlag * sr) + 1) / sr
-    env = np.exp(-np.abs(lags) / 20.0)
-    sos = signal.butter(4, [0.1, 8.0], btype="band", fs=sr, output="sos")
-    ref = signal.sosfiltfilt(sos, rng.randn(lags.size)) * env
-    t = np.arange(n_epoch, dtype=float)
-    # deep (WTD) drying trend + shallow (SM) seasonal, imposed as one bulk dv/v for the demo
-    dvv_true = -1.5e-3 * (t / n_epoch) + 2.0e-3 * np.sin(2 * np.pi * t / 12.0)
-    series = np.array([np.interp(lags, lags * (1 + e), ref) for e in dvv_true])
-    series = series + noise * np.array(
-        [signal.sosfiltfilt(sos, rng.randn(lags.size)) * env for _ in range(n_epoch)])
-    return lags, ref, series, dvv_true, t, sr
+def _synthetic(n_epoch=73, sr=25.0, maxlag=60.0, noise=0.05, seed=0):
+    """Physically realistic band-dependent synthetic: low freq -> slow GWL, high freq -> fast ET/rain.
+
+    Builds a depth-time truth m(z,t), forwards it through the band kernels, and synthesizes per-band
+    NCFs so each band recovers its OWN dv/v. Returns (lags, ref, series, dvv_bands[n_band,n_epoch], t).
+    """
+    from codameter.uq_depth import band_sensitivity_matrix
+
+    prof = dvv.pnw_velocity_profile(400.0)
+    fc = np.sqrt(np.asarray(dvv.DEFAULT_BANDS)[:, 0] * np.asarray(dvv.DEFAULT_BANDS)[:, 1])
+    K = band_sensitivity_matrix(prof, fc)
+    m, t = dvv.synthetic_depth_time_truth(K.depths_km, n_epoch=n_epoch, dt_days=5.0)
+    dvv_bands = dvv.forward_banded_dvv(m, K)
+    lags, ref, series = dvv.synthesize_banded_ncfs(dvv_bands, sr=sr, maxlag=maxlag,
+                                                   noise=noise, seed=seed + 1)
+    return lags, ref, series, dvv_bands, t, sr
 
 
 def panel_stations(ax):
@@ -97,18 +102,19 @@ def panel_kernels(ax, ens, prof):
     return K
 
 
-def panel_banded_dvv(ax, banded, ens, dvv_true):
+def panel_banded_dvv(ax, banded, ens, dvv_bands):
+    """dv/v(t) per band with ensemble UQ; each band's own imposed truth overlaid (low->slow, high->fast)."""
     fcs = sorted(ens)
     for bi, fc in enumerate(fcs):
         E = ens[fc]["ensemble"]
         m, sd = E.mean * 100, E.total_std * 100     # percent
         col = plt.cm.viridis(bi / (len(fcs) - 1))
-        ax.fill_between(banded.times, m - sd, m + sd, color=col, alpha=0.18)
+        ax.fill_between(banded.times, m - sd, m + sd, color=col, alpha=0.16)
         ax.plot(banded.times, m, color=col, lw=1.4, label=f"{fc:.2f} Hz")
-    ax.plot(banded.times, (dvv_true - dvv_true[0]) * 100, color=INK, lw=1.0, ls=":",
-            label="imposed")
+        imposed = (dvv_bands[bi] - dvv_bands[bi, 0]) * 100
+        ax.plot(banded.times, imposed, color=col, lw=0.9, ls=":")
     ax.set_xlabel("epoch (day)"); ax.set_ylabel("dv/v (%)")
-    ax.set_title("Banded dv/v with processing-ensemble UQ")
+    ax.set_title("Banded dv/v with processing-ensemble UQ (dotted = imposed)")
     ax.legend(fontsize=7, ncol=2)
     ax.grid(color=GRID, lw=0.5)
 
@@ -200,7 +206,7 @@ def make_assimilation_figure(ens):
 
 
 def main():
-    lags, ref, series, dvv_true, t, sr = _synthetic()
+    lags, ref, series, dvv_bands, t, sr = _synthetic()
     banded = dvv.measure_banded_dvv(series, ref, lags, sr, coda_s=(5.0, 30.0), times=t)
     ens = dvv.processing_ensemble_dvv(series, lags, sr, times_days=t)
     prof = dvv.pnw_velocity_profile(vs30_ms=400.0)
@@ -208,7 +214,7 @@ def main():
     fig, ax = plt.subplots(2, 2, figsize=(13, 10))
     n_sta = panel_stations(ax[0, 0])
     panel_kernels(ax[0, 1], ens, prof)
-    panel_banded_dvv(ax[1, 0], banded, ens, dvv_true)
+    panel_banded_dvv(ax[1, 0], banded, ens, dvv_bands)
     part = panel_separation(ax[1, 1], ens, prof, epoch=len(t) - 1)
 
     fig.suptitle("dv/v module: ambient-noise correlation -> uncertainty-aware, depth-separated "

@@ -321,3 +321,139 @@ def separate_depth(ens_by_band, velocity_profile, water_table_depth_km,
                 wtd_relative_dvv=wtd, wtd_relative_dvv_std=wtd_sd,
                 peak_depths_km=kernels.peak_depths_km)
     return post, part
+
+
+# ---------------------------------------------------------------------------
+# 5. Physically realistic band-dependent synthetic (for the digital-twin demo)
+# ---------------------------------------------------------------------------
+# The old bulk synthetic stretched every band identically. Real dv/v is depth-structured: low
+# frequencies (deep) track slow groundwater variation; high frequencies (shallow) track fast daily
+# ET / rainfall perturbations. We build a depth-time truth m(z,t) = dVs/Vs(z,t) with that
+# structure, forward it through the band kernels, and (optionally) synthesize per-band NCFs so the
+# measurement chain recovers band-specific dv/v. Signs match the state conversions above: a
+# deeper table (dry season) stiffens the saturated zone -> POSITIVE deep-band dv/v; a wetting pulse
+# softens the vadose zone -> NEGATIVE shallow-band dv/v.
+
+
+def synthetic_depth_time_truth(depths_km, n_epoch=73, dt_days=5.0, water_table_km=0.03,
+                               shallow_max_km=0.05, gwl_seasonal=1.5e-3, gwl_trend=-1.0e-3,
+                               et_seasonal=2.0e-3, storm_amp=3.0e-3, storm_rate=0.18,
+                               ar1_rho=0.6, seed=0):
+    """Depth-time truth m(z,t)=dVs/Vs on the kernel depth grid; deep=slow GWL, shallow=fast ET/rain.
+
+    Returns (m_zt (n_depth, n_epoch), t_days (n_epoch,)). Deep layers (z > water table) carry a
+    smooth seasonal + interannual-drift groundwater signal (positive in the dry season); shallow
+    layers (z <= shallow_max_km) carry a higher-frequency storm/ET train (negative wetting pulses
+    on top of a seasonal ET cycle).
+    """
+    z = np.asarray(depths_km, dtype="float64")
+    rng = np.random.RandomState(seed)
+    t = np.arange(n_epoch, dtype="float64") * dt_days
+    T = n_epoch * dt_days
+
+    # depth blend: deep sigmoid switches on below the water table, shallow rolls off past ~50 m.
+    w_deep = 0.5 * (1.0 + np.tanh((z - water_table_km) / 0.02))
+    w_shal = 0.5 * (1.0 - np.tanh((z - shallow_max_km) / 0.02))
+
+    # deep GWL: smooth low-frequency, positive when the table is deepest (mid dry season).
+    s_deep = gwl_trend * (t / T) - gwl_seasonal * np.cos(2.0 * np.pi * t / T)
+    # shallow ET/storms: seasonal ET (drier/stiffer in summer -> positive) + AR(1) wetting pulses.
+    et = et_seasonal * np.cos(2.0 * np.pi * t / T)
+    e = np.zeros(n_epoch)
+    for k in range(1, n_epoch):
+        shock = -storm_amp if rng.rand() < storm_rate else 0.0
+        e[k] = ar1_rho * e[k - 1] + shock
+    s_shallow = et + e
+
+    m_zt = w_shal[:, None] * s_shallow[None, :] + w_deep[:, None] * s_deep[None, :]
+    return m_zt, t
+
+
+def forward_banded_dvv(m_zt, kernels):
+    """Forward the depth-time truth through the band kernels: dv/v_b(t) = G[b,:] @ m(:,t).
+
+    ``kernels`` is a codameter ``DepthKernels`` (G is area-normalized, so each band's dv/v is the
+    depth-weighted mean of m over that band's sensitivity). Returns (n_band, n_epoch).
+    """
+    return np.asarray(kernels.G) @ np.asarray(m_zt)
+
+
+def synthesize_banded_ncfs(dvv_bt, bands=DEFAULT_BANDS, sr=25.0, maxlag=60.0, noise=0.05, seed=1):
+    """Per-epoch NCF series whose band-filtered coda is stretched by dv/v_b(t) (recovery loop).
+
+    Returns (lags, ref, series[n_epoch, n_lag]) consumable by measure_banded_dvv /
+    processing_ensemble_dvv, which then recover BAND-SPECIFIC dv/v. ``ref`` is the unstretched
+    broadband template (epoch reference).
+    """
+    dvv_bt = np.atleast_2d(dvv_bt)
+    n_band, n_epoch = dvv_bt.shape
+    rng = np.random.RandomState(seed)
+    lags = np.arange(-int(maxlag * sr), int(maxlag * sr) + 1) / sr
+    env = np.exp(-np.abs(lags) / 20.0)
+    b_lo, b_hi = 0.1, 8.0
+    sos_bb = signal.butter(4, [b_lo, b_hi], btype="band", fs=sr, output="sos")
+    ref = signal.sosfiltfilt(sos_bb, rng.randn(lags.size)) * env
+    band_sos = [signal.butter(4, [f1, f2], btype="band", fs=sr, output="sos") for f1, f2 in bands]
+    ref_bands = [signal.sosfiltfilt(s, ref) for s in band_sos]
+
+    series = np.empty((n_epoch, lags.size))
+    for ei in range(n_epoch):
+        acc = np.zeros(lags.size)
+        for bi in range(n_band):
+            eps = float(dvv_bt[bi, ei])
+            acc += np.interp(lags, lags * (1.0 + eps), ref_bands[bi])
+        acc += noise * signal.sosfiltfilt(sos_bb, rng.randn(lags.size)) * env
+        series[ei] = acc
+    return lags, ref, series
+
+
+def synthetic_station_dvv(station_lon, station_lat, kernels, n_epoch=73, dt_days=5.0,
+                          water_table_km=0.03, seed=0, **truth_kwargs):
+    """Per-station banded dv/v with coherent-but-distinct spatial modulation (feeds the twin).
+
+    Deep GWL amplitude scales with a normalized longitude gradient (regional recharge), shallow
+    storm amplitude with a latitude gradient, plus a per-station seed offset. Returns dict with
+    ``dvv_bt`` (n_sta, n_band, n_epoch), ``m_zt`` (n_sta, n_depth, n_epoch), ``t_days``,
+    ``f_center_hz`` (from kernels), and ``depths_km``.
+    """
+    lon = np.asarray(station_lon, dtype="float64")
+    lat = np.asarray(station_lat, dtype="float64")
+    n_sta = lon.size
+    glon = (lon - lon.mean()) / (np.ptp(lon) or 1.0)
+    glat = (lat - lat.mean()) / (np.ptp(lat) or 1.0)
+    z = np.asarray(kernels.depths_km, dtype="float64")
+    fc = np.asarray(kernels.frequencies_hz, dtype="float64")
+
+    dvv_bt = np.empty((n_sta, len(fc), n_epoch))
+    m_all = np.empty((n_sta, z.size, n_epoch))
+    t_days = None
+    for i in range(n_sta):
+        m, t_days = synthetic_depth_time_truth(
+            z, n_epoch=n_epoch, dt_days=dt_days, water_table_km=water_table_km,
+            gwl_seasonal=1.5e-3 * (1.0 + 0.6 * glon[i]),
+            storm_amp=3.0e-3 * (1.0 + 0.6 * glat[i]),
+            seed=seed + i, **truth_kwargs)
+        m_all[i] = m
+        dvv_bt[i] = forward_banded_dvv(m, kernels)
+    return dict(dvv_bt=dvv_bt, m_zt=m_all, t_days=t_days, f_center_hz=fc, depths_km=z)
+
+
+def top_layer_mean_dvv(profile_zt, depths_km, top_km=0.03):
+    """Depth-average dVs/Vs over 0..top_km. Accepts (n_depth,) or (n_depth, n_epoch)."""
+    z = np.asarray(depths_km, dtype="float64")
+    p = np.asarray(profile_zt, dtype="float64")
+    mask = z <= top_km
+    if not mask.any():
+        mask = z <= np.min(z) + 1e-9                          # at least the shallowest node
+    return p[mask].mean(axis=0)
+
+
+def dvv_to_vs30_change(dvv_top30, dvv_top30_std=None):
+    """Top-0-30 m mean dVs/Vs -> fractional Vs30 change. Vs30(t) = baseline * (1 + frac).
+
+    Unit sensitivity (a fractional velocity change is a fractional Vs30 change). Returns
+    (frac, frac_std). A shallow stiffening (positive dVs/Vs) raises Vs30.
+    """
+    frac = np.asarray(dvv_top30, dtype="float64")
+    std = None if dvv_top30_std is None else np.abs(np.asarray(dvv_top30_std, dtype="float64"))
+    return frac, std

@@ -67,6 +67,47 @@ def test_dvv_to_state_conversions_and_signs():
     assert dth[0] > 0 and dth_sd[0] > 0
 
 
+def test_top_layer_mean_and_vs30_conversion():
+    z = np.array([0.005, 0.02, 0.05, 0.5, 2.0])
+    prof = np.array([0.01, 0.01, -0.02, 0.0, 0.0])          # shallow stiffening in the top 30 m
+    top = dvv.top_layer_mean_dvv(prof, z, top_km=0.03)
+    assert abs(top - 0.01) < 1e-9                            # mean of the two nodes <= 30 m
+    frac, std = dvv.dvv_to_vs30_change(np.array([0.01]), np.array([0.002]))
+    assert frac[0] > 0 and std[0] > 0                        # positive dVs/Vs -> higher Vs30
+    # Vs30(t) = baseline*(1+frac): a +1% velocity change is a +1% Vs30 change
+    assert abs((400.0 * (1 + frac[0])) - 404.0) < 1e-6
+
+
+def test_register_inter_is_safe():
+    from src.viz.fonts import register_inter
+    fam = register_inter()                                   # bundled Inter present -> "Inter"
+    assert isinstance(fam, str) and len(fam) > 0
+
+
+def test_synthetic_depth_time_low_slow_high_fast():
+    if not _codameter_available():
+        print("skip: codameter/disba not installed")
+        return
+    from codameter.uq_depth import band_sensitivity_matrix
+    prof = dvv.pnw_velocity_profile(400.0)
+    fc = np.sqrt(np.asarray(dvv.DEFAULT_BANDS)[:, 0] * np.asarray(dvv.DEFAULT_BANDS)[:, 1])
+    K = band_sensitivity_matrix(prof, fc)
+    m, t = dvv.synthetic_depth_time_truth(K.depths_km, n_epoch=73, dt_days=5.0)
+    assert m.shape == (K.depths_km.size, 73)
+    dvv_bt = dvv.forward_banded_dvv(m, K)
+    assert dvv_bt.shape == (len(fc), 73)
+    assert np.allclose(dvv_bt, K.G @ m)                       # forward == G @ m
+    # deep band (slow GWL) is smoother than the shallow band (fast ET/storms)
+    rough = np.var(np.diff(dvv_bt, axis=1), axis=1)
+    assert rough[0] < rough[-1]
+    # per-band recovery through the NCF synthesis
+    lags, ref, series = dvv.synthesize_banded_ncfs(dvv_bt)
+    banded = dvv.measure_banded_dvv(series, ref, lags, 25.0, coda_s=(5.0, 30.0), times=t)
+    for bi in (0, len(fc) - 1):
+        rec = banded.dvv[:, bi]; g = np.isfinite(rec)
+        assert np.corrcoef(rec[g], dvv_bt[bi][g])[0, 1] > 0.9
+
+
 def _codameter_available():
     try:
         import codameter  # noqa: F401
@@ -112,6 +153,9 @@ if __name__ == "__main__":
     test_cross_correlate_shapes_and_symmetry()
     test_stretching_recovers_known_dvv()
     test_dvv_to_state_conversions_and_signs()
+    test_top_layer_mean_and_vs30_conversion()
+    test_register_inter_is_safe()
+    test_synthetic_depth_time_low_slow_high_fast()
     test_processing_ensemble_covariance_exceeds_weaver_floor()
     test_depth_separation_orders_and_splits_at_water_table()
     print("all dv/v tests passed")
