@@ -81,7 +81,7 @@ execute:
   echo: false
   warning: false
   message: false
-jupyter: gwl-pixi
+jupyter: python3
 ---
 
 ```{python}
