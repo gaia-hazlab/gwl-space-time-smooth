@@ -19,9 +19,9 @@ fdsnws-station service (no credentials), so ``fetch_inventory`` runs anywhere.
 Everything is cached locally so we never re-hit the network for the same request (the compute
 constraint): metadata as parquet, waveforms as one raw-miniSEED file per station-day.
 
-Downstream: ``src/models/dvv_measure.py`` turns waveforms into daily cross-correlations and a
-banded dv/v(t); ``src/models/dvv_bands.py`` separates that into groundwater level (deep,
-low-freq) and soil moisture (shallow, high-freq) at the water-table depth.
+Downstream: ``src/models/dvv.py`` turns waveforms into daily cross-correlations and a banded dv/v(t)
+(processing-ensemble Cd), then separates that into groundwater level (deep, low-freq) and soil
+moisture (shallow, high-freq) at the water-table depth; ``notebooks/make_dvv_figures.py`` wires it.
 """
 
 from __future__ import annotations

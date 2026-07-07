@@ -268,12 +268,15 @@ def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times
                       downscaler="bilinear"):
     """Downscale the θ estimate onto the 90 m envelope grid, with a 3-term σ budget.
 
-    The dynamic wetness is solved at the coarse TerraClimate grid (its true resolution) and
-    downscaled to 90 m via the modular :func:`~src.models.downscale.downscale` operator
-    (``downscaler="bilinear"`` is the resampling baseline; register a smarter, covariate-aware
-    method to upgrade). The fine static envelope supplies the sub-4 km spatial structure.
-    Returns (times, θ_90m[t,y,x], UncertaintyBudget) with static / dynamic / downscaling
-    components + provenance. ``times`` optionally selects a subset (indices).
+    Total-volumetric θ is solved at the coarse TerraClimate grid via :func:`total_water_bucket`
+    (its true resolution), converted to a *relative saturation fraction* ``(θ − wp)/(sat − wp)``,
+    and it is that dimensionless fraction that is downscaled to 90 m through the modular
+    :func:`~src.models.downscale.downscale` operator (``downscaler="bilinear"`` is the resampling
+    baseline; register a smarter, covariate-aware method to upgrade). θ is then re-expressed on the
+    fine grid through the 90 m envelope, ``θ = wp + sf·(sat − wp)``, so the fine static envelope
+    supplies the sub-4 km spatial structure and the output stays within [wp, sat]. Returns
+    (times, θ_90m[t,y,x], UncertaintyBudget) with static / dynamic / downscaling components +
+    provenance. ``times`` optionally selects a subset (indices).
     """
     from src.models.downscale import (
         ProvStep,

@@ -244,13 +244,13 @@ def processing_ensemble_dvv(ccf_series, lags, sr, bands=DEFAULT_BANDS,
         cbands = np.array([signal.sosfiltfilt(sos, ccf_series[ei]) for ei in range(n_epoch)])
         members, within = {}, {}
         for (t1, t2) in coda_windows:
-            raw = np.array([stretching_dvv(cbands[ei], cbands[0], lags, (t1, t2))
-                            for ei in range(n_epoch)])          # per-epoch (dvv, cc)
-            dvv_series, cc_series = raw[:, 0], raw[:, 1]
-            sig = np.asarray(weaver_stretching_error(cc_series, float(fc[bi]), t1, t2), float)
-            for ref in ref_indices:                             # re-reference to epoch `ref`
+            for ref in ref_indices:                             # stretch against epoch `ref` itself
+                raw = np.array([stretching_dvv(cbands[ei], cbands[ref], lags, (t1, t2))
+                                for ei in range(n_epoch)])      # per-epoch (dvv, cc) rel. to `ref`
+                dvv_series, cc_series = raw[:, 0], raw[:, 1]     # dvv_series[ref] == 0 by construction
+                sig = np.asarray(weaver_stretching_error(cc_series, float(fc[bi]), t1, t2), float)
                 lbl = f"coda{t1:g}-{t2:g}_ref{ref}"
-                members[lbl] = dvv_series - dvv_series[ref]
+                members[lbl] = dvv_series                        # genuinely reference-specific member
                 within[lbl] = sig
         ens = processing_ensemble(members, within_sigma=within)
         # Cd = structured within-method covariance (overlap + common mode) + methodological cov.

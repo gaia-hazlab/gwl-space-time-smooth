@@ -135,8 +135,9 @@ def _twi(coarse: xr.DataArray, target_like: xr.DataArray, covariates=None) -> xr
     Bilinear only smears the coarse footprint; this redistributes moisture within each footprint
     by terrain. High TWI (convergent, flat, valley) holds more water; low TWI (steep, divergent,
     ridge) less. We take the fine-minus-coarse TWI anomaly (mean ≈ 0 per footprint, so the coarse
-    mean is preserved) and add a proportional θ perturbation, clipped to the physical envelope.
-    Needs ``covariates['twi']`` (a 90 m TWI raster); falls back to bilinear if absent.
+    mean is preserved) and add a proportional θ perturbation; the anomaly is bounded (±3σ of the TWI
+    anomaly) but this operator does NOT clip to the physical θ envelope -- the caller bounds the
+    re-expressed θ to [wp, sat]. Needs ``covariates['twi']`` (a 90 m TWI raster); else bilinear.
     """
     from rasterio.enums import Resampling
 
