@@ -68,6 +68,26 @@ def test_align_to_grid_matches_template_shape():
     assert out.sizes["x"] == 12 and out.sizes["y"] == 10
 
 
+def test_apply_confidence_mask_blanks_unsupported_cells():
+    da = _grid(values=np.full((5, 6), 3.0))
+    mask = _grid(values=np.ones((5, 6)))
+    mask.values[0, :] = 0.0                               # top row unsupported
+    out = le.apply_confidence_mask(da, mask)
+    assert np.all(np.isnan(out.values[0, :]))            # masked row -> nan (no-data)
+    assert np.all(out.values[1:, :] == 3.0)              # supported cells untouched
+
+
+def test_sigma_sidecar_is_written_and_recorded():
+    da = _grid(values=np.full((5, 6), 2.0))
+    sig = _grid(values=np.full((5, 6), 0.3))
+    with tempfile.TemporaryDirectory() as d:
+        manifest = le.export_dynamic_bundle(
+            [le.DynamicField("water_table__depth", da, epoch="mean", sigma=sig)], d, write_cog=False)
+        entry = manifest["fields"][0]
+        assert entry["std_asc"] is not None
+        assert (Path(d) / entry["std_asc"]).exists()     # the _std sidecar exists on disk
+
+
 def test_export_bundle_writes_canonical_files_and_manifest():
     wtd = _grid(values=np.full((5, 6), 3.0))
     theta = _grid(values=np.full((5, 6), 0.25))
@@ -103,5 +123,7 @@ if __name__ == "__main__":
     test_seasonal_high_is_the_shallow_tail_of_dtw()
     test_write_ascii_has_valid_esri_header_and_nodata()
     test_align_to_grid_matches_template_shape()
+    test_apply_confidence_mask_blanks_unsupported_cells()
+    test_sigma_sidecar_is_written_and_recorded()
     test_export_bundle_writes_canonical_files_and_manifest()
     print("all landlab-export tests passed")

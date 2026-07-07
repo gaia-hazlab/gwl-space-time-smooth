@@ -75,6 +75,28 @@ def align_to_grid(da: xr.DataArray, template: xr.DataArray, resampling: str = "b
     return da.rio.reproject_match(template, resampling=how)
 
 
+def apply_confidence_mask(da: xr.DataArray, mask: xr.DataArray) -> xr.DataArray:
+    """Blank ``da`` (-> NaN) where ``mask`` is not positive, so unsupported cells export as no-data.
+
+    ``mask`` is the variogram-driven well-density / confidence mask (1 = supported, 0 = masked). It
+    is aligned to ``da`` first (nearest, to preserve the 0/1 classes)."""
+    m = mask.rio.reproject_match(da, resampling=_nearest()) if mask.shape != da.shape else mask
+    return da.where(m > 0)
+
+
+def _nearest():
+    from rasterio.enums import Resampling
+    return Resampling.nearest
+
+
+def _georef_latlon(da: xr.DataArray) -> xr.DataArray:
+    """Give a lat/lon DataArray the rio spatial dims + EPSG:4326 CRS so it can be reprojected."""
+    if "lat" in da.dims or "lon" in da.dims:
+        da = da.rename({"lat": "y", "lon": "x"})
+    da = da.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=False)
+    return da.rio.write_crs("EPSG:4326") if da.rio.crs is None else da
+
+
 def write_landlab_ascii(da: xr.DataArray, path: str | Path, nodata: float = NODATA) -> Path:
     """Write a 2-D DataArray as an ESRI ASCII grid (``.asc``) that landlab.io.esri_ascii reads."""
     path = Path(path)
@@ -92,11 +114,15 @@ def write_landlab_ascii(da: xr.DataArray, path: str | Path, nodata: float = NODA
 
 @dataclass
 class DynamicField:
-    """One dynamic field to export: our key (see CANONICAL), its data, and the epoch label."""
+    """One dynamic field to export: our key (see CANONICAL), its data, and the epoch label.
+
+    ``sigma`` (optional) is the matching per-cell 1σ, written as a ``<name>_std`` sidecar so LandLab
+    can ingest uncertainty, not just a mean field."""
 
     key: str
     data: xr.DataArray
     epoch: str = "mean"                                  # e.g. "mean", "seasonal_high", "2021-11"
+    sigma: xr.DataArray | None = None
     extra: dict = field(default_factory=dict)
 
 
@@ -127,6 +153,11 @@ def export_dynamic_bundle(fields: list[DynamicField], out_dir: str | Path,
         da = align_to_grid(f.data, template) if template is not None else f.data
         stem = f"{canonical}__{f.epoch}"
         asc = write_landlab_ascii(da, out_dir / f"{stem}.asc")
+        # optional per-cell 1σ sidecar
+        std_name = None
+        if f.sigma is not None:
+            sig = align_to_grid(f.sigma, template) if template is not None else f.sigma
+            std_name = write_landlab_ascii(sig, out_dir / f"{stem}_std.asc").name
         cog = None
         if write_cog:
             cog = out_dir / f"{stem}.tif"
@@ -136,12 +167,13 @@ def export_dynamic_bundle(fields: list[DynamicField], out_dir: str | Path,
             dc.rio.to_raster(cog, driver="COG")
         entries.append({
             "key": f.key, "canonical_name": canonical, "units": units, "epoch": f.epoch,
-            "asc": asc.name, "cog": (cog.name if cog else None),
+            "asc": asc.name, "std_asc": std_name, "cog": (cog.name if cog else None),
             "native_resolution_m": native_res_m, "export_resolution_m": export_res_m,
             "resampled": template is not None and abs(export_res_m - native_res_m) > 1e-6,
             **f.extra,
         })
-        logger.info("exported %s (%s) -> %s", canonical, f.epoch, asc.name)
+        logger.info("exported %s (%s) -> %s%s", canonical, f.epoch, asc.name,
+                    f" (+σ {std_name})" if std_name else "")
 
     manifest = {
         "product": "gaia-soil-reanalysis dynamic hydrological export for LandLab",
@@ -155,3 +187,109 @@ def export_dynamic_bundle(fields: list[DynamicField], out_dir: str | Path,
     }
     (out_dir / "landlab_export_manifest.json").write_text(json.dumps(manifest, indent=2))
     return manifest
+
+
+# ---------------------------------------------------------------------------
+# Loaders: assemble DynamicFields from the real reanalysis products on disk
+# ---------------------------------------------------------------------------
+def load_water_table_field(dtw_tif, rf_std_tif=None, krige_std_tif=None, mask_tif=None,
+                           dtw_series=None, seasonal_quantile=0.1):
+    """Water-table depth field(s): the mean, its 1σ (rf ⊕ kriging in quadrature), masked to the
+    supported domain. If ``dtw_series`` (a time-stack of depth-to-water) is given, also a
+    seasonal-high field. Returns a list of :class:`DynamicField`."""
+    import rioxarray as rxr
+
+    dtw = rxr.open_rasterio(dtw_tif, masked=True).squeeze("band", drop=True)
+    sig = None
+    parts = [rxr.open_rasterio(p, masked=True).squeeze("band", drop=True)
+             for p in (rf_std_tif, krige_std_tif) if p is not None]
+    if parts:
+        sig = np.sqrt(sum(p ** 2 for p in parts))
+    if mask_tif is not None:
+        mask = rxr.open_rasterio(mask_tif, masked=True).squeeze("band", drop=True)
+        dtw = apply_confidence_mask(dtw, mask)
+        if sig is not None:
+            sig = apply_confidence_mask(sig, mask)
+    fields = [DynamicField("water_table__depth", dtw, epoch="mean", sigma=sig)]
+    if dtw_series is not None:
+        high = seasonal_high_water_table(dtw_series, quantile=seasonal_quantile)
+        fields.append(DynamicField("water_table__depth", high, epoch="seasonal_high",
+                                   extra={"quantile": seasonal_quantile}))
+    return fields
+
+
+def load_saturation_field(sm_zarr):
+    """Temporal-mean saturation fraction S = θ/θ_sat (+1σ) from the soil-moisture Zarr."""
+    ds = xr.open_zarr(sm_zarr)
+    s = saturation_fraction(ds["theta"], ds["theta_sat"])              # (time, lat, lon)
+    s = xr.DataArray(s, dims=ds["theta"].dims, coords=ds["theta"].coords)
+    s_mean = _georef_latlon(s.mean("time"))
+    s_std = _georef_latlon((ds["theta_std"] / ds["theta_sat"]).mean("time"))
+    return DynamicField("saturation_fraction", s_mean, epoch="mean", sigma=s_std)
+
+
+def load_recharge_field(forcing_zarr, sm_zarr, root_depth_m=1.0):
+    """Gridded recharge (temporal mean, +max in extra) from the coupled water budget over the
+    TerraClimate forcing grid; σ ≈ 0.1·mean (the DataHub convention)."""
+    import pandas as pd
+
+    from src.models.water_budget import coupled_water_budget
+
+    fz = xr.open_zarr(forcing_zarr)
+    sm = xr.open_zarr(sm_zarr)
+    wb = coupled_water_budget(fz["precip_mm"].values, fz["pet_mm"].values,
+                              sm["theta_wp"].values, sm["theta_fc"].values, sm["theta_sat"].values,
+                              root_depth_m=root_depth_m)
+    tmpl = fz["precip_mm"]                                              # (time, lat, lon) for coords
+    # The monthly budget yields recharge in mm per month; convert to the canonical mm day⁻¹ rate
+    # by each month's length before taking temporal statistics.
+    dim = pd.to_datetime(fz["time"].values).days_in_month.values.astype("float64")
+    rech = xr.DataArray(wb.recharge_mm / dim[:, None, None], dims=tmpl.dims, coords=tmpl.coords)
+    mean = _georef_latlon(rech.mean("time"))
+    mx = _georef_latlon(rech.max("time"))
+    return DynamicField("recharge", mean, epoch="mean", sigma=0.1 * abs(mean),
+                        extra={"max_asc_note": "max also available", "max_epoch": "max"}), \
+        DynamicField("recharge", mx, epoch="max")
+
+
+def main():
+    import argparse
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    p = argparse.ArgumentParser(description="Export the dynamic hydrological state as LandLab-ready fields.")
+    d = "data/processed"
+    p.add_argument("--dtw", default=f"{d}/baseline_dtw_m.tif")
+    p.add_argument("--rf-std", default=f"{d}/baseline_rf_std_m.tif")
+    p.add_argument("--krige-std", default=f"{d}/baseline_kriging_std_m.tif")
+    p.add_argument("--mask", default=f"{d}/well_density_mask.tif")
+    p.add_argument("--sm-zarr", default=f"{d}/soil_moisture_monthly_puget.zarr")
+    p.add_argument("--forcing-zarr", default=f"{d}/terraclimate_monthly_puget.zarr")
+    p.add_argument("--template", default=None, help="Raster defining the export grid (default: --dtw grid).")
+    p.add_argument("--out-dir", default=f"{d}/landlab_export")
+    p.add_argument("--root-depth-m", type=float, default=1.0)
+    p.add_argument("--no-recharge", action="store_true")
+    p.add_argument("--no-cog", action="store_true")
+    args = p.parse_args()
+
+    import rioxarray as rxr
+
+    template = rxr.open_rasterio(args.template or args.dtw, masked=True).squeeze("band", drop=True)
+    fields = []
+    fields += load_water_table_field(args.dtw, args.rf_std, args.krige_std, args.mask)
+    try:
+        fields.append(load_saturation_field(args.sm_zarr))
+    except Exception as exc:                                            # pragma: no cover
+        logger.warning("saturation fraction skipped (%s)", exc)
+    if not args.no_recharge:
+        try:
+            fields += list(load_recharge_field(args.forcing_zarr, args.sm_zarr, args.root_depth_m))
+        except Exception as exc:                                        # pragma: no cover
+            logger.warning("recharge skipped (%s); needs the forcing + envelope Zarrs", exc)
+
+    manifest = export_dynamic_bundle(fields, args.out_dir, template=template,
+                                     write_cog=not args.no_cog)
+    logger.info("wrote %d fields to %s", len(manifest["fields"]), args.out_dir)
+
+
+if __name__ == "__main__":
+    main()
