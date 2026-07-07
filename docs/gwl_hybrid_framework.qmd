@@ -1843,20 +1843,32 @@ synthetic placeholders -- the real data that will replace it.
 | Twin evolution / attribution / sigma-reduction | **synthetic-derived** | no | follows once dv/v is real |
 | Soil-moisture validation | MERRA-2 (model cross-check); SNOTEL (real); SMAP (real, staged) | n/a | SMAP L3/L4, NLDAS, lowland USCRN / ISMN |
 
-**The water budget (required, not yet closed).** The current bucket removes above-field-capacity water
-as drainage that simply *leaves the system*; groundwater and soil moisture are therefore co-located,
-not hydrologically coupled. A correct coupled reanalysis must route that water through two fluxes:
+**The water budget (first-pass closure).** The standalone bucket removed above-field-capacity water as
+drainage that *left the system*, so groundwater and soil moisture were only co-located. The
+`water_budget.coupled_water_budget` operator now routes that water through explicit fluxes so the two
+states genuinely exchange mass (@fig-water):
 
-1. **Vertical infiltration / recharge.** Deep percolation below the root zone must recharge the water
-   table (an explicit theta -> GWL flux), with capillary rise back into the vadose zone where the
-   table is shallow. This is what makes "coupled" physical rather than nominal.
-2. **Downhill runoff.** Surface runoff (infiltration- and saturation-excess overland flow) and
-   subsurface lateral flow (interflow / flow along the water table) must redistribute water
-   down-gradient, so the column is not a closed 1-D bucket.
+1. **Vertical infiltration / recharge (#43).** Deep percolation below the root zone is **recharge** to
+   the water table (an explicit θ → GWL flux); the table responds as a linear reservoir (recharge in,
+   baseflow recession out); and where the table is shallow, **capillary rise** feeds water back up into
+   the root zone (GWL → θ), closing the feedback loop.
+2. **Downhill runoff (#44).** **Saturation-excess** surface runoff is generated when the column fills
+   to porosity, and **subsurface lateral flow** is represented by a TOPMODEL relation that lets the
+   steady-state water table follow the topographic wetness index (valleys shallow/wet, ridges
+   deep/dry); generated runoff can be routed down-gradient with a flow-accumulation weight.
 
-Until both fluxes are represented, the product is an *antecedent-state estimate*, not a closed water
-balance, and cannot by itself drive a runoff or flood model. Closing the water budget is tracked as a
-priority modeling task (see the project issues).
+Mass is conserved each step ($dS = \text{cap} + \text{input} - \text{runoff} - \text{AET} -
+\text{recharge}$). Remaining gaps, tracked as follow-ups: the balance is monthly, so
+*infiltration-excess* (intensity-driven, sub-daily) runoff is not yet represented (#57), and full
+channel routing to a hydrograph belongs to a downstream runoff model (#55); the specific yield,
+recession time, capillary reach, and TOPMODEL scale are nominal pending borehole/streamflow
+calibration.
+
+![Coupled water budget on real domain-mean TerraClimate forcing and the real 90 m TWI field. Left:
+monthly fluxes (precip, AET, recharge, saturation-excess runoff, capillary rise). Middle: soil
+moisture θ and the water-table depth co-evolving — vadose recharge raises the table, a shallow table
+feeds capillary rise back up. Right: subsurface lateral flow — the TOPMODEL steady-state water table
+follows the drainage network (valleys shallow, ridges deep).](assets/water_budget.png){#fig-water}
 
 ### Attribution: what sets each state
 
