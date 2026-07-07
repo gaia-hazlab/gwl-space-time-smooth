@@ -65,9 +65,11 @@ def test_dvv_to_state_conversions_and_signs():
     # shallow band: wetting softens (dv/v < 0) -> positive Δθ
     dth, dth_sd = dvv.dvv_to_theta_change(np.array([-0.02]), np.array([0.004]))
     assert dth[0] > 0 and dth_sd[0] > 0
-    # magnitude sanity (#45): a 0.1 m3/m3 seasonal swing must give ~0.1-1% dv/v, not ~20%
-    dvv_for_0p1 = abs(dvv.S_THETA * 0.1)
-    assert 1e-3 <= dvv_for_0p1 <= 1e-2
+    # magnitude sanity (#45): the MATERIAL sensitivity (for the inverted profile) is ~-1/unit theta
+    # (~10% dv/v per 0.1 theta locally); the BAND-diluted sensitivity (for a raw band dv/v, no
+    # inversion) is ~1-2 orders smaller and reproduces the observed ~0.1-1% seasonal band dv/v.
+    assert 0.5 <= abs(dvv.S_THETA) <= 2.0                    # material: O(1) per unit theta
+    assert 1e-3 <= abs(dvv.S_THETA_BAND * 0.1) <= 1e-2       # band-diluted: 0.1-1% dv/v per 0.1 theta
 
 
 def test_top_layer_mean_and_vs30_conversion():

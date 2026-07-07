@@ -1779,7 +1779,14 @@ dv/v assimilated onto those fields, so the animation shows the assimilation *mac
 state updates and σ shrinks where and when
 sensors constrain it. This is an **MVP built without big-data compute**: the dv/v is a physically
 realistic synthetic (low frequencies track slow groundwater; high frequencies track fast ET and
-rainfall), and the same operators run on measured dv/v once the multi-year waveform run lands.
+rainfall), and the same operators run on measured dv/v once the multi-year waveform run lands. The
+shallow (vadose) band now carries a several-percent seasonal signal — peak-to-peak $\approx 9\%$
+during strong wetting and drying — so after depth inversion the near-surface stiffness moves
+visibly: the domain-mean Vs30 spans $\approx 425$–$439$ m s⁻¹ over the year ($\approx 3\%$), and
+near constraining stations the swing is larger still. Because Vs30 is a 30 m time-*average* and the
+point assimilation reverts to the static prior away from sensors, that domain-mean range is a lower
+bound on the local response, not the full shallow amplitude — the honest consequence of measuring a
+30 m average with a locally-constrained analysis.
 
 ![Digital-twin MVP over one hydrologic year at 5-day cadence. Top: groundwater and soil moisture
 are shown as **anomalies** ($\Delta$ from the per-frame geospatial mean, printed as a text insert)
