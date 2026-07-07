@@ -1771,9 +1771,10 @@ The pieces above compose into a **digital twin**: an uncertainty-aware, 90 m, co
 the near-surface state that evolves in time as data are assimilated. @fig-twin animates one
 hydrologic year at 5-day cadence. The top row is the state — groundwater depth-to-water, soil
 moisture, and Vs30 (the near-surface stiffness the geotechnical twins consume); the bottom row is
-the matching per-cell 1σ. The groundwater and soil-moisture static structure is real 90 m data; the
-**Vs30 shown here is a synthetic HAND-ramp placeholder** (see the classification table), not a
-measured or published Vs30. The time evolution and its high-frequency content come from a **synthetic**
+the matching per-cell 1σ. The groundwater and soil-moisture static structure is real 90 m data, and
+the **Vs30 is now the Wald-Allen topographic-slope proxy** (issue #54) — the standard terrain-based
+site-condition estimate [@waldallen2007] behind the USGS global Vs30 model, applied to the native 90 m 3DEP slope, no
+longer the earlier synthetic HAND ramp. The time evolution and its high-frequency content come from a **synthetic**
 dv/v assimilated onto those fields, so the animation shows the assimilation *machinery* at work — the
 state updates and σ shrinks where and when
 sensors constrain it. This is an **MVP built without big-data compute**: the dv/v is a physically
@@ -1802,7 +1803,7 @@ compute-free MVP (the wells, SNOTEL, and seismic geometry are real).
 | Seismic UW + CC (74) | EarthScope/IRIS FDSN via `seisfetch` | point | dv/v -> ΔWTD, Δθ, ΔVs30 (assimilated) |
 | SOLUS100 (clay, sand) | USDA-NRCS SOLUS100, GAIA STAC / public COGs | 100 m | soil-hydraulic envelope; GWL predictor |
 | USGS 3DEP DEM | 3DEP (`py3dep`) -> HAND/TWI/slope | 10 m -> 90 m | terrain prior; Vs30 HAND proxy |
-| Vs30 (synthetic HAND ramp in the MVP) | GAIA vs-STAC (`fetch_gaia`) not reached; **HAND fallback used** | 90 m | Vs30 static base (placeholder — see classification table) |
+| Vs30 (Wald-Allen slope proxy) | 3DEP slope → `fetch_vs30` (Wald & Allen 2007); USGS grid / Sanger-Maurer optional | 90 m | Vs30 static base (real site-condition estimate) |
 | TerraClimate; PRISM | Climatology Lab THREDDS; PRISM web service | ~4 km | dynamic forcing (P, PET) |
 
 ### Evaluation datasets
@@ -1856,7 +1857,7 @@ synthetic placeholders -- the real data that will replace it.
 | Groundwater dynamics | observation (kriged NWIS well anomalies) | yes (ground) | NWIS (have) |
 | Soil-moisture envelope | physical (Saxton-Rawls on SOLUS texture) | no (prior) | SOLUS100 (have) |
 | Soil-moisture dynamics | reanalysis-forced bucket (TerraClimate / PRISM) | no (prior) | forcing is model; see water budget |
-| Vs30 | **synthetic** (HAND ramp) | no | Sanger-Maurer parametric (GAIA vs-STAC); Wald-Allen slope proxy; measured Vs30 (MASW / borehole / Vs30 databases) |
+| Vs30 | **statistical/physical** (Wald-Allen slope proxy from 3DEP) | no (prior) | USGS global Vs30 grid; Sanger-Maurer parametric (GAIA vs-STAC); measured Vs30 (MASW / borehole) |
 | dv/v | **synthetic** (band generator) | no (yet) | real UW/CC ambient noise via `seisfetch` + `codameter` (pipeline exists) |
 | Twin evolution / attribution / sigma-reduction | **synthetic-derived** | no | follows once dv/v is real |
 | Soil-moisture validation | MERRA-2 (model cross-check); SNOTEL (real); SMAP (real, staged) | n/a | SMAP L3/L4, NLDAS, lowland USCRN / ISMN |
@@ -1894,13 +1895,13 @@ Attribution is answered at two levels, because they say different things (@fig-a
 
 **Field level — statistical learning across all features.** A random forest predicts each state from
 every feature — the static covariates (HAND, TWI, slope, clay, sand) and the dv/v observation — and
-its permutation importance is the field-wide accounting: **Vs30 is ~100% terrain (HAND)**, groundwater
-is ~61% HAND and ~26% clay, and soil moisture is ~89% sand. **Caveat (partly tautological in this
-MVP).** Because the synthetic Vs30 is *defined* as a function of HAND and the bucket θ is *defined*
-from Saxton-Rawls texture (sand/clay), the random forest recovers those generative covariates by
-construction — the ~100% HAND and ~89% sand are self-recovery, not a discovery about real soil. The
-attribution becomes a genuine finding only once Vs30 and θ are real fields whose covariate relations
-are learned, not imposed. The dv/v is a small field-level contributor here also **by construction**:
+its permutation importance is the field-wide accounting: **Vs30 is ~100% slope**, groundwater is
+~61% HAND and ~26% clay, and soil moisture is ~89% sand. For Vs30 this is now the *intended physical
+relation* — the Wald-Allen proxy [@waldallen2007] maps topographic slope to Vs30, so slope-dominance is the method
+working, not an artifact (the earlier HAND-ramp attribution was a construction tautology; it is not
+anymore). **Caveat.** The bucket θ is still *defined* from Saxton-Rawls texture, so the ~89% sand is
+partly self-recovery; θ attribution becomes a fully independent finding only once θ is a real
+observed field whose covariate relations are learned rather than imposed. The dv/v is a small field-level contributor here also **by construction**:
 in this MVP it only perturbs the state near the seismic stations, so it cannot explain the
 covariate-driven structure that fills the domain. This is
 exactly why a point-assimilation "sensor share" is the wrong lens for the field, and why the MVP uses
@@ -1967,8 +1968,9 @@ the twin is trustworthy (dense wells / SNOTEL / seismic) and where it reverts to
 **What remains to fix**: (1) run the multi-year real-waveform dv/v over UW/CC to replace the
 synthetic; (2) borehole-calibrate the poroelastic $k_{sat}$ to convert relative WTD to head in
 metres; (3) assimilate SNOTEL SWE for the winter snowpack term (soil-moisture stations only today);
-(4) carry the per-month kriging σ rather than its time mean; (5) fetch the GAIA Vs30 product in
-place of the HAND proxy; (6) densify the Cascade networks so the anchor corrects station-specific
+(4) carry the per-month kriging σ rather than its time mean; (5) upgrade the Wald-Allen slope Vs30
+to the USGS grid or the Sanger-Maurer parametric product (both wired in `fetch_vs30`) and translate
+its σ to NEHRP site-class probability; (6) densify the Cascade networks so the anchor corrects station-specific
 representativeness, not only the systematic bias.
 
 ### Toward forecast forcing: Earth2Studio {#sec-earth2studio}

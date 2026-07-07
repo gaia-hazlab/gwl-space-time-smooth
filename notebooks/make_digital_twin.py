@@ -105,7 +105,8 @@ def _load_static():
 
 
 def _vs30_field(like):
-    """Read vs30_90m.tif if present; else synthesize from HAND (vs30=180+520*(1-exp(-hand/30)))."""
+    """Read the real vs30_90m.tif if present (fetch_vs30: Wald-Allen slope proxy by default; USGS /
+    Sanger-Maurer optional); else fall back to a synthetic HAND ramp with a clear provenance flag."""
     tif = PROC / "vs30_90m.tif"
     if tif.exists():
         v = rxr.open_rasterio(tif, masked=True).squeeze("band", drop=True)
@@ -488,7 +489,8 @@ def main():
 
     meta.update(n_frames=N_FRAMES, dt_days=DT_DAYS, span_days=DT_DAYS * (N_FRAMES - 1),
                 display_px=list(grid["shape"]), poster_frame=frame,
-                vs30_source=("fetched" if (PROC / "vs30_90m.tif").exists() else "synthetic-from-HAND"),
+                vs30_source=("vs30_90m.tif (fetch_vs30: Wald-Allen slope proxy)"
+                             if (PROC / "vs30_90m.tif").exists() else "synthetic-from-HAND"),
                 attribution=shares)
     (PROC / "digital_twin_summary.json").write_text(json.dumps(meta, indent=2))
     print("wrote twin + attribution; summary:", json.dumps(meta, indent=2))
