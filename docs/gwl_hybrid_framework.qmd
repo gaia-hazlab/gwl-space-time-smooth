@@ -1776,7 +1776,9 @@ compute-free MVP (the wells, SNOTEL, and seismic geometry are real).
 | Dataset | Source & access | Native res | Role in the twin |
 |---|---|---|---|
 | USGS NWIS wells (863) | USGS Water Data OGC API (`dataretrieval`), param 72019 | point | GWL assimilation + Stage-1/3 anchor |
-| NRCS SNOTEL (SMS) | NRCS AWDB REST API, element SMS | point | soil-moisture assimilation |
+| NRCS SNOTEL (SMS) | NRCS AWDB REST API, element SMS | point | soil-moisture assimilation (mountain) |
+| NOAA USCRN | NOAA NCEI public flat files (`fetch_uscrn`) | point | soil-moisture assimilation (valley/lowland) |
+| ISMN networks | ISMN registered export (`read_ismn`) | point | soil-moisture assimilation (aggregates SCAN, mesonets, ...) |
 | Seismic UW + CC (74) | EarthScope/IRIS FDSN via `seisfetch` | point | dv/v -> ΔWTD, Δθ, ΔVs30 (assimilated) |
 | SOLUS100 (clay, sand) | USDA-NRCS SOLUS100, GAIA STAC / public COGs | 100 m | soil-hydraulic envelope; GWL predictor |
 | USGS 3DEP DEM | 3DEP (`py3dep`) -> HAND/TWI/slope | 10 m -> 90 m | terrain prior; Vs30 HAND proxy |
@@ -1790,9 +1792,15 @@ Independent references used to score the twin (kept separate from the assimilate
 | Dataset | Source & access | Native res | Evaluates |
 |---|---|---|---|
 | MERRA-2 root-zone SM | NASA GES DISC (`earthaccess`), incl. 2025 | 0.5° | soil moisture (upscale-then-compare) |
-| SMAP L3 (SPL3SMP_E) | NASA NSIDC (`earthaccess`) | 9 km | soil moisture (independent, staged) |
-| SNOTEL θ (held out) | NRCS AWDB | point | soil-moisture phase (LOSO) |
+| SMAP L4 root-zone / L3 | NASA (`earthaccess`) | 9 km | soil moisture (gridded, native-scale) |
+| NLDAS-2 soil moisture | NASA GES DISC (`earthaccess`) | ~12 km | soil moisture (gridded cross-check) |
+| SNOTEL / USCRN θ (held out) | NRCS AWDB; NOAA NCEI | point | soil-moisture phase (LOSO) |
 | NWIS wells (held out) | USGS | point | GWL baseline (spatial block-CV) |
+
+The in-situ soil-moisture networks are unified under one schema by `soil_moisture_stations.load_sm_stations`
+(SNOTEL + USCRN, plus any registered ISMN export), so additional networks assimilate without changing
+the pipeline; the gridded SMAP L4 / NLDAS layers are assimilated at native scale by
+upscale-then-compare rather than as points.
 
 ### Attribution: what sets each state
 

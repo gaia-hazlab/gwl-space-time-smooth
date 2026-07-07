@@ -78,8 +78,11 @@ lithology-local = "python -m src.data.rasterize_geology --geology data/raw/geolo
 # Dynamic climate forcing for soil moisture — two interchangeable sources (forcing ensemble):
 terraclimate = "python -m src.data.fetch_terraclimate --output data/processed/terraclimate_monthly_puget.zarr"
 prism = "python -m src.data.fetch_prism_monthly --output data/processed/prism_monthly_puget.zarr"  # obs-based; ppt+tmean→Hamon PET
-# SNOTEL in-situ soil-moisture stations (NRCS AWDB) — independent θ validation anchors (#28).
+# In-situ soil-moisture station networks (assimilation + validation), unified by soil_moisture_stations.
+# SNOTEL (NRCS AWDB) — mountain-focused θ anchors (#28).
 snotel = "python -m src.data.fetch_snotel --output data/processed/snotel_soil_moisture_monthly.parquet"
+# USCRN (NOAA) — research-grade public flat files; valley/lowland complement to SNOTEL.
+uscrn = "python -m src.data.fetch_uscrn --output data/processed/uscrn_soil_moisture_monthly.parquet"
 snotel-validate = "python notebooks/validate_snotel.py"
 snow-calibrate = "python notebooks/calibrate_snow.py"   # grid + LOSO snow calibration + bias decomposition
 snotel-anchor = "python notebooks/anchor_snotel.py"     # obs-anchor θ to SNOTEL over Puget+Cascade (residual anchor + LOSO)
