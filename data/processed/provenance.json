@@ -28,25 +28,18 @@
       "method": "NCSS subset"
     },
     {
-      "quantity": "wetness w(t)",
-      "source": "Thornthwaite\u2013Mather bucket",
+      "quantity": "\u03b8(t)",
+      "source": "total-water bucket (\u03b8_wp\u2192\u03b8_sat)",
       "source_res_m": 4000.0,
       "target_res_m": 4000.0,
-      "method": "water balance"
+      "method": "water balance + drainage"
     },
     {
-      "quantity": "w(t) \u2192 90 m",
-      "source": "statistical downscaling",
+      "quantity": "\u03b8(t) \u2192 90 m",
+      "source": "downscaler=twi",
       "source_res_m": 4000.0,
       "target_res_m": 90.0,
-      "method": "bilinear + representativeness \u03c3"
-    },
-    {
-      "quantity": "\u03b8(t) = \u03b8_wp + w\u00b7(\u03b8_fc\u2212\u03b8_wp)",
-      "source": "envelope \u00d7 wetness",
-      "source_res_m": 90.0,
-      "target_res_m": 90.0,
-      "method": "combine"
+      "method": "downscale + representativeness \u03c3"
     }
   ],
   "groundwater": [
@@ -88,9 +81,9 @@
   ],
   "budget_fractions": {
     "soil_moisture": {
-      "static_pedotransfer": 0.5653384004821199,
-      "dynamic_driver": 0.2022368254957996,
-      "downscaling": 0.23242477402208056
+      "static_pedotransfer": 0.6566062615147493,
+      "dynamic_driver": 0.15984330555412,
+      "downscaling": 0.1835504329311306
     },
     "groundwater": {
       "static_rf_baseline": 0.6745898563674956,
@@ -99,7 +92,7 @@
     }
   },
   "median_total_sigma": {
-    "soil_moisture_m3m3": 0.02946913307788735,
+    "soil_moisture_m3m3": 0.034854556012234326,
     "groundwater_m": 17.357157899843433
   }
 }

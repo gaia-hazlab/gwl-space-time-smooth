@@ -1,7 +1,7 @@
 [workspace]
-name = "gwl-space-time-smooth"
+name = "gaia-soil-reanalysis"
 version = "0.1.0"
-description = "Groundwater level space-time smoothing"
+description = "GAIA Soil Reanalysis: coupled 90 m groundwater level, soil moisture, and near-surface stiffness (Vs30) with uncertainty and dv/v assimilation"
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64"]
 
@@ -38,6 +38,7 @@ numba = "*"
 llvmlite = "*"
 earthaccess = ">=0.17.0,<0.18"
 h5netcdf = ">=1.8.1,<2"
+obspy = ">=1.5.0,<2"
 
 [pypi-dependencies]
 dataretrieval = "*"
@@ -54,6 +55,9 @@ py3dep = "*"
 pystac = "*"
 s3fs = "*"
 pystac-client = "*"
+seisfetch = { git = "https://github.com/Denolle-Lab/seisfetch.git", extras = ["fdsn", "auth", "pandas", "xarray"] }
+disba = ">=0.7, <0.8"
+codameter = { git = "https://github.com/Denolle-Lab/codameter.git" }
 
 [tasks]
 # === Primary pipeline ===
@@ -74,8 +78,11 @@ lithology-local = "python -m src.data.rasterize_geology --geology data/raw/geolo
 # Dynamic climate forcing for soil moisture — two interchangeable sources (forcing ensemble):
 terraclimate = "python -m src.data.fetch_terraclimate --output data/processed/terraclimate_monthly_puget.zarr"
 prism = "python -m src.data.fetch_prism_monthly --output data/processed/prism_monthly_puget.zarr"  # obs-based; ppt+tmean→Hamon PET
-# SNOTEL in-situ soil-moisture stations (NRCS AWDB) — independent θ validation anchors (#28).
+# In-situ soil-moisture station networks (assimilation + validation), unified by soil_moisture_stations.
+# SNOTEL (NRCS AWDB) — mountain-focused θ anchors (#28).
 snotel = "python -m src.data.fetch_snotel --output data/processed/snotel_soil_moisture_monthly.parquet"
+# USCRN (NOAA) — research-grade public flat files; valley/lowland complement to SNOTEL.
+uscrn = "python -m src.data.fetch_uscrn --output data/processed/uscrn_soil_moisture_monthly.parquet"
 snotel-validate = "python notebooks/validate_snotel.py"
 snow-calibrate = "python notebooks/calibrate_snow.py"   # grid + LOSO snow calibration + bias decomposition
 snotel-anchor = "python notebooks/anchor_snotel.py"     # obs-anchor θ to SNOTEL over Puget+Cascade (residual anchor + LOSO)
@@ -92,6 +99,15 @@ soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30
 products-90m = "python notebooks/make_products_90m.py"
 # Forcing-ensemble (TerraClimate vs PRISM) + demonstrative dv/v coupling figures.
 ensemble-dvv = "python notebooks/make_ensemble_dvv_figures.py"
+# === dv/v state module (seismic ambient noise -> depth-separated SM + relative WTD) ===
+# UW + CC station metadata via seisfetch (cheap; add --waveforms for a bounded download).
+seismic = "python -m src.data.fetch_seismic --output data/processed/seismic_stations.parquet"
+# dv/v module figure: stations -> freq/depth kernels -> banded dv/v (UQ, codameter) -> SM & WTD.
+dvv-demo = "python notebooks/make_dvv_figures.py"
+# Vs30 near-surface stiffness (GAIA Sanger-Maurer; synth-from-HAND fallback) for the digital twin.
+vs30 = "python -m src.data.fetch_gaia vs30 --bbox -123.3 46.8 -120.8 48.5 --output-dir data/processed"
+# Digital-twin MVP: 2x3 animated GIF (GWL, soil moisture, Vs30 + uncertainty) with dv/v assimilation.
+digital-twin = "python notebooks/make_digital_twin.py"
 # Demo: static figures + GIFs + provenance, assembled into the self-contained Quarto page.
 demo = "python notebooks/demo_gwl_sm.py && python notebooks/make_products_90m.py && python notebooks/make_ensemble_dvv_figures.py && python notebooks/build_demo_qmd.py && quarto render docs/gwl_soil_moisture_demo.qmd --to html"
 # === Legacy (comparison only) ===

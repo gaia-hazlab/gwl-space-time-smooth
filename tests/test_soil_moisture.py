@@ -12,7 +12,43 @@ from src.models.soil_moisture import (
     estimate_soil_moisture,
     saxton_rawls_envelope,
     thornthwaite_mather_wetness,
+    total_water_bucket,
 )
+
+
+def test_total_water_bucket_spans_full_range_and_drains():
+    wp = np.array([[0.10]]); fc = np.array([[0.25]]); sat = np.array([[0.45]])
+    # a very wet month then dry months (with ET)
+    P = np.array([300.0, 0, 0, 0, 0, 0])[:, None, None]
+    PET = np.array([10.0, 60, 60, 60, 60, 60])[:, None, None]
+    th = total_water_bucket(P, PET, wp, fc, sat, root_depth_m=1.0)
+    assert np.all(th >= wp - 1e-6) and np.all(th <= sat + 1e-6)   # within physical envelope
+    assert th[0, 0, 0] > fc[0, 0]                                  # wet month exceeds field capacity
+    assert th[-1, 0, 0] < th[0, 0, 0]                             # drains/dries over time
+
+
+def test_soil_moisture_station_combiner_unifies_networks():
+    import pathlib
+    import tempfile
+
+    import pandas as pd
+
+    from src.data.soil_moisture_stations import SCHEMA, load_sm_stations
+    # SNOTEL-style (id in `triplet`) + USCRN-style (id in `station`) -> one schema, both networks.
+    sn = pd.DataFrame({"triplet": ["672:WA:SNTL"], "name": ["S"], "lat": [47.0], "lon": [-122.0],
+                       "year": [2024], "month": [1], "date": pd.to_datetime(["2024-01-01"]),
+                       "theta_obs": [0.3]})
+    us = pd.DataFrame({"network": ["USCRN"], "station": ["WA_x"], "name": ["X"], "lat": [48.0],
+                       "lon": [-121.0], "elev_m": [100.0], "year": [2024], "month": [1],
+                       "date": pd.to_datetime(["2024-01-01"]), "theta_obs": [0.2]})
+    with tempfile.TemporaryDirectory() as d:
+        p = pathlib.Path(d)
+        sn.to_parquet(p / "sn.parquet"); us.to_parquet(p / "us.parquet")
+        out = load_sm_stations({"SNOTEL": p / "sn.parquet", "USCRN": p / "us.parquet"})
+    assert list(out.columns) == SCHEMA
+    assert set(out.network) == {"SNOTEL", "USCRN"}
+    assert out[out.network == "SNOTEL"].station.iloc[0] == "672:WA:SNTL"   # triplet -> station id
+    assert load_sm_stations({"NONE": p / "missing.parquet"}).empty          # graceful when absent
 
 
 def test_envelope_ordering_and_ranges():
@@ -64,7 +100,9 @@ def test_theta_stays_within_envelope():
 
 
 if __name__ == "__main__":
+    test_soil_moisture_station_combiner_unifies_networks()
     test_envelope_ordering_and_ranges()
+    test_total_water_bucket_spans_full_range_and_drains()
     test_bucket_responds_to_forcing()
     test_theta_stays_within_envelope()
     print("all soil-moisture tests passed")

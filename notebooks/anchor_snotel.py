@@ -31,7 +31,7 @@ from src.models.soil_moisture import (
     DEFAULT_ROOT_DEPTH_M,
     apply_snow_if_available,
     saxton_rawls_envelope,
-    thornthwaite_mather_wetness,
+    total_water_bucket,
 )
 
 mpl.use("Agg")
@@ -50,11 +50,9 @@ def build_theta_field():
         solus = solus.rio.write_crs("EPSG:5070")
     s4 = solus.rio.reproject_match(drv)                       # sand/clay at 4 km
     env = saxton_rawls_envelope(s4["sand_pct"].values, s4["clay_pct"].values)
-    wp, fc, sat = env["theta_wp"], env["theta_fc"], env["theta_sat"]
-    awc = np.clip(fc - wp, 0.02, None) * (DEFAULT_ROOT_DEPTH_M * 1000.0)
     liquid = apply_snow_if_available(drv, drv["precip_mm"].values)
-    w = thornthwaite_mather_wetness(liquid, drv["pet_mm"].values, awc)
-    theta = np.minimum(wp[None] + w * (fc - wp)[None], sat[None]).astype("float32")
+    theta = total_water_bucket(liquid, drv["pet_mm"].values, env["theta_wp"], env["theta_fc"],
+                               env["theta_sat"], DEFAULT_ROOT_DEPTH_M)
     return xr.DataArray(theta, dims=("time", "lat", "lon"),
                         coords={"time": drv.time.values, "lat": drv.lat.values, "lon": drv.lon.values})
 
@@ -105,7 +103,7 @@ def main():
 
     fig = plt.figure(figsize=(15, 4.8))
     gs = fig.add_gridspec(1, 3, wspace=0.3, width_ratios=[1.05, 1.05, 1])
-    vmin, vmax = 0.08, 0.35
+    vmin, vmax = 0.10, 0.45
     for ax, fld, title in [(fig.add_subplot(gs[0, 0]), model_m, "Model θ (Puget+Cascade, 2019-05)"),
                            (fig.add_subplot(gs[0, 1]), anchored_m, "SNOTEL-anchored θ")]:
         im = ax.imshow(fld, extent=ext, origin="lower", cmap="YlGnBu", vmin=vmin, vmax=vmax, aspect="auto")

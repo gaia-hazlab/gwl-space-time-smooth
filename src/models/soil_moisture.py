@@ -155,15 +155,51 @@ def thornthwaite_mather_wetness(
     return w
 
 
+# Monthly gravitational drainage fraction above field capacity (nominal; calibratable).
+_DRAIN_FRAC = 0.6
+
+
+def total_water_bucket(precip_mm, pet_mm, theta_wp, theta_fc, theta_sat,
+                       root_depth_m=1.0, drain_frac=_DRAIN_FRAC, init="fc"):
+    """Total-volumetric soil moisture θ(time, y, x) spanning wilting point → porosity.
+
+    The plant-available Thornthwaite–Mather bucket caps θ at field capacity, which biases the
+    product dry and saturates the visual scale near θ_fc. This is a total-water store instead:
+    a single layer of depth ``root_depth_m`` whose storage ranges θ_wp·z … θ_sat·z. Each month
+    the liquid input recharges it; ET removes water down toward wilting; storage above field
+    capacity drains gravitationally at ``drain_frac`` per month. θ = S / z therefore rises toward
+    saturation in wet months and recedes through field capacity as it drains — comparable to the
+    total-volumetric soil moisture that SNOTEL, MERRA-2 and SMAP report.
+    """
+    P = np.asarray(precip_mm, dtype="float64")
+    PET = np.asarray(pet_mm, dtype="float64")
+    wp, fc, sat = (np.asarray(a, dtype="float64") for a in (theta_wp, theta_fc, theta_sat))
+    z = root_depth_m * 1000.0
+    Swp, Sfc, Ssat = wp * z, fc * z, sat * z
+    S = Sfc.copy() if init == "fc" else (Swp + 0.5 * (Sfc - Swp))
+
+    theta = np.empty_like(P)
+    for t in range(P.shape[0]):
+        S = S + P[t]
+        aet = np.minimum(PET[t], np.maximum(S - Swp, 0.0))       # ET limited by water above wilting
+        S = S - aet
+        excess = np.maximum(S - Sfc, 0.0)
+        S = S - excess * drain_frac                              # gravitational drainage
+        S = np.clip(S, Swp, Ssat)
+        theta[t] = S / z
+    return theta.astype("float32")
+
+
 # ---------------------------------------------------------------------------
 # Snow — temperature-index (degree-day) redistribution of winter precipitation
 # ---------------------------------------------------------------------------
-# Snow parameters — calibrated against SNOTEL by grid search + leave-one-station-out
-# (notebooks/calibrate_snow.py; LOSO mean per-site r 0.52→0.54, so the values generalise):
-_DDF_MM_PER_C_DAY = 2.5   # degree-day melt factor (mm/°C/day)
-_T_SNOW_HI = 2.0          # ≥ this °C → all precip falls as rain
+# Snow parameters — nominal. Under the total-water bucket, grid-search tuning against the 5
+# SNOTEL stations overfits (LOSO worse than default), so nominal values are used; a proper
+# calibration needs a denser network or SNOTEL SWE (see notebooks/calibrate_snow.py, roadmap).
+_DDF_MM_PER_C_DAY = 3.0   # degree-day melt factor (mm/°C/day)
+_T_SNOW_HI = 3.0          # ≥ this °C → all precip falls as rain
 _T_SNOW_LO = -1.0         # ≤ this °C → all precip falls as snow (linear between)
-_T_MELT = 1.0             # melt threshold (°C)
+_T_MELT = 0.0             # melt threshold (°C)
 
 
 def snowmelt_liquid_input(precip_mm, tmean_c, days_in_month, ddf=_DDF_MM_PER_C_DAY,
@@ -232,12 +268,15 @@ def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times
                       downscaler="bilinear"):
     """Downscale the θ estimate onto the 90 m envelope grid, with a 3-term σ budget.
 
-    The dynamic wetness is solved at the coarse TerraClimate grid (its true resolution) and
-    downscaled to 90 m via the modular :func:`~src.models.downscale.downscale` operator
-    (``downscaler="bilinear"`` is the resampling baseline; register a smarter, covariate-aware
-    method to upgrade). The fine static envelope supplies the sub-4 km spatial structure.
-    Returns (times, θ_90m[t,y,x], UncertaintyBudget) with static / dynamic / downscaling
-    components + provenance. ``times`` optionally selects a subset (indices).
+    Total-volumetric θ is solved at the coarse TerraClimate grid via :func:`total_water_bucket`
+    (its true resolution), converted to a *relative saturation fraction* ``(θ − wp)/(sat − wp)``,
+    and it is that dimensionless fraction that is downscaled to 90 m through the modular
+    :func:`~src.models.downscale.downscale` operator (``downscaler="bilinear"`` is the resampling
+    baseline; register a smarter, covariate-aware method to upgrade). θ is then re-expressed on the
+    fine grid through the 90 m envelope, ``θ = wp + sf·(sat − wp)``, so the fine static envelope
+    supplies the sub-4 km spatial structure and the output stays within [wp, sat]. Returns
+    (times, θ_90m[t,y,x], UncertaintyBudget) with static / dynamic / downscaling components +
+    provenance. ``times`` optionally selects a subset (indices).
     """
     from src.models.downscale import (
         ProvStep,
@@ -246,40 +285,41 @@ def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times
         representativeness_sigma,
     )
 
-    # Wetness w(time) on the coarse driver grid (its native ~4 km resolution). The snow module
-    # redistributes winter precip → spring melt when the driver carries temperature (tmean_c).
+    # Total-volumetric θ(time) on the coarse driver grid (its native ~4 km resolution). The snow
+    # module redistributes winter precip → spring melt when the driver carries temperature.
     env_d = _regrid_envelope_to_driver(env90, driver_ds)
-    awc_mm = np.clip(env_d["theta_fc"].values - env_d["theta_wp"].values, 0.02, None) \
-        * (root_depth_m * 1000.0)
     liquid_in = apply_snow_if_available(driver_ds, driver_ds["precip_mm"].values)
-    w_coarse_full = thornthwaite_mather_wetness(
-        liquid_in, driver_ds["pet_mm"].values, awc_mm
-    )
-    w_coarse = xr.DataArray(
-        w_coarse_full, dims=("time", "lat", "lon"),
+    theta_coarse_full = total_water_bucket(
+        liquid_in, driver_ds["pet_mm"].values, env_d["theta_wp"].values,
+        env_d["theta_fc"].values, env_d["theta_sat"].values, root_depth_m)
+    # Relative saturation ∈ [0,1] over the full wilting→porosity range (carries the dynamics);
+    # downscaled, then re-expressed through the FINE 90 m envelope so θ keeps its 90 m texture.
+    wpc, satc = env_d["theta_wp"].values, env_d["theta_sat"].values
+    satfrac_coarse = np.clip((theta_coarse_full - wpc[None]) / np.clip(satc - wpc, 1e-6, None)[None], 0.0, 1.0)
+    satfrac = xr.DataArray(
+        satfrac_coarse.astype("float32"), dims=("time", "lat", "lon"),
         coords={"time": driver_ds["time"].values, "lat": driver_ds["lat"], "lon": driver_ds["lon"]},
     ).rio.set_spatial_dims(x_dim="lon", y_dim="lat").rio.write_crs("EPSG:4326")
 
-    idx = range(w_coarse.sizes["time"]) if times is None else list(times)
+    idx = range(satfrac.sizes["time"]) if times is None else list(times)
     like = env90["theta_fc"]
     wp, fc, sat = env90["theta_wp"].values, env90["theta_fc"].values, env90["theta_sat"].values
     awc90 = np.clip(fc - wp, 1e-6, None)
 
-    cov = {"envelope": env90}  # fine static covariates a smarter downscaler may exploit
+    cov = {"envelope": env90}  # fine static covariates a smarter (e.g. TWI) downscaler exploits
+    _twi_path = Path("data/processed/terrain_twi_90m.tif")
+    if _twi_path.exists():
+        cov["twi"] = rioxarray.open_rasterio(_twi_path, masked=True).squeeze("band", drop=True) \
+            .rio.reproject_match(like)
     frames = []
     for t in idx:
-        w90 = downscale(w_coarse.isel(time=t), like, method=downscaler, covariates=cov).values
-        w90 = np.clip(w90, 0.0, 1.0)
-        theta = np.minimum(wp + w90 * (fc - wp), sat)
+        sf90 = np.clip(downscale(satfrac.isel(time=t), like, method=downscaler, covariates=cov).values, 0.0, 1.0)
+        theta = wp + sf90 * (sat - wp)                            # fine envelope re-expression
         frames.append(theta.astype("float32"))
     theta_90m = np.stack(frames, axis=0)
 
-    # Uncertainty budget (time-mean wetness weights the static/dynamic split).
-    w90_mean = np.clip(
-        downscale(w_coarse.isel(time=list(idx)).mean("time"), like, method=downscaler,
-                  covariates=cov).values, 0.0, 1.0)
     budget = UncertaintyBudget()
-    budget.add("static_pedotransfer", np.sqrt((1 - w90_mean) ** 2 + w90_mean ** 2) * _PTF_SIGMA)
+    budget.add("static_pedotransfer", np.full_like(awc90, _PTF_SIGMA))
     budget.add("dynamic_driver", _W_SIGMA * awc90)
     # representativeness on the θ scale: fine texture std the coarse driver can't resolve
     budget.add("downscaling", representativeness_sigma(like, 4000.0, TARGET_RES_M))
@@ -287,9 +327,8 @@ def soil_moisture_90m(env90, driver_ds, root_depth_m=DEFAULT_ROOT_DEPTH_M, times
         ProvStep("clay%, sand%", "SOLUS100 (USDA-NRCS)", 100.0, TARGET_RES_M, "reproject (bilinear)"),
         ProvStep("θ_wp, θ_fc, θ_sat", "Saxton & Rawls (2006) PTF", TARGET_RES_M, TARGET_RES_M, "pedotransfer"),
         ProvStep("precip, PET", "TerraClimate v1.1", 4000.0, 4000.0, "NCSS subset"),
-        ProvStep("wetness w(t)", "Thornthwaite–Mather bucket", 4000.0, 4000.0, "water balance"),
-        ProvStep("w(t) → 90 m", "statistical downscaling", 4000.0, TARGET_RES_M, "bilinear + representativeness σ"),
-        ProvStep("θ(t) = θ_wp + w·(θ_fc−θ_wp)", "envelope × wetness", TARGET_RES_M, TARGET_RES_M, "combine"),
+        ProvStep("θ(t)", "total-water bucket (θ_wp→θ_sat)", 4000.0, 4000.0, "water balance + drainage"),
+        ProvStep(f"θ(t) → 90 m", f"downscaler={downscaler}", 4000.0, TARGET_RES_M, "downscale + representativeness σ"),
     ]
     sel_times = np.asarray(driver_ds["time"].values)[list(idx)]
     return sel_times, theta_90m, budget
@@ -408,15 +447,13 @@ def main() -> None:
     awc_mm = np.clip((env_d["theta_fc"].values - env_d["theta_wp"].values), 0.02, None) \
         * (args.root_depth_m * 1000.0)
 
+    wp_d, fc_d, sat_d = (env_d[k].values for k in ("theta_wp", "theta_fc", "theta_sat"))
     liquid_in = apply_snow_if_available(driver, driver["precip_mm"].values)
-    w = thornthwaite_mather_wetness(liquid_in, driver["pet_mm"].values, awc_mm)
-    inp = SoilMoistureInputs(
-        field_capacity=env_d["theta_fc"].values,
-        wilting_point=env_d["theta_wp"].values,
-        porosity=env_d["theta_sat"].values,
-        dynamic_driver=w,
-    )
-    theta, theta_std = estimate_soil_moisture(inp)
+    theta = total_water_bucket(liquid_in, driver["pet_mm"].values, wp_d, fc_d, sat_d, args.root_depth_m)
+    w = np.clip((theta - wp_d[None]) / np.clip(sat_d - wp_d, 1e-6, None)[None], 0.0, 1.0).astype("float32")
+    theta_std = np.broadcast_to(
+        np.sqrt(_PTF_SIGMA ** 2 + (_W_SIGMA * awc_mm / (args.root_depth_m * 1000.0)) ** 2),
+        theta.shape).astype("float32")
 
     ds = xr.Dataset(
         {
@@ -436,7 +473,7 @@ def main() -> None:
     ds["theta"].attrs.update(units="m3/m3", long_name="Volumetric soil moisture (0–1 m root zone)")
     ds.attrs.update(
         static_source="SOLUS100 → Saxton & Rawls (2006) pedotransfer envelope",
-        dynamic_source="TerraClimate monthly P & PET → Thornthwaite–Mather bucket",
+        dynamic_source="TerraClimate monthly P & PET → total-water bucket (θ_wp→θ_sat)",
         root_depth_m=args.root_depth_m, om_pct=args.om_pct,
     )
     theta_path = out_dir / f"soil_moisture_monthly_{args.tag}.zarr"

@@ -38,7 +38,7 @@ from src.models.soil_moisture import (
     DEFAULT_ROOT_DEPTH_M,
     saxton_rawls_envelope,
     snowmelt_liquid_input,
-    thornthwaite_mather_wetness,
+    total_water_bucket,
 )
 
 mpl.use("Agg")
@@ -76,11 +76,11 @@ def _load():
 
 def _theta(s, params, tct, days):
     env = saxton_rawls_envelope(np.array([s["sand"]]), np.array([s["clay"]]))
-    wp, fc = float(env["theta_wp"][0]), float(env["theta_fc"][0])
-    awc = np.array([[max(fc - wp, 0.02) * DEFAULT_ROOT_DEPTH_M * 1000.0]])
+    wp = np.array([[float(env["theta_wp"][0])]]); fc = np.array([[float(env["theta_fc"][0])]])
+    sat = np.array([[float(env["theta_sat"][0])]])
     liq, _ = snowmelt_liquid_input(s["P"][:, None, None], s["T"][:, None, None], days, **params)
-    w = thornthwaite_mather_wetness(liq[:, 0, :], s["PET"][:, None], awc)[:, 0]
-    return pd.DataFrame({"date": tct, "theta_mod": wp + w * (fc - wp)})
+    th = total_water_bucket(liq, s["PET"][:, None, None], wp, fc, sat, DEFAULT_ROOT_DEPTH_M)[:, 0, 0]
+    return pd.DataFrame({"date": tct, "theta_mod": th})
 
 
 def _per_site_r(st, params, tct, days, names=None):

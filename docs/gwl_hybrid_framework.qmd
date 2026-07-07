@@ -1,7 +1,7 @@
 ---
 title: |
-  Observation-Anchored Groundwater Level Modeling for the Pacific Northwest:
-  A Hybrid Data-Driven Framework
+  GAIA Soil Reanalysis: Observation-Anchored Groundwater Level, Soil Moisture,
+  and Near-Surface Stiffness for the Pacific Northwest
 subtitle: "GAIA HazLab Technical Report"
 author:
   - name: Marine Denolle
@@ -74,6 +74,7 @@ execute:
   echo: false
   warning: false
   message: false
+jupyter: gwl-pixi
 ---
 
 ```{python}
@@ -1404,12 +1405,14 @@ envelope and a dynamic driver:
 |---|---|---|---|
 | Groundwater level | HAND + SOLUS100 → RF baseline (90 m) | kriged monthly well anomalies | mature (this report) |
 | Soil moisture | SOLUS100 → Saxton–Rawls envelope (90 m) | TerraClimate $P$ & PET → Thornthwaite–Mather bucket | implemented |
-| Soil mechanics | Vs30 [@sanger2025parametric] + SOLUS | ambient-noise dv/v | in development |
+| Soil mechanics | Vs30 [@sanger2025parametric] + SOLUS | ambient-noise dv/v | implemented (module) |
 
 The differentiator relative to hydrology-only products is the third row: seismic velocity
 change (dv/v) as a dynamic, *observational* constraint on effective stress and saturation,
-jointly informing the water table and the vadose zone. That module is not yet implemented;
-the soil-moisture module below is.
+jointly informing the water table and the vadose zone. Both the soil-moisture module and the
+dv/v module are now implemented; each is described below, with the dv/v module resolving the
+depth ambiguity by separating shallow (vadose, soil moisture) from deep (saturated, water
+table) contributions.
 
 ### Soil-moisture static envelope
 
@@ -1445,15 +1448,15 @@ $\theta_t = \theta_{wp} + w_t\,(\theta_{fc}-\theta_{wp})$, capped at $\theta_{sa
 Two roles of TerraClimate must be kept distinct. Its **precipitation and reference ET are
 forcing inputs** to our water balance. Its own **soil-water-storage product is used only as a
 cross-check** — it never enters the estimator. Because TerraClimate derives that soil field
-from a Thornthwaite–Mather balance driven by the *same* $P$ and PET, the $r = 0.98$ agreement
-between our $\theta$ and TerraClimate soil (domain mean; per-cell median $0.98$) is a
-**consistency check that the envelope and bucket are implemented sensibly — not an
-independent validation of accuracy**, since the two models share both forcing and model
+from a Thornthwaite–Mather balance driven by the *same* $P$ and PET, the $r = 0.94$ agreement
+between our $\theta$ and TerraClimate soil (domain mean; per-cell median $0.93$, for the shipped
+total-water bucket) is a **consistency check that the envelope and bucket are implemented sensibly —
+not an independent validation of accuracy**, since the two models share both forcing and model
 family. A genuinely *independent* check requires observations outside the forcing chain. A
 first such check is now in hand: running the model at five NRCS **SNOTEL** stations (in-situ
 capacitance soil-moisture sensors in the adjacent Cascades, independent of SOLUS and
 TerraClimate) gives a **pooled $r \approx 0.33$** against the measured $\theta$ — far below the
-$r = 0.98$ shared-forcing consistency, which is exactly the point. The check also localised the
+$r = 0.94$ shared-forcing consistency, which is exactly the point. The check also localised the
 missing physics: because these are snowmelt-driven uplands and the bucket had no explicit
 snowpack, we added a **temperature-index snow module** (winter precipitation accumulates as SWE
 and is released by degree-day spring melt), then **calibrated** its parameters against SNOTEL by
@@ -1638,6 +1641,338 @@ sophistication removes without additional wells, and it is surfaced explicitly t
 downstream liquefaction and LandLab models rather than hidden.
 
 ---
+
+## Results: Real-Data Modeling and Validation {#sec-results}
+
+The framework is exercised on real data over the Puget Sound pilot: monthly, 90 m, 2000–2025,
+with the coupled soil-moisture state. The figures below are the actual products and their
+validation, not the synthetic demonstration used above.
+
+### Groundwater level
+
+The observation-anchored baseline recovers depth-to-water with HAND as the dominant predictor
+(≈43% of the random-forest importance, no latitude or longitude), and its uncertainty is mapped
+per cell. Spatially blocked cross-validation gives a deliberately hard pooled RMSE of ≈18.5 m,
+the honest metric over a heterogeneous domain rather than an at-well interpolation error. A
+24-year monthly hydrograph at the best-recorded pilot well shows the seasonal cycle and the
+2021 drought draw-down.
+
+![Groundwater level over the Puget Sound pilot: baseline depth-to-water and 1σ uncertainty,
+random-forest feature importance, spatial block cross-validation, and a 24-year well hydrograph.](assets/gwl_state.png){#fig-gwl-results}
+
+The monthly product is time-varying; the animation steps through depth-to-water month by month
+over a densely-instrumented window.
+
+![Depth-to-water evolving month by month at 90 m (2010–2013).](assets/gwl_90m.gif){#fig-gwl-anim}
+
+### Soil moisture
+
+The static SOLUS→Saxton-Rawls envelope sets the physical bounds at 90 m (wilting point, field
+capacity, porosity, available water); a **total-water bucket** forced by TerraClimate fills it
+through time. Unlike a plant-available Thornthwaite-Mather store, which caps θ at field capacity
+and biases the product dry, the total-water store spans wilting point to porosity: wet months
+saturate above field capacity and drain gravitationally, so θ ranges from ≈0.05 to ≈0.46 m³ m⁻³
+with the correct Pacific Northwest signal (wet winters ≈0.30, late-summer drought ≈0.09). The
+coarse dynamic field is downscaled to 90 m by a **topographic-wetness-index** operator rather than
+plain bilinear resampling, which redistributes moisture along the terrain and resolves the drainage
+network instead of leaving 4 km blocks; it is one entry in a modular downscaler registry that also
+admits statistical and machine-learning methods. The modelled θ reproduces the peer TerraClimate
+soil-water field at r = 0.94 (a consistency check, shared forcing).
+
+![Soil-moisture state: the SOLUS→Saxton-Rawls envelope at 90 m, wet vs dry θ maps, and the
+2000–2024 θ series against the TerraClimate soil field.](assets/soil_moisture_state.png){#fig-sm-results}
+
+![Soil moisture θ evolving month by month at 90 m (2010–2013).](assets/theta_90m.gif){#fig-sm-anim}
+
+Independent validation uses data outside the model's forcing chain. NRCS SNOTEL in-situ sensors
+in the adjacent Cascades give a first independent check: with the temperature-index snow module
+at nominal degree-day parameters, the snowiest sites reach r ≈ 0.7–0.8 on the seasonal phase.
+Leave-one-station-out shows that tuning the snow constants on only five stations overfits (held-out
+r 0.49 default vs 0.44 tuned), so the nominal parameters are adopted.
+
+![Independent validation against SNOTEL in-situ θ (upland stations), with the snow module.](assets/snotel_validation.png){#fig-snotel}
+
+Over the recent period of interest, including 2025, the model is compared against MERRA-2
+reanalysis at its native 0.5° scale (upscale-then-compare). Its root-zone field is depth-matched
+to the bucket: with the total-water store the model tracks it at domain-mean r = 0.85 (bias
+−0.08 m³ m⁻³, RMSE 0.095), up from r = 0.81 under the plant-available store, with the seasonal
+and 2024/2025 interannual swings lining up.
+
+![Depth-matched validation against MERRA-2 root-zone reanalysis at native 0.5°, 2024–2025 incl. 2025.](assets/merra2_validation.png){#fig-merra2}
+
+Finally, θ is observation-anchored to SNOTEL over the Puget+Cascade domain, the soil-moisture
+analogue of the groundwater well anchoring. A leave-one-station-out test confirms the anchor
+removes the systematic bias out-of-sample.
+
+![Observation-anchored soil moisture: model vs SNOTEL-anchored θ over the Cascades, with
+leave-one-station-out skill.](assets/snotel_anchor.png){#fig-anchor}
+
+### dv/v module: depth-separated soil moisture and relative water table
+
+The third state variable is measured, not modelled. Ambient-noise seismic velocity change
+$\delta v/v$ is a depth-averaged, frequency-dependent probe of the subsurface mechanical state
+[@denolle2026unified], with peak sensitivity depth $L \approx V_S/(3f)$: high frequencies sense
+the shallow vadose zone, low frequencies the deeper saturated zone. The module turns this into
+two hydrological states along one modular chain. Continuous waveforms for the UW (Pacific
+Northwest Seismic Network) and CC (Cascades Volcano Observatory) networks are pulled through
+`seisfetch` — 74 stations fall in the Puget/Cascade pilot bbox (52 UW, 22 CC). Daily
+cross-correlations are stacked and a relative velocity change is measured per frequency band by
+coda-wave stretching. The **companion methods package `codameter`** then marginalises a
+*processing ensemble* — the defensible choices of coda window, reference epoch, and estimator —
+into an honest time-dependent data covariance $C_d$ that carries the methodological spread a
+single processing choice hides, not just the Weaver coherence floor. Feeding the banded
+$\delta v/v$ and $C_d$ to `codameter`'s Rayleigh depth kernels inverts a depth profile of
+$\delta V_S/V_S(z)$ with propagated uncertainty, which is split at the water-table depth:
+the shallow part is **soil moisture** (vadose capillary stiffness), the deep part is a
+**relative water-table change** (saturated poroelastic head). Consistent with the literature,
+$\delta v/v$ constrains a *relative* groundwater change, not an absolute level.
+
+![dv/v module: UW + CC station inventory (`seisfetch`), the frequency→depth Rayleigh kernels
+(peak depth $\approx V_S/3f$) with the water-table split, banded $\delta v/v(t)$ recovered by
+coda stretching with the processing-ensemble uncertainty band, and the depth-separated profile
+partitioned into soil moisture (shallow) and relative water table (deep). The station inventory
+is live; the $\delta v/v$ panels run the pipeline on a controlled synthetic with a known imposed
+velocity change (the same calls run on cached real correlations), validating recovery and
+uncertainty propagation before the multi-year compute.](assets/dvv_module.png){#fig-dvv}
+
+### Coupled state and uncertainty budget
+
+Both state variables come from one pipeline over the same grid, and every product's uncertainty
+is decomposed into static, dynamic, and downscaling components rather than folded into a single
+number.
+
+![Coupled subsurface state: groundwater depth-to-water and mean soil moisture with the shared
+seasonal cycle.](assets/coupled_overview.png){#fig-coupled}
+
+![Uncertainty budget: per-product 1σ maps and the static / dynamic / downscaling variance
+split.](assets/uncertainty_budget.png){#fig-budget}
+
+## Digital-Twin MVP Demonstration {#sec-twin}
+
+The pieces above compose into a **digital twin**: an uncertainty-aware, 90 m, co-located estimate of
+the near-surface state that evolves in time as data are assimilated. @fig-twin animates one
+hydrologic year at 5-day cadence. The top row is the state — groundwater depth-to-water, soil
+moisture, and Vs30 (the near-surface stiffness the geotechnical twins consume); the bottom row is
+the matching per-cell 1σ. The groundwater and soil-moisture static structure is real 90 m data; the
+**Vs30 shown here is a synthetic HAND-ramp placeholder** (see the classification table), not a
+measured or published Vs30. The time evolution and its high-frequency content come from a **synthetic**
+dv/v assimilated onto those fields, so the animation shows the assimilation *machinery* at work — the
+state updates and σ shrinks where and when
+sensors constrain it. This is an **MVP built without big-data compute**: the dv/v is a physically
+realistic synthetic (low frequencies track slow groundwater; high frequencies track fast ET and
+rainfall), and the same operators run on measured dv/v once the multi-year waveform run lands.
+
+![Digital-twin MVP over one hydrologic year at 5-day cadence. Top: groundwater and soil moisture
+are shown as **anomalies** ($\Delta$ from the per-frame geospatial mean, printed as a text insert)
+so the assimilated time signal is visible rather than swamped by the static range; Vs30 is absolute
+(turbo, the jet-like ramp geotechnical models expect). Bottom: per-cell 1$\sigma$. Markers: wells
+(GWL), SNOTEL (soil moisture), seismic UW/CC (Vs30); remote-sensing inputs listed below the
+panels.](assets/digital_twin.gif){#fig-twin}
+
+### Data provenance
+
+Every input, its access path, and its role. Point (in-situ) sources are assimilated; static and
+forcing sources build the model prior; the dv/v is a physically realistic synthetic for this
+compute-free MVP (the wells, SNOTEL, and seismic geometry are real).
+
+| Dataset | Source & access | Native res | Role in the twin |
+|---|---|---|---|
+| USGS NWIS wells (863) | USGS Water Data OGC API (`dataretrieval`), param 72019 | point | GWL assimilation + Stage-1/3 anchor |
+| NRCS SNOTEL (SMS) | NRCS AWDB REST API, element SMS | point | soil-moisture assimilation (mountain) |
+| NOAA USCRN | NOAA NCEI public flat files (`fetch_uscrn`) | point | soil-moisture assimilation (valley/lowland) |
+| ISMN networks | ISMN registered export (`read_ismn`) | point | soil-moisture assimilation (aggregates SCAN, mesonets, ...) |
+| Seismic UW + CC (74) | EarthScope/IRIS FDSN via `seisfetch` | point | dv/v -> ΔWTD, Δθ, ΔVs30 (assimilated) |
+| SOLUS100 (clay, sand) | USDA-NRCS SOLUS100, GAIA STAC / public COGs | 100 m | soil-hydraulic envelope; GWL predictor |
+| USGS 3DEP DEM | 3DEP (`py3dep`) -> HAND/TWI/slope | 10 m -> 90 m | terrain prior; Vs30 HAND proxy |
+| Vs30 (synthetic HAND ramp in the MVP) | GAIA vs-STAC (`fetch_gaia`) not reached; **HAND fallback used** | 90 m | Vs30 static base (placeholder — see classification table) |
+| TerraClimate; PRISM | Climatology Lab THREDDS; PRISM web service | ~4 km | dynamic forcing (P, PET) |
+
+### Evaluation datasets
+
+Independent references used to score the twin (kept separate from the assimilated inputs):
+
+| Dataset | Source & access | Native res | Evaluates |
+|---|---|---|---|
+| MERRA-2 root-zone SM | NASA GES DISC (`earthaccess`), incl. 2025 | 0.5° | soil moisture (upscale-then-compare) |
+| SMAP L4 root-zone / L3 | NASA (`earthaccess`) | 9 km | soil moisture (gridded, native-scale) |
+| NLDAS-2 soil moisture | NASA GES DISC (`earthaccess`) | ~12 km | soil moisture (gridded cross-check) |
+| SNOTEL / USCRN θ (held out) | NRCS AWDB; NOAA NCEI | point | soil-moisture phase (LOSO) |
+| NWIS wells (held out) | USGS | point | GWL baseline (spatial block-CV) |
+
+The in-situ soil-moisture networks are unified under one schema by `soil_moisture_stations.load_sm_stations`
+(SNOTEL + USCRN, plus any registered ISMN export), so additional networks assimilate without changing
+the pipeline; the gridded SMAP L4 / NLDAS layers are assimilated at native scale by
+upscale-then-compare rather than as points.
+
+### Data classification, the assimilation principle, and the water budget {#sec-classification}
+
+Every quantity in this reanalysis falls into one of four classes, and the reader (and every figure)
+should be able to tell which is which.
+
+- **Observation (real).** In-situ ground sensors and satellite retrievals. These are the only inputs
+  that are *assimilated* (see the principle below).
+- **Reanalysis / model cross-check.** Model products (TerraClimate, PRISM, MERRA-2, NLDAS) used as
+  forcing or as a consistency check. Correlation against these is inter-model agreement, not
+  independent validation.
+- **Statistical / physical model.** Fields learned or computed from covariates (the HAND-based RF
+  groundwater baseline, the Saxton-Rawls hydraulic envelope, the total-water bucket, the downscalers,
+  the feature-importance attribution). Not observations.
+- **Synthetic (placeholder).** Hand-constructed stand-ins used to exercise machinery before the real
+  data are wired: the band-dependent dv/v, the HAND-ramp Vs30, and therefore the entire digital-twin
+  time evolution and its attribution / posterior-sigma-reduction numbers. Synthetic results
+  demonstrate the pipeline, not skill.
+
+**The assimilation principle.** Only two kinds of quantity are ever *assimilated* into the state:
+(1) **ground-based in-situ sensors** (NWIS wells; SNOTEL / USCRN / ISMN soil moisture; seismic dv/v
+stations) and (2) **satellite / remote observations** at their native scale (SMAP, and later NISAR,
+SWOT, GRACE). Everything else -- terrain covariates, soil texture, climate-reanalysis forcing, and the
+RF / kriging / bucket models built from them -- is **statistical learning or physical modeling**, and
+is the model *prior* that observations correct, never an assimilated observation itself.
+
+Table: current class of each product component, whether it is assimilation-eligible, and -- for the
+synthetic placeholders -- the real data that will replace it.
+
+| Component | Class | Assimilated? | Real source to plug in |
+|---|---|---|---|
+| Groundwater baseline (DTW) | statistical (RF on HAND + covariates) | anchored to real wells | NWIS (have) |
+| Groundwater dynamics | observation (kriged NWIS well anomalies) | yes (ground) | NWIS (have) |
+| Soil-moisture envelope | physical (Saxton-Rawls on SOLUS texture) | no (prior) | SOLUS100 (have) |
+| Soil-moisture dynamics | reanalysis-forced bucket (TerraClimate / PRISM) | no (prior) | forcing is model; see water budget |
+| Vs30 | **synthetic** (HAND ramp) | no | Sanger-Maurer parametric (GAIA vs-STAC); Wald-Allen slope proxy; measured Vs30 (MASW / borehole / Vs30 databases) |
+| dv/v | **synthetic** (band generator) | no (yet) | real UW/CC ambient noise via `seisfetch` + `codameter` (pipeline exists) |
+| Twin evolution / attribution / sigma-reduction | **synthetic-derived** | no | follows once dv/v is real |
+| Soil-moisture validation | MERRA-2 (model cross-check); SNOTEL (real); SMAP (real, staged) | n/a | SMAP L3/L4, NLDAS, lowland USCRN / ISMN |
+
+**The water budget (required, not yet closed).** The current bucket removes above-field-capacity water
+as drainage that simply *leaves the system*; groundwater and soil moisture are therefore co-located,
+not hydrologically coupled. A correct coupled reanalysis must route that water through two fluxes:
+
+1. **Vertical infiltration / recharge.** Deep percolation below the root zone must recharge the water
+   table (an explicit theta -> GWL flux), with capillary rise back into the vadose zone where the
+   table is shallow. This is what makes "coupled" physical rather than nominal.
+2. **Downhill runoff.** Surface runoff (infiltration- and saturation-excess overland flow) and
+   subsurface lateral flow (interflow / flow along the water table) must redistribute water
+   down-gradient, so the column is not a closed 1-D bucket.
+
+Until both fluxes are represented, the product is an *antecedent-state estimate*, not a closed water
+balance, and cannot by itself drive a runoff or flood model. Closing the water budget is tracked as a
+priority modeling task (see the project issues).
+
+### Attribution: what sets each state
+
+Attribution is answered at two levels, because they say different things (@fig-attr).
+
+**Field level — statistical learning across all features.** A random forest predicts each state from
+every feature — the static covariates (HAND, TWI, slope, clay, sand) and the dv/v observation — and
+its permutation importance is the field-wide accounting: **Vs30 is ~100% terrain (HAND)**, groundwater
+is ~61% HAND and ~26% clay, and soil moisture is ~89% sand. **Caveat (partly tautological in this
+MVP).** Because the synthetic Vs30 is *defined* as a function of HAND and the bucket θ is *defined*
+from Saxton-Rawls texture (sand/clay), the random forest recovers those generative covariates by
+construction — the ~100% HAND and ~89% sand are self-recovery, not a discovery about real soil. The
+attribution becomes a genuine finding only once Vs30 and θ are real fields whose covariate relations
+are learned, not imposed. The dv/v is a small field-level contributor here also **by construction**:
+in this MVP it only perturbs the state near the seismic stations, so it cannot explain the
+covariate-driven structure that fills the domain. This is
+exactly why a point-assimilation "sensor share" is the wrong lens for the field, and why the MVP uses
+feature learning across all covariates — as real covariate/dv/v relations are learned, the same model
+generalizes the dv/v signal beyond station neighborhoods and its importance grows.
+
+**Update level — which sensor sets the near-station correction.** The precision-weighted assimilation
+gives the exact share of each observation in the *update* it applies on top of the covariate field:
+$w_i = \exp(-d^2/2L^2)/\sigma_i^2$ per station, against the model-prior precision
+$p_0 = 1/\sigma_{\text{prior}}^2$. Near the stations that correction is ~94% wells for groundwater,
+~95% seismic dv/v for soil moisture (more stations than the sparse SNOTEL set), and ~99% seismic for
+Vs30 — a real per-pixel number, but describing the *near-station refinement*, not the field.
+
+![Attribution. Top: random-forest feature importance for each state's field (static covariates +
+dv/v) — covariates dominate; dv/v is a minor field-level term in this MVP. Bottom: the
+precision-weighted sensor share of the near-station assimilation update.](assets/digital_twin_attribution.png){#fig-attr}
+
+### Assumptions and physical models
+
+- **Frequency -> depth**: dv/v is a depth-averaged, frequency-dependent measurement with peak
+  sensitivity depth $L \approx V_S/(3f)$ [@denolle2026unified]; multi-band dv/v inverts to a depth
+  profile split at the water table.
+- **Groundwater (saturated)**: poroelastic head sensitivity, $\delta v/v = k_{sat}\,\Delta\mathrm{WTD}$;
+  the recovered water table is a *relative* change, not an absolute level.
+- **Soil moisture (vadose)**: dynamic-capillary stiffening (Hertz-Mindlin + suction) on the
+  SOLUS -> Saxton-Rawls envelope; wetting softens the frame, drying stiffens it.
+- **Vs30**: $V_{S30}(t) = V_{S30}^{\text{base}}\,(1 + \langle\delta V_S/V_S\rangle_{0-30\,\text{m}})$;
+  the top 30 m is partly extrapolated through the baseline profile because the shallowest band
+  resolves ~45 m.
+- **Assimilation**: precision-weighted spatial fusion; each observation carries its own σ (from
+  codameter's processing-ensemble data covariance), the estimate reverts to the model off-station,
+  and posterior σ shrinks below the prior near informative sensors.
+- **Downscaling**: coarse dynamic signals reach 90 m through a modular registry (bilinear / TWI /
+  regression / ML); the regression and ML operators are mean-preserving.
+
+### Evaluation framework
+
+The twin is scored per component against independent references, and the residual uncertainty is
+carried, not hidden.
+
+| Component | Metric | Value | Reference | Basis |
+|---|---|---|---|---|
+| Groundwater baseline | block-CV RMSE | ≈ 18.5 m (pooled; per-domain valley-fill TBD) | held-out wells | **REAL** |
+| Soil moisture | domain-mean $r$; bias; RMSE | 0.85; −0.08; 0.095 | MERRA-2 root zone (incl. 2025) | **MODEL cross-check** |
+| Soil moisture (snow phase) | LOSO $r$ | 0.49 (tuning overfits to 0.44) | SNOTEL | **REAL** (n=5, upland) |
+| dv/v measurement | band recovery $r$ | > 0.95 | controlled synthetic | **SYNTHETIC** (circular: inverse undoes forward) |
+| Assimilation | posterior σ reduction | WTD ~53%, θ ~91% | near-station vs prior | **SYNTHETIC** (geometry only; zero measurement error injected) |
+
+The **Basis** column is essential: only the groundwater block-CV RMSE and the SNOTEL LOSO are real
+independent skill. MERRA-2 is a model cross-check (shared forcing family). The dv/v recovery and the
+assimilation σ-reduction are synthetic-derived — the recovery is circular (the inverse undoing the
+forward operator on an imposed signal), and the σ-reduction reflects station geometry with **zero
+dv/v measurement error injected**, not demonstrated dv/v precision. These are pipeline demonstrations,
+not skill claims, until the real dv/v run lands.
+
+**Deviations shown, not smoothed**: each animated σ panel is the honest per-cell 1σ (static budget
+combined in quadrature with the per-frame assimilation posterior), so the viewer sees exactly where
+the twin is trustworthy (dense wells / SNOTEL / seismic) and where it reverts to the prior.
+
+**What remains to fix**: (1) run the multi-year real-waveform dv/v over UW/CC to replace the
+synthetic; (2) borehole-calibrate the poroelastic $k_{sat}$ to convert relative WTD to head in
+metres; (3) assimilate SNOTEL SWE for the winter snowpack term (soil-moisture stations only today);
+(4) carry the per-month kriging σ rather than its time mean; (5) fetch the GAIA Vs30 product in
+place of the HAND proxy; (6) densify the Cascade networks so the anchor corrects station-specific
+representativeness, not only the systematic bias.
+
+### Toward forecast forcing: Earth2Studio {#sec-earth2studio}
+
+The MVP is a *hindcast* antecedent-state twin. It is **not a flood forecast**: reaching a flood
+requires an external runoff-generation and routing model (WRF-Hydro / NWM, a saturation-excess step
+keyed on the product's DTW and θ, or ParFlow surface-water coupling) fed by this product's antecedent
+state. What the twin *can* become is a forecast of the antecedent subsurface state, by swapping the
+forcing: AI weather models (GraphCast, AIFS, StormCast, served through **Earth2Studio**) provide the
+meteorological fields (precipitation; and temperature / humidity / radiation / wind, from which
+reference ET is derived — Penman-Monteith; the current pipeline implements temperature-only Hamon
+PET). Several transforms are required and are not yet built: (a) **temporal** — the bucket is monthly
+and must be re-derived at daily / hourly resolution (its drainage and degree-day-snow closures do not
+transfer); (b) **spatial** — a precipitation downscaler with orographic physics for the ~25 km → 90 m
+step (bilinear resampling loses the Cascade AR enhancement); (c) **bias correction** of the AI-model
+QPF; and (d) **index construction** — the β-map ingests SPI-3, ΔSWE, and PDO, not raw precip.
+The "cheap scenario is a matrix multiply" property holds **only for the linear Stage-2 GWL β-map**; the
+soil-moisture bucket is nonlinear, so its ensemble cost is N bucket integrations. Note also that the
+AR coefficient β₄ is currently zero, so atmospheric rivers contribute nothing to GWL in the β-map path
+until the TFN recharge kernel (Rung 2) is populated. This is deliberately staged after the MVP.
+
+## Roadmap {#sec-roadmap}
+
+The pilot demonstrates the coupled machinery; the path to an operational product is staged.
+The **independent-satellite check** against SMAP (≈9 km surface soil moisture) is implemented
+and awaits a full multi-year run; it is the truly independent validation the reanalysis
+cross-check cannot supply. A **denser Cascade soil-moisture network** is what lets the anchor
+correct station-specific representativeness rather than only the systematic bias. The
+**snow module** should be calibrated against SNOTEL snow-water-equivalent directly, not only
+through soil-moisture correlation. On the dynamics side, the **dv/v module** is now implemented
+end to end (correlation → uncertainty-aware measurement → depth-separated soil moisture and
+relative water table); what remains is the multi-year real-data run over the UW/CC networks and
+borehole-calibrated poroelastic parameters to convert the relative water-table change to head in
+metres, at which point it becomes a third, independent estimate of both state variables.
+Groundwater level
+gains a **forcing and method ensemble** to match the soil-moisture forcing-uncertainty term.
+Together these carry the pilot from a demonstration to a calibrated, observation-anchored,
+uncertainty-aware coupled reanalysis.
 
 ## Discussion and Open Questions {#sec-discussion}
 

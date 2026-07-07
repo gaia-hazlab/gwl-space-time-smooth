@@ -142,19 +142,18 @@ it should.](../figures/demo/snotel_validation.png)
                   f"SMAP is next ([#29]({ISSUE}/29)).")
     if snowcal:
         snotel_section += f"""
-The snow parameters were then **calibrated** against SNOTEL (grid search + leave-one-station-out,
-so the numbers are out-of-sample): the degree-day factor and rain/snow thresholds lift the mean
-per-station skill and — crucially — **generalise** (held-out LOSO r
-{snowcal['loso_mean_r_default']:.2f}&nbsp;→&nbsp;{snowcal['loso_mean_r_calibrated']:.2f}). The
-dominant residual is not phase but a per-site *representativeness bias* (our 0–1 m bucket saturates
-near field capacity; the shallow sensors read higher): a per-station bias correction — an
-operational anchor that **consumes SNOTEL as training**, leaving SMAP ([#29]({ISSUE}/29)) the
-independent test — collapses RMSE {snowcal['rmse_raw']:.3f}&nbsp;→&nbsp;{snowcal['rmse_bias_corrected']:.3f}
+Snow-parameter tuning was attempted against SNOTEL (grid search + leave-one-station-out). With only
+{snotel['n_stations']} stations it **overfits** — the held-out LOSO skill does not beat the nominal
+parameters ({snowcal['loso_mean_r_default']:.2f} default vs {snowcal['loso_mean_r_calibrated']:.2f}
+tuned) — so nominal snow parameters are used and a denser network or direct SNOTEL snow-water-equivalent
+calibration is left to the roadmap. The residual gap is a per-site *representativeness bias*: a
+per-station linear correction — an operational anchor that **consumes SNOTEL as training**, leaving the
+satellite test independent — collapses RMSE {snowcal['rmse_raw']:.3f}&nbsp;→&nbsp;{snowcal['rmse_bias_corrected']:.3f}
 m³/m³ while preserving the correlation.
 
-![Snow-parameter calibration (per-station r, default vs calibrated; LOSO generalisation) and the
-per-site bias correction anchoring the level to the in-situ measurements — the offset is a fixable
-representativeness bias, not dynamics error.](../figures/demo/snow_calibration.png)
+![Snow-parameter grid search (per-station r) and the per-site bias correction anchoring the level to
+the in-situ measurements. Tuning overfits with 5 stations; the offset is a fixable representativeness
+bias, not a dynamics error.](../figures/demo/snow_calibration.png)
 """
 else:
     snotel_section = ""
@@ -173,18 +172,17 @@ residual is distance-weighted onto the grid and added, pulling θ toward the in-
 reverting to the model (with inflated σ) away from stations. This is the soil-moisture analogue of
 the GWL Stage-3 well anchoring.
 
-A **leave-one-station-out** test shows the anchor generalises: the held-out systematic bias falls
-from {anchor['loso_bias_raw']:+.3f} to {anchor['loso_bias_anchored']:+.3f} m³/m³ ({_reduction}).
-RMSE is essentially
-flat ({anchor['loso_rmse_raw']:.3f}→{anchor['loso_rmse_anchored']:.3f}) — with only
-{anchor['n_stations']} sparse upland stations, one alpine outlier's bias can't be resolved
-spatially, so the anchor fixes the *systematic* offset but not station-specific representativeness.
-The machinery (a reusable residual-anchor operator, `src/models/anchor.py`) is in place; denser
-coverage or a Cascade station network is what unlocks the rest.
+With the total-water bucket the model is already close to the in-situ level (held-out bias
+{anchor['loso_bias_raw']:+.3f} m³/m³), so the anchor mainly provides a fine correction: a
+**leave-one-station-out** test brings the held-out bias to {anchor['loso_bias_anchored']:+.3f} m³/m³,
+with RMSE roughly flat ({anchor['loso_rmse_raw']:.3f}→{anchor['loso_rmse_anchored']:.3f}). With only
+{anchor['n_stations']} sparse upland stations the anchor can slightly over-shoot and cannot resolve
+station-specific representativeness. The value here is the **reusable operator**
+(`src/models/anchor.py`) — the soil-moisture analogue of the GWL well anchoring — ready for a denser
+Cascade network.
 
 ![Model θ vs SNOTEL-anchored θ over the Puget+Cascade domain (orange = SNOTEL soil-moisture
-stations); the anchor wets the station neighbourhoods. Right: leave-one-station-out skill — the
-systematic bias is corrected out-of-sample.](../figures/demo/snotel_anchor.png)
+stations). Right: leave-one-station-out skill.](../figures/demo/snotel_anchor.png)
 """
 
 if merra:
@@ -286,7 +284,7 @@ CSS = """
 """
 
 BODY = f"""---
-title: "Coupled Subsurface State — Groundwater Level + Soil Moisture"
+title: "GAIA Soil Reanalysis — Coupled Groundwater, Soil Moisture &amp; Vs30"
 subtitle: "A data-driven demo over the Puget Sound pilot (90 m)"
 date: today
 author: "GAIA HazLab · gaia-soil-hydromechanics"
@@ -467,14 +465,15 @@ estimate also makes the TerraClimate cross-check more genuinely independent.
 PRISM): domain-mean θ agreement, the per-cell forcing-σ, and the four-component θ uncertainty
 budget with forcing now explicit.](../figures/demo/forcing_ensemble.png)
 
-**Downscaling is modular — and currently the simplest thing.** The coarse→90 m step is a
-registry, not a hard-coded call. The default is **bilinear resampling**: a baseline that adds
-*no* new fine-scale information (the representativeness σ measures exactly that). Smarter,
-**data-informed or model-driven** downscalers — covariate regression on the fine static field,
-ML super-resolution trained on high-resolution observations, physics-based redistribution
-(TWI/TOPMODEL for θ, poroelastic head propagation for GWL) — can be registered and selected
-without touching any call site. This is stated plainly so the current resampling is not mistaken
-for a fine-scale physical model.
+**Downscaling is modular — and now more than resampling.** The coarse→90 m step is a registry,
+not a hard-coded call. The default **bilinear** baseline adds *no* new fine-scale information (the
+representativeness σ measures exactly that). Four methods are now registered and selectable
+without touching any call site: `bilinear` (baseline), `twi` (physical — redistributes moisture by
+the topographic wetness index), `regression` (statistical — mean-preserving multilinear fit of the
+coarse field on the fine static covariates), and `ml` (RandomForest on the same covariates). The
+regression and ML methods are *exactly mean-preserving*: area-averaging the 90 m output back over a
+coarse footprint recovers the coarse value, so they redistribute sub-footprint structure without
+inventing a coarse-scale bias. ML gains most from denser fine-resolution labels (SMAP/NISAR).
 
 **Calibrate at the sensor's native scale, not ours.** Validation/assimilation against coarse
 products (SMAP, NISAR, NLDAS, GRACE, SWOT) is done by **upscaling** our 90 m field to the
@@ -496,7 +495,78 @@ data.
 = soil moisture) → inverted back to both states (recovery r ≈ 1). Governing relations from the
 soil-hydromechanical memory framework.](../figures/demo/dvv_coupling.png)
 
-## 6 · Methods — data sources, workflow & physical laws {{#methods}}
+**The dv/v module — measured, not modelled.** The coupling above is closed-loop; the module below
+measures dv/v from real seismic data and inverts it for depth. Continuous ambient noise for the UW
+(Pacific Northwest Seismic Network) and CC (Cascades Volcano Observatory) networks is pulled through
+`seisfetch` — 74 stations fall in the pilot bbox (52 UW, 22 CC). Daily cross-correlations are stacked
+and a velocity change is measured per frequency band by coda-wave stretching. The companion package
+**codameter** then marginalises a *processing ensemble* (coda window, reference, estimator) into an
+honest time-dependent data covariance — the methodological spread a single processing choice hides,
+not just the coherence floor — and inverts the banded dv/v for a depth profile of δV_S/V_S with
+propagated uncertainty. Splitting that profile at the water-table depth (peak sensitivity depth
+≈ V_S/3f) yields **soil moisture** (shallow, vadose) and a **relative water table** (deep, saturated);
+dv/v constrains a *relative* groundwater change, per the literature.
+
+![dv/v module: real UW+CC station inventory (seisfetch), frequency→depth Rayleigh kernels with the
+water-table split, banded dv/v(t) recovered by coda stretching with the processing-ensemble
+uncertainty band, and the depth-separated profile partitioned into soil moisture (shallow) and
+relative water table (deep). Station inventory is live; the dv/v panels run on a controlled
+synthetic with a known imposed velocity change, validating recovery before the multi-year
+compute.](../figures/demo/dvv_module.png)
+
+**dv/v as a new assimilated observation.** The depth-separated relative water table and soil
+moisture are folded into the GWL and soil-moisture models exactly as wells and SNOTEL are — a
+precision-weighted, uncertainty-aware update where each station carries its own σ (from codameter's
+data covariance), so the dv/v estimates are fused *alongside* the existing observations, not in
+place of them. The update reverts to the model where there is no station and shrinks the posterior σ
+where dv/v constrains the state.
+
+![dv/v assimilated at the real UW/CC geometry: the depth-separated relative water-table and
+soil-moisture anomalies (left) folded into the state models with their posterior σ (right); σ
+shrinks where stations constrain the field and reverts to the model
+elsewhere.](../figures/demo/dvv_assimilation.png)
+
+## 6 · Digital-twin MVP — the coupled state, animated
+
+Everything above composes into a **digital twin**: a coupled, uncertainty-aware 90 m estimate of the
+near-surface state that evolves as data are assimilated. The animation runs one hydrologic year at
+5-day cadence. Top row: groundwater depth-to-water, soil moisture, and Vs30 (the near-surface
+stiffness the geotechnical models consume). Bottom row: their per-cell 1σ. The static structure is
+real 90 m data; the time evolution and its high-frequency content come from assimilating the
+depth-separated dv/v — so the state updates and σ shrinks where and when sensors constrain it.
+
+![Digital-twin MVP: 90 m GWL, soil moisture, and Vs30 (top) with per-cell uncertainty (bottom),
+assimilating depth-separated dv/v at the real UW/CC geometry over one hydrologic year. Markers:
+wells (GWL), SNOTEL (soil moisture), seismic UW/CC (Vs30); remote-sensing inputs listed below the
+panels.](../figures/demo/digital_twin.gif)
+
+GWL and soil moisture are shown as **anomalies** (Δ from the per-frame geospatial mean, printed as a
+text insert) so the assimilated signal is visible; Vs30 is absolute (turbo, the jet-like ramp
+geotechnical models expect).
+
+Attribution is answered at two levels. **Field level** — a random forest over all features (static
+covariates HAND/TWI/slope/clay/sand + the dv/v observation) shows what actually explains each field:
+**Vs30 is ~100% terrain (HAND)**, groundwater ~61% HAND + ~26% clay, soil moisture ~89% sand. dv/v is
+a small field-level term in this MVP *by construction* — it only perturbs the state near the seismic
+stations. **Update level** — the precision-weighted assimilation share shows which sensor sets the
+near-station correction: ~94% wells (GWL), ~95% seismic dv/v (soil moisture), ~99% seismic (Vs30).
+The first is the honest field-wide accounting; the second describes only the near-station refinement.
+
+![Attribution: RF feature importance per state (top; covariates dominate, dv/v minor at the field
+level) and the sensor share of the near-station update (bottom).](../figures/demo/digital_twin_attribution.png)
+
+This is an **MVP with no big-data compute**: the dv/v is a physically realistic synthetic — low
+frequencies track slow groundwater, high frequencies track fast ET and rainfall — while the wells,
+SNOTEL, and seismic geometry are real. **Data**: NWIS wells, NRCS SNOTEL, UW+CC seismic, SOLUS100,
+3DEP, TerraClimate/PRISM forcing, MERRA-2/SMAP validation. **Assumptions**: dv/v depth sensitivity
+`L≈Vs/3f`; poroelastic head for GWL (relative, not absolute); dynamic-capillary stiffening for soil
+moisture; `Vs30(t)=base·(1+⟨dVs/Vs⟩_0-30m)`; precision-weighted assimilation reverting to the model
+off-station. **Evaluation**: GWL block-CV RMSE ≈18.5 m, soil moisture vs MERRA-2 r=0.85 (bias −0.08,
+RMSE 0.095), dv/v band recovery r>0.95, assimilation σ reduction ~53% (WTD) / ~91% (θ) near stations.
+**Next**: real multi-year waveform dv/v, borehole poroelastic calibration to head in metres, SNOTEL
+SWE assimilation, and Earth2Studio weather-forecast forcing to turn the twin forward in time.
+
+## 7 · Methods — data sources, workflow & physical laws {{#methods}}
 
 ### What each data source actually does
 

@@ -107,7 +107,7 @@ def fig_dvv_coupling(env, tc):
 
     drv_t = pd.DatetimeIndex(tc.time.values)
     idx = [int(np.where((drv_t.year == mon.year) & (drv_t.month == mon.month))[0][0])]
-    _, theta, _ = soil_moisture_90m(env, tc, times=idx)
+    _, theta, _ = soil_moisture_90m(env, tc, times=idx, downscaler="twi")
     theta = theta[0]
     theta_ref = env["theta_wp"].values + 0.5 * (env["theta_fc"].values - env["theta_wp"].values)
 
