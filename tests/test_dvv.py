@@ -65,6 +65,11 @@ def test_dvv_to_state_conversions_and_signs():
     # shallow band: wetting softens (dv/v < 0) -> positive Δθ
     dth, dth_sd = dvv.dvv_to_theta_change(np.array([-0.02]), np.array([0.004]))
     assert dth[0] > 0 and dth_sd[0] > 0
+    # magnitude sanity (#45): the MATERIAL sensitivity (for the inverted profile) is ~-1/unit theta
+    # (~10% dv/v per 0.1 theta locally); the BAND-diluted sensitivity (for a raw band dv/v, no
+    # inversion) is ~1-2 orders smaller and reproduces the observed ~0.1-1% seasonal band dv/v.
+    assert 0.5 <= abs(dvv.S_THETA) <= 2.0                    # material: O(1) per unit theta
+    assert 1e-3 <= abs(dvv.S_THETA_BAND * 0.1) <= 1e-2       # band-diluted: 0.1-1% dv/v per 0.1 theta
 
 
 def test_top_layer_mean_and_vs30_conversion():
@@ -133,6 +138,26 @@ def test_processing_ensemble_covariance_exceeds_weaver_floor():
     assert Cd.shape == (len(t_days), len(t_days)) and np.allclose(Cd, Cd.T)
 
 
+def test_invert_states_from_bands_carries_measurement_error():
+    if not _codameter_available():
+        print("skip: codameter/disba not installed")
+        return
+    from codameter.uq_depth import band_sensitivity_matrix
+    prof = dvv.pnw_velocity_profile(400.0)
+    fc = np.sqrt(np.asarray(dvv.DEFAULT_BANDS)[:, 0] * np.asarray(dvv.DEFAULT_BANDS)[:, 1])
+    K = band_sensitivity_matrix(prof, fc)
+    dvv_bands = np.array([1e-3, -5e-4, -1e-3, -2e-3])          # deep positive, shallow negative
+    cov = np.diag(np.full(4, (3e-4) ** 2))                    # nonzero measurement covariance
+    st = dvv.invert_states_from_bands(dvv_bands, cov, K, water_table_km=0.03, top_km=0.03)
+    # all three states + their sigmas are finite and the sigmas are POSITIVE (error carried through)
+    for k in ("soil_moisture_dvv", "wtd_relative_dvv", "vs30_frac"):
+        assert np.isfinite(st[k]) and np.isfinite(st[k + "_std"]) and st[k + "_std"] > 0
+    # zero measurement covariance -> smaller posterior sigma than a large one (error propagates)
+    tight = dvv.invert_states_from_bands(dvv_bands, np.diag(np.full(4, (1e-5) ** 2)), K, 0.03)
+    loose = dvv.invert_states_from_bands(dvv_bands, np.diag(np.full(4, (2e-3) ** 2)), K, 0.03)
+    assert tight["wtd_relative_dvv_std"] < loose["wtd_relative_dvv_std"]
+
+
 def test_depth_separation_orders_and_splits_at_water_table():
     if not _codameter_available():
         print("skip: codameter/disba not installed")
@@ -157,5 +182,6 @@ if __name__ == "__main__":
     test_register_inter_is_safe()
     test_synthetic_depth_time_low_slow_high_fast()
     test_processing_ensemble_covariance_exceeds_weaver_floor()
+    test_invert_states_from_bands_carries_measurement_error()
     test_depth_separation_orders_and_splits_at_water_table()
     print("all dv/v tests passed")

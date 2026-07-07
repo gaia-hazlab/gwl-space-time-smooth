@@ -68,7 +68,7 @@ terrain = "python -m src.features.compute_terrain --dem data/raw/dem/3dep_10m_50
 gaia-data = "python -m src.data.fetch_gaia --output-dir data/processed"
 climate = "python -m src.data.fetch_climate --output-dir data/processed"
 grid = "python -m src.features.compute_grid --output-dir data/processed"
-baseline = "python -m src.models.baseline_regression --sites data/processed/nwis_sites_clean.parquet --output-dir data/processed"
+baseline = "python -m src.models.baseline_regression --sites data/processed/nwis_sites_clean.parquet --max-well-depth-m 30 --output-dir data/processed"
 climate-response = "python -m src.models.climate_response --monthly data/processed/nwis_gwlevels_monthly.parquet --sites data/processed/nwis_sites_clean.parquet --output-dir data/processed"
 residuals = "python -m src.models.interpolate_residuals --monthly data/processed/nwis_gwlevels_monthly.parquet --output-dir data/processed"
 # === Lithology (intermediate/local, until DataHub lithology-stac is live) ===
@@ -104,10 +104,14 @@ ensemble-dvv = "python notebooks/make_ensemble_dvv_figures.py"
 seismic = "python -m src.data.fetch_seismic --output data/processed/seismic_stations.parquet"
 # dv/v module figure: stations -> freq/depth kernels -> banded dv/v (UQ, codameter) -> SM & WTD.
 dvv-demo = "python notebooks/make_dvv_figures.py"
-# Vs30 near-surface stiffness (GAIA Sanger-Maurer; synth-from-HAND fallback) for the digital twin.
-vs30 = "python -m src.data.fetch_gaia vs30 --bbox -123.3 46.8 -120.8 48.5 --output-dir data/processed"
+# Vs30 near-surface stiffness: Wald-Allen slope proxy (default) / USGS grid / Sanger-Maurer (GAIA).
+vs30 = "python -m src.data.fetch_vs30 --source wald_allen --output data/processed/vs30_90m.tif"
 # Digital-twin MVP: 2x3 animated GIF (GWL, soil moisture, Vs30 + uncertainty) with dv/v assimilation.
 digital-twin = "python notebooks/make_digital_twin.py"
+# Coupled water budget: recharge + capillary rise (#43), saturation-excess runoff + TOPMODEL (#44).
+water-budget = "python notebooks/make_water_budget_figure.py"
+# Well hydrostratigraphic screen diagnostic: shallow water-table vs deep confined-outwash (#46).
+well-screen = "python notebooks/make_well_screening_figure.py"
 # Demo: static figures + GIFs + provenance, assembled into the self-contained Quarto page.
 demo = "python notebooks/demo_gwl_sm.py && python notebooks/make_products_90m.py && python notebooks/make_ensemble_dvv_figures.py && python notebooks/build_demo_qmd.py && quarto render docs/gwl_soil_moisture_demo.qmd --to html"
 # === Legacy (comparison only) ===

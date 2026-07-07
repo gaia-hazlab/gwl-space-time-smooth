@@ -51,8 +51,22 @@ def peak_depth_km(f_hz, vs_ms=1500.0):
 # Nominal, calibration-pending sensitivities (documented; anchor to boreholes/lab).
 from src.models.dvv_coupling import K_SAT           # dv/v per metre of head (5e-4)
 
-# dv/v per unit volumetric θ; NEGATIVE because wetting softens the frame (v drops). Nominal.
-S_THETA = -2.0
+# dv/v per unit volumetric θ. NEGATIVE (wetting softens the frame -> velocity drops). This is the
+# **material** vadose sensitivity S_MATERIAL ≈ -1.0 per unit θ, from the Hertz-Mindlin + van Genuchten
+# capillary-suction model (dvv_coupling._vs_vadose): a 0.1 θ swing changes the local shallow-soil
+# velocity ~10%.
+#
+# It applies to the INVERTED shallow-profile δVs/Vs (the twin's `invert_states_from_bands`), because
+# the depth inversion (issue #51) already deconvolves the band's Rayleigh kernel and recovers the
+# local shallow δVs/Vs. The depth-dilution factor (~0.08) that folded into S_THETA earlier (#45) was
+# for converting the RAW depth-integrated BAND dv/v directly, without inversion; the band measurement
+# stays ~0.1-few % (a ~5% local shallow signal integrates down to ~1-2% at the band), consistent with
+# observed ambient-noise dv/v. Use S_THETA_BAND for a no-inversion raw-band conversion. Refine per
+# site from the local vadose envelope.
+S_MATERIAL_THETA = -1.0
+KERNEL_FRACTION_TOP1M = 0.08
+S_THETA = S_MATERIAL_THETA                            # material sensitivity (for the inverted profile)
+S_THETA_BAND = S_MATERIAL_THETA * KERNEL_FRACTION_TOP1M   # ≈ -0.08 (for a raw, un-inverted band dv/v)
 
 
 def dvv_to_wtd_change(dvv_wtd, dvv_wtd_std, k_sat=K_SAT):
@@ -67,8 +81,14 @@ def dvv_to_wtd_change(dvv_wtd, dvv_wtd_std, k_sat=K_SAT):
 def dvv_to_theta_change(dvv_sm, dvv_sm_std, sensitivity=S_THETA):
     """Shallow (vadose-band) dv/v -> volumetric soil-moisture change Δθ, with sigma.
 
-    dv/v = sensitivity * Δθ (sensitivity < 0: wetter -> softer -> lower velocity). Nominal
-    sensitivity; calibrate against the SOLUS/Saxton-Rawls vadose operator per site.
+    dv/v = sensitivity * Δθ (sensitivity < 0: wetter -> softer -> lower velocity). The default is the
+    **material** vadose sensitivity ``S_THETA = -1.0`` per unit θ (Hertz-Mindlin + suction), which
+    applies to the depth-*inverted* θ profile (the inversion already deconvolves the kernel dilution,
+    see :func:`invert_states_from_bands`). For a raw, *non-inverted* single band dv/v, pass
+    ``sensitivity=S_THETA_BAND`` (≈ -0.08): the material value diluted by the fraction (~0.08) of the
+    shallow band's kernel in the θ-active top ~1 m, which reproduces the observed ~0.1-1% seasonal
+    band dv/v. Calibrate per site from the band kernel and the local Saxton-Rawls / van Genuchten
+    vadose envelope.
     """
     return np.asarray(dvv_sm) / sensitivity, np.abs(np.asarray(dvv_sm_std) / sensitivity)
 
@@ -122,7 +142,7 @@ def cross_correlate(a, b, sr, maxlag_s=60.0):
     return lags, ccf
 
 
-def stretching_dvv(cur, ref, lags, band, cc_min=0.0, eps_max=0.03, n_eps=201):
+def stretching_dvv(cur, ref, lags, band, cc_min=0.0, eps_max=0.08, n_eps=321):
     """Coda-wave *stretching* dv/v of ``cur`` vs ``ref`` over a symmetric coda window.
 
     Searches a uniform velocity perturbation eps = -dv/v by resampling the lapse axis
@@ -327,6 +347,34 @@ def separate_depth(ens_by_band, velocity_profile, water_table_depth_km,
     return post, part
 
 
+def invert_states_from_bands(dvv_bands, cov_bands, kernels, water_table_km, top_km=0.03,
+                             prior_std=5e-3, corr_length_km=0.1):
+    """Invert one epoch's banded dv/v (with covariance) for the three state dv/v means + propagated σ.
+
+    The efficient, honest per-station entry point: pass PRE-BUILT ``kernels`` (so the ~12 s disba
+    kernel build happens once, not per call) and the measurement covariance ``cov_bands``. Returns
+    dict with the shallow (soil-moisture), deep (relative WTD), and top-``top_km`` (Vs30) mean dv/v
+    and their aggregated posterior σ -- all from the depth INVERSION, carrying measurement + inversion
+    error. σ is the RMS over the depth nodes (prior-correlated, so not reduced by sqrt(N)).
+    """
+    from codameter.uq_depth import invert_depth_profile
+
+    post = invert_depth_profile(np.asarray(dvv_bands), np.asarray(cov_bands), kernels,
+                                prior_std=prior_std, corr_length_km=corr_length_km)
+    z = np.asarray(kernels.depths_km); m, sd = np.asarray(post.mean), post.std
+    shallow, deep, top = z <= water_table_km, z > water_table_km, z <= top_km
+
+    def _agg(mask):
+        if not mask.any():
+            return np.nan, np.nan
+        return float(np.mean(m[mask])), float(np.sqrt(np.mean(sd[mask] ** 2)))
+
+    sm, sm_sd = _agg(shallow); wtd, wtd_sd = _agg(deep); v, v_sd = _agg(top)
+    return dict(soil_moisture_dvv=sm, soil_moisture_dvv_std=sm_sd,
+                wtd_relative_dvv=wtd, wtd_relative_dvv_std=wtd_sd,
+                vs30_frac=v, vs30_frac_std=v_sd)
+
+
 # ---------------------------------------------------------------------------
 # 5. Physically realistic band-dependent synthetic (for the digital-twin demo)
 # ---------------------------------------------------------------------------
@@ -345,7 +393,7 @@ DRY_PEAK = 0.85
 
 def synthetic_depth_time_truth(depths_km, n_epoch=73, dt_days=5.0, water_table_km=0.03,
                                shallow_max_km=0.05, gwl_seasonal=1.5e-3, gwl_trend=1.0e-3,
-                               et_seasonal=2.0e-3, storm_amp=3.0e-3, storm_rate=0.18,
+                               et_seasonal=2.5e-2, storm_amp=3.0e-2, storm_rate=0.18,
                                ar1_rho=0.6, seed=0):
     """Depth-time truth m(z,t)=dVs/Vs on the kernel depth grid; deep=slow GWL, shallow=fast ET/rain.
 

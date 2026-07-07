@@ -59,7 +59,13 @@ execute:
 <div class="tag">GAIA HazLab · gaia-soil-hydromechanics</div>
 ```
 
-Two of the three planned subsurface state variables — the mature
+**Mission:** a *living hydromechanical state of the subsurface* — water table depth, soil moisture,
+and near-surface stiffness — at the ~90 m space and time scales that flood, landslide, and
+liquefaction models need. It is built from high-resolution static layers (the prior), assimilated
+ground sensors and satellites, and a closed water budget plus a hydromechanical rheology, then
+scored against held-out validation at native sensor resolution.
+
+This page shows two of the three state variables — the mature
 [groundwater-level]{.gwl} module and the new [soil-moisture]{.sm} module — produced by one
 observation-anchored pipeline, on real public data.
 

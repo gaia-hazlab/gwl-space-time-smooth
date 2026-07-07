@@ -15,6 +15,13 @@ author:
 date: today
 date-format: long
 abstract: |
+  The GAIA Soil Reanalysis maintains a *living hydromechanical state of the subsurface* —
+  water table depth, soil moisture, and near-surface stiffness — at the space and time
+  scales that downstream hazard models (flood, landslide, liquefaction) require. The state is
+  constrained by high-resolution static layers, ground sensors, and satellite retrievals, tied
+  together by a closed water budget and a hydromechanical rheology, and scored against held-out
+  validation at native sensor resolution (@sec-mission). This report documents the first mature
+  state variable and the shared machinery.
   We present a three-stage hybrid framework for modeling monthly groundwater levels (GWL)
   across the Pacific Northwest at 90 m spatial resolution, without solving the full
   groundwater flow equation. The framework anchors predictions to USGS NWIS well
@@ -114,6 +121,101 @@ plt.rcParams.update({
     "axes.facecolor": "#FAFAFA",
 })
 ```
+
+## Mission and Framework {#sec-mission}
+
+**Mission.** Maintain a *living hydromechanical state of the subsurface* — water table depth,
+soil moisture, and near-surface stiffness — at the space and time scales that downstream hazard
+models need to anticipate **floods, landslides, and liquefaction**.
+
+The one constraint that governs every design choice in this report: **the target spatial scale is
+set by the hazard, not by whatever data happen to be available.** Liquefaction in valley fill,
+shallow landslides on hillslopes, and compound flooding all resolve at ~100 m or finer, so the
+state lives on a **90 m grid from the start** and every input is placed onto that grid at its own
+native resolution, update rate, and uncertainty.
+
+```{python}
+#| label: fig-mission
+#| fig-cap: "**The GAIA Soil Reanalysis framework.** Three information streams constrain a
+#|   coupled subsurface state through a water budget and a hydromechanical rheology. Only ground
+#|   sensors and satellites are *assimilated*; static layers form the prior; validation is held out
+#|   and scored at native sensor resolution. The downstream hazard sets the target scale (90 m),
+#|   which governs the data structure from the start."
+INK = "#1a1a2e"; SUB = "#3a3a4e"
+fig, ax = plt.subplots(figsize=(11.5, 6.4))
+ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis("off")
+
+def _box(x, y, w, h, title, body, hue, fs_t=10.0, fs_b=8.0):
+    ax.add_patch(FancyBboxPatch((x - w / 2, y - h / 2), w, h,
+        boxstyle="round,pad=0.5,rounding_size=2.4",
+        linewidth=1.5, edgecolor=hue, facecolor=mcolors.to_rgba(hue, 0.13), zorder=2))
+    ax.text(x, y + h / 2 - 2.4, title, ha="center", va="top", fontsize=fs_t,
+            fontweight="bold", color=INK, zorder=3)
+    ax.text(x, y + h / 2 - 6.2, body, ha="center", va="top", fontsize=fs_b,
+            color=SUB, zorder=3, linespacing=1.4)
+
+def _arrow(x0, y0, x1, y1, label=None, color=C_GREY, ls="-", lw=1.7):
+    ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle="-|>",
+        mutation_scale=14, linewidth=lw, color=color, linestyle=ls, zorder=1,
+        shrinkA=1, shrinkB=1))
+    if label:
+        ax.text((x0 + x1) / 2, (y0 + y1) / 2 + 1.6, label, ha="center", va="bottom",
+                fontsize=7, color=color, style="italic", zorder=3)
+
+ax.add_patch(FancyBboxPatch((3, 92.5), 94, 6.5, boxstyle="round,pad=0.3,rounding_size=2",
+    linewidth=0, facecolor=mcolors.to_rgba(INK, 0.9), zorder=2))
+ax.text(50, 95.8, "Target resolution set by the downstream hazard  —  built on a 90 m grid from the start",
+        ha="center", va="center", fontsize=10.5, fontweight="bold", color="white", zorder=3)
+
+_box(15, 76, 26, 15, "1  Static layers", "lithology · geology\nsoils · terrain\n(fine, time-invariant)", C_GREEN)
+_box(15, 51, 26, 15, "2  Ground sensors", "wells · seismic dv/v · met\nsparse space / dense time\ndirect or proxy", C_BLUE)
+_box(15, 26, 26, 15, "3  Satellite products", "SMAP · MERRA-2 · GRACE\ndense space / sparse time\nnative res caps output", C_TEAL)
+_box(46, 51, 22, 54, "Assimilation +\nphysical models",
+     "\n\nWater budget\nP in · ET, runoff out\ninfiltration + capillary\nrise <-> water table\n\nHydromechanical state\nrheology + petrophysics", C_GREY, fs_t=10.5)
+_box(74, 71, 22, 13, "Water table depth", "", C_PURPLE)
+_box(74, 51, 22, 13, "Soil moisture", "", C_PURPLE)
+_box(74, 31, 22, 13, "Near-surface Vs", "", C_PURPLE)
+_box(93, 51, 12, 44, "Hazards", "\nFloods\n\nLandslides\n\nLiquefaction", C_ORANGE)
+_box(46, 9, 34, 12, "Held-out validation", "scored at native sensor resolution, kept out of processing", C_GOLD, fs_t=9.5, fs_b=7.6)
+
+_arrow(28.2, 74, 34.8, 60, "prior / envelope", color=C_GREEN)
+_arrow(28.2, 51, 34.8, 51, "assimilated", color=C_BLUE)
+_arrow(28.2, 28, 34.8, 42, "assimilated", color=C_TEAL)
+for sy in (71, 51, 31):
+    _arrow(57.2, 51 + (sy - 51) * 0.45, 62.8, sy, color=C_GREY)
+    _arrow(85.2, sy, 86.8, 51 + (sy - 51) * 0.35, color=C_PURPLE, lw=1.5)
+_arrow(58, 11, 63, 26, "benchmark", color=C_GOLD, ls=(0, (4, 3)))
+fig.tight_layout()
+plt.show()
+```
+
+Five kinds of information constrain the state:
+
+1. **Static layers** — lithology, geology, soils, and terrain-derived hydrology. High-resolution
+   but time-invariant; they set what the subsurface *can* do (the envelope of hydraulic and
+   mechanical properties) and form the model prior.
+2. **Ground-based sensors** — hydrologic (wells), geophysical (ambient-noise seismic), and
+   atmospheric networks. Sparse in space, dense in time; they sense the state directly or by proxy /
+   repurposed measurement (e.g. seismic dv/v as a moisture and pore-pressure proxy).
+3. **Satellite products** — reprocessed retrievals (soil moisture, terrain, total water storage).
+   Dense in space, sparse in time; their native resolution caps the resolution of anything derived
+   from them.
+4. **Validation data** — held out of processing and scored at the native resolution of the sensor,
+   never upsampled to flatter the model.
+5. **Physical models we constrain** — a closed **water budget** (rain in; runoff and ET out;
+   infiltration to the water table and capillary rise back up) and a **hydromechanical state** that
+   links moisture and pore pressure to stiffness through rheology and petrophysics.
+
+**The assimilation principle.** Only the ground sensors (2) and satellites (3) are *assimilated* —
+everything else is prior knowledge or physical modelling. Data enter at their own rates,
+sensitivities, and uncertainties; the physical models are updated on a regular cadence; and the
+output states — water table depth, soil moisture, Vs — are validated or benchmarked against the
+held-out references (4), always at native sensor resolution.
+
+The rest of this report is one concrete instantiation of this framework: groundwater level is the
+mature state variable (@sec-framework), soil moisture is implemented (@sec-soilmoisture), the
+seismically-constrained stiffness channel is in development (@sec-twin), and the coupling water
+budget is specified in @sec-classification.
 
 ## Introduction {#sec-intro}
 
@@ -695,6 +797,24 @@ local slope, provides complementary information: TWI is high in convergent terra
 terrain feature matrix for Stage 1.
 
 ### Stage 1: Observation-anchored spatial model {#sec-stage1}
+
+**What HAND can and cannot predict — the well population must be screened (issue #46).** HAND is a
+defensible proxy only for the shallowest **unconfined, terrain-following** water table. In the Puget
+Lowland's layered glacial drift, wells that penetrate the Vashon till into the **confined** advance
+outwash below it record a *potentiometric* head set by the recharge-area elevation and confining
+geometry — decoupled from height-above-drainage, and sometimes artesian. Confined vs unconfined here
+is a **vertical** distinction (a depth layer), not a surface map unit, so it must be screened at the
+*well* level. The NWIS wells make this concrete (@fig-wellscreen): the shallow water-table wells
+(≤ 30 m) have a median DTW of ~6 m, while the deeper wells the crude 500 ft flag misses (≥ 60 m,
+n ≈ 281 of 863) sit at a median DTW of ~36 m — two populations pooled into one target inflate the
+HAND fit. `src.features.well_hydrostratigraphy` classifies wells by depth and screens the target to
+the shallow water-table population; the Stage-1 baseline is therefore trained with a `--max-well-depth-m`
+screen (≈ 30 m for this basin). The deep confined-outwash heads are a distinct potentiometric surface,
+a candidate for a separate future product rather than an input to the water-table model.
+
+![Well hydrostratigraphic screen: the depth histogram by class, the DTW-vs-depth mixing (shallow ~6 m
+vs confined ~36 m), and the spatial overlap of the two populations (confined = a vertical unit, not a
+map polygon).](assets/well_screening.png){#fig-wellscreen}
 
 Stage 1 estimates climatological (time-averaged) depth to water table at each **90 m**
 grid cell by training **directly on USGS NWIS well observations** — the observations
@@ -1753,14 +1873,22 @@ The pieces above compose into a **digital twin**: an uncertainty-aware, 90 m, co
 the near-surface state that evolves in time as data are assimilated. @fig-twin animates one
 hydrologic year at 5-day cadence. The top row is the state — groundwater depth-to-water, soil
 moisture, and Vs30 (the near-surface stiffness the geotechnical twins consume); the bottom row is
-the matching per-cell 1σ. The groundwater and soil-moisture static structure is real 90 m data; the
-**Vs30 shown here is a synthetic HAND-ramp placeholder** (see the classification table), not a
-measured or published Vs30. The time evolution and its high-frequency content come from a **synthetic**
+the matching per-cell 1σ. The groundwater and soil-moisture static structure is real 90 m data, and
+the **Vs30 is now the Wald-Allen topographic-slope proxy** (issue #54) — the standard terrain-based
+site-condition estimate [@waldallen2007] behind the USGS global Vs30 model, applied to the native 90 m 3DEP slope, no
+longer the earlier synthetic HAND ramp. The time evolution and its high-frequency content come from a **synthetic**
 dv/v assimilated onto those fields, so the animation shows the assimilation *machinery* at work — the
 state updates and σ shrinks where and when
 sensors constrain it. This is an **MVP built without big-data compute**: the dv/v is a physically
 realistic synthetic (low frequencies track slow groundwater; high frequencies track fast ET and
-rainfall), and the same operators run on measured dv/v once the multi-year waveform run lands.
+rainfall), and the same operators run on measured dv/v once the multi-year waveform run lands. The
+shallow (vadose) band now carries a several-percent seasonal signal — peak-to-peak $\approx 9\%$
+during strong wetting and drying — so after depth inversion the near-surface stiffness moves
+visibly: the domain-mean Vs30 spans $\approx 425$–$439$ m s⁻¹ over the year ($\approx 3\%$), and
+near constraining stations the swing is larger still. Because Vs30 is a 30 m time-*average* and the
+point assimilation reverts to the static prior away from sensors, that domain-mean range is a lower
+bound on the local response, not the full shallow amplitude — the honest consequence of measuring a
+30 m average with a locally-constrained analysis.
 
 ![Digital-twin MVP over one hydrologic year at 5-day cadence. Top: groundwater and soil moisture
 are shown as **anomalies** ($\Delta$ from the per-frame geospatial mean, printed as a text insert)
@@ -1768,6 +1896,37 @@ so the assimilated time signal is visible rather than swamped by the static rang
 (turbo, the jet-like ramp geotechnical models expect). Bottom: per-cell 1$\sigma$. Markers: wells
 (GWL), SNOTEL (soil moisture), seismic UW/CC (Vs30); remote-sensing inputs listed below the
 panels.](assets/digital_twin.gif){#fig-twin}
+
+### Vs30 uncertainty as site-class probability {#sec-siteclass}
+
+A geotechnical consumer does not act on a raw "15 % ± " on Vs30 — it acts on the **NEHRP/ASCE 7
+site class** and on the risk of crossing a design boundary (180 / 360 / 760 m s⁻¹). We therefore
+report the Vs30 uncertainty as a **site-class probability**: given the per-cell Vs30 mean and its
+propagated 1σ, `fetch_vs30.nehrp_class_probabilities` integrates a Gaussian (or lognormal) over the
+class boundaries to return $P(\text{E}, \text{D}, \text{C}, \text{B}, \text{A})$, and by differencing
+the CDF, the probability of crossing any single boundary. A cell that sits near a boundary honestly
+splits its mass across two classes rather than being forced into one.
+
+```{python}
+#| output: asis
+import os, sys
+for _p in (os.getcwd(), os.path.abspath("..")):        # kernel cwd is docs/; repo root holds src/
+    if os.path.isdir(os.path.join(_p, "src")) and _p not in sys.path:
+        sys.path.insert(0, _p)
+from src.data.fetch_vs30 import nehrp_class_probabilities, NEHRP_CLASSES
+examples = [("soft valley fill", 200.0, 30.0),
+            ("firm / stiff soil", 350.0, 40.0),
+            ("weathered rock", 620.0, 90.0)]
+print("| Representative cell | Vs30 (m/s) | 1σ | " + " | ".join(f"P({c})" for c in NEHRP_CLASSES) + " |")
+print("|---|---|---|" + "---|" * 5)
+for name, mu, sd in examples:
+    cells = " | ".join(f"{x:.2f}" for x in nehrp_class_probabilities(mu, sd))
+    print(f"| {name} | {mu:.0f} | {sd:.0f} | {cells} |")
+```
+
+The middle row makes the point: a 350 m s⁻¹ firm-soil cell 40 m s⁻¹ from the D|C boundary carries a
+real probability of being class C, and that split — not a symmetric percent bar — is what a
+site-response or liquefaction screen should propagate.
 
 ### Data provenance
 
@@ -1783,8 +1942,8 @@ compute-free MVP (the wells, SNOTEL, and seismic geometry are real).
 | ISMN networks | ISMN registered export (`read_ismn`) | point | soil-moisture assimilation (aggregates SCAN, mesonets, ...) |
 | Seismic UW + CC (74) | EarthScope/IRIS FDSN via `seisfetch` | point | dv/v -> ΔWTD, Δθ, ΔVs30 (assimilated) |
 | SOLUS100 (clay, sand) | USDA-NRCS SOLUS100, GAIA STAC / public COGs | 100 m | soil-hydraulic envelope; GWL predictor |
-| USGS 3DEP DEM | 3DEP (`py3dep`) -> HAND/TWI/slope | 10 m -> 90 m | terrain prior; Vs30 HAND proxy |
-| Vs30 (synthetic HAND ramp in the MVP) | GAIA vs-STAC (`fetch_gaia`) not reached; **HAND fallback used** | 90 m | Vs30 static base (placeholder — see classification table) |
+| USGS 3DEP DEM | 3DEP (`py3dep`) -> HAND/TWI/slope | 10 m -> 90 m | terrain prior (HAND, TWI); slope feeds the Vs30 row below |
+| Vs30 (Wald-Allen slope proxy) | 3DEP slope → `fetch_vs30` (Wald & Allen 2007); USGS grid / Sanger-Maurer optional | 90 m | Vs30 static base (real site-condition estimate) |
 | TerraClimate; PRISM | Climatology Lab THREDDS; PRISM web service | ~4 km | dynamic forcing (P, PET) |
 
 ### Evaluation datasets
@@ -1838,25 +1997,37 @@ synthetic placeholders -- the real data that will replace it.
 | Groundwater dynamics | observation (kriged NWIS well anomalies) | yes (ground) | NWIS (have) |
 | Soil-moisture envelope | physical (Saxton-Rawls on SOLUS texture) | no (prior) | SOLUS100 (have) |
 | Soil-moisture dynamics | reanalysis-forced bucket (TerraClimate / PRISM) | no (prior) | forcing is model; see water budget |
-| Vs30 | **synthetic** (HAND ramp) | no | Sanger-Maurer parametric (GAIA vs-STAC); Wald-Allen slope proxy; measured Vs30 (MASW / borehole / Vs30 databases) |
+| Vs30 | **statistical/physical** (Wald-Allen slope proxy from 3DEP) | no (prior) | USGS global Vs30 grid; Sanger-Maurer parametric (GAIA vs-STAC); measured Vs30 (MASW / borehole) |
 | dv/v | **synthetic** (band generator) | no (yet) | real UW/CC ambient noise via `seisfetch` + `codameter` (pipeline exists) |
 | Twin evolution / attribution / sigma-reduction | **synthetic-derived** | no | follows once dv/v is real |
 | Soil-moisture validation | MERRA-2 (model cross-check); SNOTEL (real); SMAP (real, staged) | n/a | SMAP L3/L4, NLDAS, lowland USCRN / ISMN |
 
-**The water budget (required, not yet closed).** The current bucket removes above-field-capacity water
-as drainage that simply *leaves the system*; groundwater and soil moisture are therefore co-located,
-not hydrologically coupled. A correct coupled reanalysis must route that water through two fluxes:
+**The water budget (first-pass closure).** The standalone bucket removed above-field-capacity water as
+drainage that *left the system*, so groundwater and soil moisture were only co-located. The
+`water_budget.coupled_water_budget` operator now routes that water through explicit fluxes so the two
+states genuinely exchange mass (@fig-water):
 
-1. **Vertical infiltration / recharge.** Deep percolation below the root zone must recharge the water
-   table (an explicit theta -> GWL flux), with capillary rise back into the vadose zone where the
-   table is shallow. This is what makes "coupled" physical rather than nominal.
-2. **Downhill runoff.** Surface runoff (infiltration- and saturation-excess overland flow) and
-   subsurface lateral flow (interflow / flow along the water table) must redistribute water
-   down-gradient, so the column is not a closed 1-D bucket.
+1. **Vertical infiltration / recharge (#43).** Deep percolation below the root zone is **recharge** to
+   the water table (an explicit θ → GWL flux); the table responds as a linear reservoir (recharge in,
+   baseflow recession out); and where the table is shallow, **capillary rise** feeds water back up into
+   the root zone (GWL → θ), closing the feedback loop.
+2. **Downhill runoff (#44).** **Saturation-excess** surface runoff is generated when the column fills
+   to porosity, and **subsurface lateral flow** is represented by a TOPMODEL relation that lets the
+   steady-state water table follow the topographic wetness index (valleys shallow/wet, ridges
+   deep/dry); generated runoff can be routed down-gradient with a flow-accumulation weight.
 
-Until both fluxes are represented, the product is an *antecedent-state estimate*, not a closed water
-balance, and cannot by itself drive a runoff or flood model. Closing the water budget is tracked as a
-priority modeling task (see the project issues).
+Mass is conserved each step ($dS = \text{cap} + \text{input} - \text{runoff} - \text{AET} -
+\text{recharge}$). Remaining gaps, tracked as follow-ups: the balance is monthly, so
+*infiltration-excess* (intensity-driven, sub-daily) runoff is not yet represented (#57), and full
+channel routing to a hydrograph belongs to a downstream runoff model (#55); the specific yield,
+recession time, capillary reach, and TOPMODEL scale are nominal pending borehole/streamflow
+calibration.
+
+![Coupled water budget on real domain-mean TerraClimate forcing and the real 90 m TWI field. Left:
+monthly fluxes (precip, AET, recharge, saturation-excess runoff, capillary rise). Middle: soil
+moisture θ and the water-table depth co-evolving — vadose recharge raises the table, a shallow table
+feeds capillary rise back up. Right: subsurface lateral flow — the TOPMODEL steady-state water table
+follows the drainage network (valleys shallow, ridges deep).](assets/water_budget.png){#fig-water}
 
 ### Attribution: what sets each state
 
@@ -1864,13 +2035,13 @@ Attribution is answered at two levels, because they say different things (@fig-a
 
 **Field level — statistical learning across all features.** A random forest predicts each state from
 every feature — the static covariates (HAND, TWI, slope, clay, sand) and the dv/v observation — and
-its permutation importance is the field-wide accounting: **Vs30 is ~100% terrain (HAND)**, groundwater
-is ~61% HAND and ~26% clay, and soil moisture is ~89% sand. **Caveat (partly tautological in this
-MVP).** Because the synthetic Vs30 is *defined* as a function of HAND and the bucket θ is *defined*
-from Saxton-Rawls texture (sand/clay), the random forest recovers those generative covariates by
-construction — the ~100% HAND and ~89% sand are self-recovery, not a discovery about real soil. The
-attribution becomes a genuine finding only once Vs30 and θ are real fields whose covariate relations
-are learned, not imposed. The dv/v is a small field-level contributor here also **by construction**:
+its permutation importance is the field-wide accounting: **Vs30 is ~100% slope**, groundwater is
+~61% HAND and ~26% clay, and soil moisture is ~89% sand. For Vs30 this is now the *intended physical
+relation* — the Wald-Allen proxy [@waldallen2007] maps topographic slope to Vs30, so slope-dominance is the method
+working, not an artifact (the earlier HAND-ramp attribution was a construction tautology; it is not
+anymore). **Caveat.** The bucket θ is still *defined* from Saxton-Rawls texture, so the ~89% sand is
+partly self-recovery; θ attribution becomes a fully independent finding only once θ is a real
+observed field whose covariate relations are learned rather than imposed. The dv/v is a small field-level contributor here also **by construction**:
 in this MVP it only perturbs the state near the seismic stations, so it cannot explain the
 covariate-driven structure that fills the domain. This is
 exactly why a point-assimilation "sensor share" is the wrong lens for the field, and why the MVP uses
@@ -1917,14 +2088,18 @@ carried, not hidden.
 | Soil moisture | domain-mean $r$; bias; RMSE | 0.85; −0.08; 0.095 | MERRA-2 root zone (incl. 2025) | **MODEL cross-check** |
 | Soil moisture (snow phase) | LOSO $r$ | 0.49 (tuning overfits to 0.44) | SNOTEL | **REAL** (n=5, upland) |
 | dv/v measurement | band recovery $r$ | > 0.95 | controlled synthetic | **SYNTHETIC** (circular: inverse undoes forward) |
-| Assimilation | posterior σ reduction | WTD ~53%, θ ~91% | near-station vs prior | **SYNTHETIC** (geometry only; zero measurement error injected) |
+| Assimilation | σ shrink (near-station vs far) | GWL ~84%, θ ~46%, Vs30 ~90% | inverted-state σ vs prior | **SYNTHETIC forcing, real chain** (measurement + inversion σ carried) |
 
 The **Basis** column is essential: only the groundwater block-CV RMSE and the SNOTEL LOSO are real
-independent skill. MERRA-2 is a model cross-check (shared forcing family). The dv/v recovery and the
-assimilation σ-reduction are synthetic-derived — the recovery is circular (the inverse undoing the
-forward operator on an imposed signal), and the σ-reduction reflects station geometry with **zero
-dv/v measurement error injected**, not demonstrated dv/v precision. These are pipeline demonstrations,
-not skill claims, until the real dv/v run lands.
+independent skill. MERRA-2 is a model cross-check (shared forcing family). The dv/v recovery is still
+circular (the inverse undoing the forward operator on an imposed signal). The assimilation
+σ-reduction, however, is **no longer geometry-only**: the twin now runs the full
+forward → measure → invert chain (issue #51) — a realistic measurement error is added to the
+synthetic band dv/v, each station-epoch is inverted with `invert_depth_profile`, and the states
+(relative WTD, θ, Vs30) are read off the *inverted* depth profile with its posterior covariance
+carried into the per-station assimilation σ (not zero, and not the ground truth). So the σ-reduction
+reflects measurement precision **and** geometry. The forcing is still a synthetic dv/v; the numbers
+become skill claims only when the real UW/CC waveform run supplies the measured dv/v.
 
 **Deviations shown, not smoothed**: each animated σ panel is the honest per-cell 1σ (static budget
 combined in quadrature with the per-frame assimilation posterior), so the viewer sees exactly where
@@ -1933,8 +2108,9 @@ the twin is trustworthy (dense wells / SNOTEL / seismic) and where it reverts to
 **What remains to fix**: (1) run the multi-year real-waveform dv/v over UW/CC to replace the
 synthetic; (2) borehole-calibrate the poroelastic $k_{sat}$ to convert relative WTD to head in
 metres; (3) assimilate SNOTEL SWE for the winter snowpack term (soil-moisture stations only today);
-(4) carry the per-month kriging σ rather than its time mean; (5) fetch the GAIA Vs30 product in
-place of the HAND proxy; (6) densify the Cascade networks so the anchor corrects station-specific
+(4) carry the per-month kriging σ rather than its time mean; (5) upgrade the Wald-Allen slope Vs30
+to the USGS grid or the Sanger-Maurer parametric product (both wired in `fetch_vs30`) and translate
+its σ to NEHRP site-class probability; (6) densify the Cascade networks so the anchor corrects station-specific
 representativeness, not only the systematic bias.
 
 ### Toward forecast forcing: Earth2Studio {#sec-earth2studio}

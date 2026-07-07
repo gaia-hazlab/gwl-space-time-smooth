@@ -119,8 +119,16 @@ def _active_feature_cols(args) -> list[str]:
     return cols
 
 
-def _load_sites(sites_parquet: Path) -> pd.DataFrame:
-    """Load QC-passed sites with usable long-term median DTW."""
+def _load_sites(sites_parquet: Path, max_well_depth_m: float | None = None) -> pd.DataFrame:
+    """Load QC-passed sites with usable long-term median DTW.
+
+    When ``max_well_depth_m`` is set, the target is screened to the shallow, unconfined/perched
+    **water-table** population (issue #46): HAND predicts only the terrain-following table, whereas
+    deeper wells tap confined advance-outwash below the Vashon till whose potentiometric head is not
+    terrain-driven. In this dataset the two populations differ sharply (median DTW ~6 m shallow vs
+    ~36 m for the deep-confined wells the crude 500 ft flag misses), so pooling them inflates the
+    HAND fit; ~30 m is a defensible Puget-Lowland screen.
+    """
     df = pd.read_parquet(sites_parquet)
     mask = (
         (~df.get("is_sparse_timeseries", pd.Series(False, index=df.index)))
@@ -129,6 +137,13 @@ def _load_sites(sites_parquet: Path) -> pd.DataFrame:
         & (df["median_dtw_m"] > 0)  # DTW must be positive
     )
     df = df[mask].copy()
+    if max_well_depth_m is not None:
+        from src.features.well_hydrostratigraphy import watertable_wells
+
+        before = len(df)
+        df = watertable_wells(df, max_depth_m=max_well_depth_m)
+        logger.info("Water-table screen (<= %.0f m): kept %d of %d wells (dropped deep-confined).",
+                    max_well_depth_m, len(df), before)
 
     # Project site lon/lat (EPSG:4326) to the analysis CRS (EPSG:5070) if not already
     # present; every downstream sampler indexes rasters by x_5070/y_5070 metres.
@@ -267,6 +282,9 @@ def main() -> None:
         description="Observation-anchored random-forest regression kriging GWL baseline."
     )
     parser.add_argument("--sites", type=Path, default=Path("data/processed/nwis_sites_clean.parquet"))
+    parser.add_argument("--max-well-depth-m", type=float, default=None,
+                        help="screen the DTW target to shallow water-table wells <= this depth "
+                             "(issue #46; ~30 for the Puget Lowland). Default: no depth screen.")
     parser.add_argument("--hand", type=Path, default=Path("data/processed/terrain_hand_90m.tif"))
     parser.add_argument("--twi", type=Path, default=Path("data/processed/terrain_twi_90m.tif"))
     parser.add_argument("--slope", type=Path, default=Path("data/processed/terrain_slope_90m.tif"))
@@ -304,7 +322,7 @@ def main() -> None:
     logger.info("Active predictors (%d, no coordinates): %s", len(active_cols), active_cols)
 
     # Load sites + features
-    sites = _load_sites(args.sites)
+    sites = _load_sites(args.sites, max_well_depth_m=args.max_well_depth_m)
     feats = _build_feature_matrix(
         sites, active_cols, args.hand, args.twi, args.slope, args.solus,
         args.prism_ppt, optional_rasters,
