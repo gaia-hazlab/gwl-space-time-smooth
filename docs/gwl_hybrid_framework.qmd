@@ -696,6 +696,24 @@ terrain feature matrix for Stage 1.
 
 ### Stage 1: Observation-anchored spatial model {#sec-stage1}
 
+**What HAND can and cannot predict — the well population must be screened (issue #46).** HAND is a
+defensible proxy only for the shallowest **unconfined, terrain-following** water table. In the Puget
+Lowland's layered glacial drift, wells that penetrate the Vashon till into the **confined** advance
+outwash below it record a *potentiometric* head set by the recharge-area elevation and confining
+geometry — decoupled from height-above-drainage, and sometimes artesian. Confined vs unconfined here
+is a **vertical** distinction (a depth layer), not a surface map unit, so it must be screened at the
+*well* level. The NWIS wells make this concrete (@fig-wellscreen): the shallow water-table wells
+(≤ 30 m) have a median DTW of ~6 m, while the deeper wells the crude 500 ft flag misses (≥ 60 m,
+n ≈ 281 of 863) sit at a median DTW of ~36 m — two populations pooled into one target inflate the
+HAND fit. `src.features.well_hydrostratigraphy` classifies wells by depth and screens the target to
+the shallow water-table population; the Stage-1 baseline is therefore trained with a `--max-well-depth-m`
+screen (≈ 30 m for this basin). The deep confined-outwash heads are a distinct potentiometric surface,
+a candidate for a separate future product rather than an input to the water-table model.
+
+![Well hydrostratigraphic screen: the depth histogram by class, the DTW-vs-depth mixing (shallow ~6 m
+vs confined ~36 m), and the spatial overlap of the two populations (confined = a vertical unit, not a
+map polygon).](assets/well_screening.png){#fig-wellscreen}
+
 Stage 1 estimates climatological (time-averaged) depth to water table at each **90 m**
 grid cell by training **directly on USGS NWIS well observations** — the observations
 anchor the model from the outset rather than entering only as a final residual patch.
