@@ -2132,6 +2132,95 @@ soil-moisture bucket is nonlinear, so its ensemble cost is N bucket integrations
 AR coefficient β₄ is currently zero, so atmospheric rivers contribute nothing to GWL in the β-map path
 until the TFN recharge kernel (Rung 2) is populated. This is deliberately staged after the MVP.
 
+## Downstream: LandLab landslide coupling {#sec-landlab}
+
+The complementary downstream consumer is the **LandLab** landslide study — the geotechnical
+data-prep pipeline `gaia-hazlab/landslide-data-prep`, which drives LandLab's infinite-slope
+`LandslideProbability` component (the Monte-Carlo Factor of Safety, $\Pr(FS \le 1)$). Pore pressure
+from a shallow, storm-driven water table is the proximate trigger of the shallow landslides it
+models, so this reanalysis is the natural supplier of that hydrologic state.
+
+### Division of labour
+
+The interface is clean because the two repositories own different halves of the input stack:
+
+- **`landslide-data-prep` owns the static stack** — DEM (3DEP), SOLUS100 soil, and NLCD land cover
+  turned into cohesion, internal friction angle, and leaf-area index. It harmonises these onto the
+  LandLab analysis grid. We do **not** duplicate or re-export them.
+- **This reanalysis owns the dynamic / hydrological state** and exports *only* those fields, on the
+  **same grid** so they register cell-for-cell onto the static stack.
+
+The seam between the two is a small set of parameters that are *static* (so nominally the data-prep
+side's job) but are *also* structural inputs to our water budget — chiefly the saturated hydraulic
+conductivity $K_{sat}$ and soil thickness. For our recharge/drainage physics and LandLab's
+transmissivity to be consistent, both sides must derive $K_{sat}$ the **same way**; we make that
+choice explicit and swappable (below) rather than hard-coding one pedotransfer.
+
+### The dynamic export contract
+
+We export the following via `src.io.landlab_export`, in the DataHub canonical vocabulary, as
+LandLab-ready ESRI ASCII (`.asc`) plus a COG and a provenance manifest:
+
+| Canonical field | Meaning | Units | Cadence | Uncertainty |
+|---|---|---|---|---|
+| `water_table__depth` | depth to water table; **mean and seasonal-high state** | m | monthly + wet-season high | per-cell σ + confidence mask |
+| `soil_moisture__saturation_fraction` | $S = \theta / n$ | – | monthly | from θ envelope + driver |
+| `soil_water__recharge_rate` | groundwater recharge (water budget) | mm day⁻¹ | monthly (mean/max) | σ ≈ 0.1·mean |
+
+The landslide-relevant state is the **wet-season high** table (small depth-to-water), not the annual
+mean, so `seasonal_high_water_table` exports the shallow-tail quantile of depth-to-water alongside
+the mean. Every field carries its per-cell 1σ and the variogram-driven confidence mask (@sec-validation):
+LandLab ingests uncertainty, and masked upland cells (fractured hillslopes — precisely the sparse-well
+regime where this framework is weakest) are exported as no-data rather than a false mean.
+
+### Shared static soil-hydromechanical set
+
+We ingest the *same* SOLUS100 static set the data-prep side uses — texture (clay/sand/silt), pH, CEC,
+oven-dry bulk density, and depth-to-lithic (`anylithicdpt` → soil thickness) — via
+`fetch_public.fetch_solus`, so our soil state is built on identical inputs. These feed both the
+Saxton–Rawls retention envelope (θ_wp/θ_fc/θ_sat) that sizes our bucket and the $K_{sat}$ choice below.
+
+### Modular $K_{sat}$ and transmissivity {#sec-ksat}
+
+There is no single correct pedotransfer for $K_{sat}$, and the choice materially changes both our
+drainage flux and LandLab's transmissivity $T$. `src.models.soil_hydraulics` therefore exposes
+$K_{sat}$ and $T$ as a **registry of methods** that a user selects; the default is Saxton–Rawls, but
+selecting the LandLab pedotransfer makes our hydrology and the Factor-of-Safety mutually consistent.
+Output units are canonical: $K_{sat}$ in m day⁻¹, $T$ in m² day⁻¹.
+
+$K_{sat}$ methods (`saturated_conductivity(method=…)`):
+
+- **`saxton_rawls`** (default) — Saxton & Rawls (2006) [@saxton2006soil] from sand%, clay%, and
+  organic-matter%; also yields the θ_wp/θ_fc/θ_sat envelope. Native mm hr⁻¹ converted to m day⁻¹.
+- **`solus_pedotransfer`** — the log-linear PTF used by `landslide-data-prep`,
+  $\log_{10} K_{sat} = 0.8478 + 0.2612\,\mathrm{pH} - 0.0233\,\mathrm{clay} - 0.0127\,\mathrm{silt}
+  - 0.0104\,\mathrm{CEC}$ (clay/silt %, CEC in cmol(+) kg⁻¹). **Select this for LandLab consistency.**
+  Its native output unit is undocumented at source, so a `unit_scale` hook converts it to m day⁻¹
+  once confirmed with the data-prep authors — flagged rather than silently assumed.
+- **`provided`** — pass through a measured or data-product $K_{sat}$ field (e.g. POLARIS Ksat).
+
+Transmissivity methods (`transmissivity(ksat, thickness, method=…)`):
+
+- **`ksat_x_thickness`** — $T = K_{sat}\,h$ (the `landslide-data-prep` convention).
+- **`ksat_x_thickness_anisotropy`** — $T = K_{sat}\,h\,f$ with a lateral:vertical anisotropy factor
+  $f$ (DataHub canonical default $f=2.5$).
+- **`topmodel_exponential`** — $T = K_{sat}\,d$, the effective profile transmissivity of an
+  exponential store with decay depth $d = 1/f$ (TOPMODEL-style), for hillslopes where conductivity
+  decays sharply with depth.
+
+The registry is deliberately open: a new PTF (Cosby, Rosetta, …) is one function plus a dictionary
+entry, and the report/manifest records which method produced a given field so downstream users can
+reproduce or re-select it.
+
+### Grid parity and the resolution caveat
+
+Our native grid is 90 m EPSG:5070; the LandLab AOI grid is finer (often 10 m). `align_to_grid`
+reprojects each dynamic field onto the caller's template grid so it registers with the static stack,
+and the export manifest records **native vs export resolution** for every field. Reprojection to a
+finer grid *resamples* — it does not add information — so a downscaled 90 m (or coarser satellite)
+cell is never to be read as a native fine-scale observation (the DataHub "footprint-leakage"
+caution). A physics-based downscaler for this step is future work (@sec-roadmap).
+
 ## Roadmap {#sec-roadmap}
 
 The pilot demonstrates the coupled machinery; the path to an operational product is staged.
