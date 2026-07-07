@@ -51,8 +51,20 @@ def peak_depth_km(f_hz, vs_ms=1500.0):
 # Nominal, calibration-pending sensitivities (documented; anchor to boreholes/lab).
 from src.models.dvv_coupling import K_SAT           # dv/v per metre of head (5e-4)
 
-# dv/v per unit volumetric θ; NEGATIVE because wetting softens the frame (v drops). Nominal.
-S_THETA = -2.0
+# dv/v per unit volumetric θ, for the depth-separated SHALLOW-BAND measurement. NEGATIVE (wetting
+# softens the frame -> velocity drops). It is the product of two factors:
+#   * material sensitivity S_MATERIAL ≈ -1.0 per unit θ, from the Hertz-Mindlin + van Genuchten
+#     capillary-suction vadose model (dvv_coupling._vs_vadose): a 0.1 θ swing changes the *local*
+#     shallow-soil velocity by ~10%; and
+#   * a DEPTH-DILUTION factor ≈ 0.08: the θ-varying layer is only the top ~1 m, but the shallow
+#     band's Rayleigh sensitivity kernel peaks near ~45 m (L = Vs/3f), so only a small fraction of
+#     the band's kernel weight lies in the θ-active zone.
+# The product S_THETA ≈ -0.08 gives ~0.8% dv/v for a 0.1 m³/m³ seasonal swing, matching the observed
+# ~0.1-1% ambient-noise seasonal dv/v (the earlier -2.0 implied ~20%, ~1-2 orders too large). Refine
+# per site from the actual band kernel and the local vadose envelope.
+S_MATERIAL_THETA = -1.0
+KERNEL_FRACTION_TOP1M = 0.08
+S_THETA = S_MATERIAL_THETA * KERNEL_FRACTION_TOP1M   # ≈ -0.08 dv/v per unit volumetric θ
 
 
 def dvv_to_wtd_change(dvv_wtd, dvv_wtd_std, k_sat=K_SAT):
@@ -67,8 +79,11 @@ def dvv_to_wtd_change(dvv_wtd, dvv_wtd_std, k_sat=K_SAT):
 def dvv_to_theta_change(dvv_sm, dvv_sm_std, sensitivity=S_THETA):
     """Shallow (vadose-band) dv/v -> volumetric soil-moisture change Δθ, with sigma.
 
-    dv/v = sensitivity * Δθ (sensitivity < 0: wetter -> softer -> lower velocity). Nominal
-    sensitivity; calibrate against the SOLUS/Saxton-Rawls vadose operator per site.
+    dv/v = sensitivity * Δθ (sensitivity < 0: wetter -> softer -> lower velocity). The default
+    ``S_THETA ≈ -0.08`` is the material vadose sensitivity (~-1 per unit θ, Hertz-Mindlin + suction)
+    diluted by the fraction (~0.08) of the shallow band's kernel that lies in the θ-active top ~1 m,
+    which reproduces the observed ~0.1-1% seasonal dv/v. Calibrate per site from the band kernel and
+    the local Saxton-Rawls / van Genuchten vadose envelope.
     """
     return np.asarray(dvv_sm) / sensitivity, np.abs(np.asarray(dvv_sm_std) / sensitivity)
 

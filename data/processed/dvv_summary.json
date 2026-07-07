@@ -13,13 +13,13 @@
     0.045000000000000005
   ],
   "water_table_km": 0.03,
-  "soil_moisture_dvv": -0.00021874516732958913,
-  "soil_moisture_dvv_std": 0.0012801832923595314,
-  "wtd_relative_dvv": 0.0002714767823551466,
-  "wtd_relative_dvv_std": 0.004479192302063773,
+  "soil_moisture_dvv": -0.00021818247622629126,
+  "soil_moisture_dvv_std": 0.0012801837002218172,
+  "wtd_relative_dvv": 0.000271589309490897,
+  "wtd_relative_dvv_std": 0.004479190991756092,
   "assimilation": {
     "n_stations": 74,
-    "wtd_sigma_reduction": 0.5303423404693604,
+    "wtd_sigma_reduction": 0.5303612947463989,
     "theta_sigma_reduction": 0.9123663902282715
   }
 }

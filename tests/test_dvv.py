@@ -65,6 +65,9 @@ def test_dvv_to_state_conversions_and_signs():
     # shallow band: wetting softens (dv/v < 0) -> positive Δθ
     dth, dth_sd = dvv.dvv_to_theta_change(np.array([-0.02]), np.array([0.004]))
     assert dth[0] > 0 and dth_sd[0] > 0
+    # magnitude sanity (#45): a 0.1 m3/m3 seasonal swing must give ~0.1-1% dv/v, not ~20%
+    dvv_for_0p1 = abs(dvv.S_THETA * 0.1)
+    assert 1e-3 <= dvv_for_0p1 <= 1e-2
 
 
 def test_top_layer_mean_and_vs30_conversion():
