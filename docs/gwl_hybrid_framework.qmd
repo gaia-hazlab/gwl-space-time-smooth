@@ -2179,11 +2179,14 @@ well-density confidence mask, the saturation fraction from the soil-moisture θ 
 recharge from the coupled water budget run over the TerraClimate forcing (@fig-landlab-export).
 
 ![LandLab dynamic export: the three canonical hydrological fields (top) and their per-cell 1σ
-(bottom), on the 90 m grid, masked to the well-supported domain. The water table carries fine
-terrain-driven (HAND) 90 m structure; the saturation-fraction and recharge fields inherit the coarse
-~4 km TerraClimate driver footprint (visible as blocky cells) — an honest signal of their native
-resolution, recorded in the export manifest so a resampled cell is not read as a native 90 m
-observation.](assets/landlab_export.png){#fig-landlab-export}
+(bottom), on the 90 m grid, the water table masked to the well-supported domain. The water table
+(HAND baseline) and the saturation fraction both carry fine 90 m structure — the saturation is
+downscaled the same way as the rest of the product and the digital twin (coarse relative wetness
+re-expressed through the fine 90 m soil envelope, $\theta = \theta_{wp} + sf\,(\theta_{sat}-\theta_{wp})$),
+so its 90 m detail is the static texture while its temporal signal stays at the driver scale.
+Recharge is exported at the ~4 km TerraClimate forcing scale (a P/PET-dominated flux, so its
+information is genuinely coarse; visible as blocky cells). Each field's spatial scale is recorded in
+the manifest so a resampled cell is not read as a native observation.](assets/landlab_export.png){#fig-landlab-export}
 
 ### Shared static soil-hydromechanical set
 

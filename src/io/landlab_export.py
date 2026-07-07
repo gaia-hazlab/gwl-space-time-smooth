@@ -218,14 +218,38 @@ def load_water_table_field(dtw_tif, rf_std_tif=None, krige_std_tif=None, mask_ti
     return fields
 
 
-def load_saturation_field(sm_zarr):
-    """Temporal-mean saturation fraction S = θ/θ_sat (+1σ) from the soil-moisture Zarr."""
+def load_saturation_field(sm_zarr, envelope_zarr="data/processed/soil_hydraulic_envelope_90m.zarr"):
+    """Temporal-mean saturation fraction S = θ/θ_sat (+1σ) on the fine 90 m grid.
+
+    Mirrors :func:`src.models.soil_moisture.soil_moisture_90m`: the *dynamics* (relative saturation
+    ``(θ−wp)/(sat−wp)``) are solved at the coarse ~4 km driver grid, downscaled, then re-expressed
+    through the **fine 90 m envelope** ``θ = wp + sf·(sat−wp)`` so the field keeps its 90 m soil
+    texture rather than the blocky driver footprint. The temporal signal remains driver-scale (noted
+    in the manifest); the 90 m structure is the static envelope, consistent with the digital twin and
+    the rest of the product. Falls back to the coarse θ/θ_sat if the 90 m envelope is unavailable.
+    """
+    from rasterio.enums import Resampling
+
     ds = xr.open_zarr(sm_zarr)
-    s = saturation_fraction(ds["theta"], ds["theta_sat"])              # (time, lat, lon)
-    s = xr.DataArray(s, dims=ds["theta"].dims, coords=ds["theta"].coords)
-    s_mean = _georef_latlon(s.mean("time"))
-    s_std = _georef_latlon((ds["theta_std"] / ds["theta_sat"]).mean("time"))
-    return DynamicField("saturation_fraction", s_mean, epoch="mean", sigma=s_std)
+    wpc, satc = ds["theta_wp"], ds["theta_sat"]
+    satfrac = ((ds["theta"] - wpc) / (satc - wpc).clip(min=1e-6)).clip(0.0, 1.0)   # (time,lat,lon)
+    if not Path(envelope_zarr).exists():                               # coarse fallback
+        s_mean = _georef_latlon((ds["theta"] / satc).clip(0.0, 1.0).mean("time"))
+        s_std = _georef_latlon((ds["theta_std"] / satc).mean("time"))
+        return DynamicField("saturation_fraction", s_mean, epoch="mean", sigma=s_std,
+                            extra={"spatial_scale": "driver ~4 km (no 90 m envelope found)"})
+
+    env = xr.open_zarr(envelope_zarr)
+    like = env["theta_sat"].rio.write_crs("EPSG:5070")
+    wp90 = env["theta_wp"].rio.write_crs("EPSG:5070")
+    sf90 = _georef_latlon(satfrac.mean("time")).rio.reproject_match(
+        like, resampling=Resampling.bilinear).clip(0.0, 1.0)
+    theta90 = wp90 + sf90 * (like - wp90)                             # re-express on the fine envelope
+    s_mean = (theta90 / like).clip(0.0, 1.0)
+    s_std = _georef_latlon((ds["theta_std"] / satc).mean("time")).rio.reproject_match(
+        like, resampling=Resampling.bilinear)
+    return DynamicField("saturation_fraction", s_mean, epoch="mean", sigma=s_std,
+                        extra={"spatial_scale": "90 m envelope; dynamics at driver ~4 km"})
 
 
 def load_recharge_field(forcing_zarr, sm_zarr, root_depth_m=1.0):
@@ -247,9 +271,9 @@ def load_recharge_field(forcing_zarr, sm_zarr, root_depth_m=1.0):
     rech = xr.DataArray(wb.recharge_mm / dim[:, None, None], dims=tmpl.dims, coords=tmpl.coords)
     mean = _georef_latlon(rech.mean("time"))
     mx = _georef_latlon(rech.max("time"))
-    return DynamicField("recharge", mean, epoch="mean", sigma=0.1 * abs(mean),
-                        extra={"max_asc_note": "max also available", "max_epoch": "max"}), \
-        DynamicField("recharge", mx, epoch="max")
+    scale = {"spatial_scale": "driver ~4 km (forcing-limited: P/PET-dominated flux)"}
+    return DynamicField("recharge", mean, epoch="mean", sigma=0.1 * abs(mean), extra=scale), \
+        DynamicField("recharge", mx, epoch="max", extra=scale)
 
 
 def main():
