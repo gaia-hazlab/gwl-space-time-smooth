@@ -1,13 +1,18 @@
-# gwl-space-time-smooth — GAIA HazLab
+# GAIA Soil Reanalysis — GAIA HazLab
+
+> Formerly **gwl-space-time-smooth**. The project has grown from a groundwater-level product into a
+> coupled **soil reanalysis**: groundwater level, soil moisture, and near-surface stiffness (Vs30) at
+> 90 m, with uncertainty and ambient-noise dv/v assimilation. The GitHub repository rename to
+> `gaia-soil-reanalysis` is pending; the badge/site URLs below still use the old slug until then.
 
 [![Render & Publish Quarto Site](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml/badge.svg)](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml)
 
-**[📄 Read the technical paper →](https://gaia-hazlab.github.io/gwl-space-time-smooth/)**
+**[📄 Read the technical report →](https://gaia-hazlab.github.io/gwl-space-time-smooth/)**
 
-Observation-anchored monthly groundwater level (GWL) product for Washington State (Pacific Northwest),
-integrated with the [GAIA HazLab](https://gaia-hazlab.github.io) ecosystem. Outputs
-support Sanger et al. liquefaction models (valleys/basins) and LandLab landslide
-modeling (mountain slopes).
+Observation-anchored 90 m reanalysis of the near-surface state for Washington State (Pacific
+Northwest) — groundwater level, soil moisture, and Vs30 — integrated with the
+[GAIA HazLab](https://gaia-hazlab.github.io) ecosystem. Outputs support Sanger et al. liquefaction
+models (valleys/basins) and LandLab landslide modeling (mountain slopes).
 
 > **Core philosophy**: Real wells first. HAND-based terrain physics second. Climate
 > response functions third. Never trust a gridded product until validated against

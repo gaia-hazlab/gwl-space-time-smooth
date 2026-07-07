@@ -1,7 +1,7 @@
 ---
 title: |
-  Observation-Anchored Groundwater Level Modeling for the Pacific Northwest:
-  A Hybrid Data-Driven Framework
+  GAIA Soil Reanalysis: Observation-Anchored Groundwater Level, Soil Moisture,
+  and Near-Surface Stiffness for the Pacific Northwest
 subtitle: "GAIA HazLab Technical Report"
 author:
   - name: Marine Denolle
