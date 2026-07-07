@@ -55,6 +55,48 @@ def wald_allen_vs30(slope_deg, region="active"):
     return np.where(np.isfinite(s), out, np.nan).astype("float32")
 
 
+# NEHRP / ASCE 7 site-class Vs30 boundaries (m/s), soft -> stiff, and the classes they separate:
+# E < 180 < D < 360 < C < 760 < B < 1500 < A. A design engineer reads P(class) and P(crossing a
+# boundary), not a raw percent sigma -- issue #53.
+NEHRP_BOUNDS = np.array([180.0, 360.0, 760.0, 1500.0])
+NEHRP_CLASSES = ("E", "D", "C", "B", "A")
+
+
+def nehrp_class_probabilities(vs30_mean, vs30_std, lognormal=False):
+    """P(NEHRP site class) from a Vs30 estimate and its 1-sigma.
+
+    Returns probabilities ``P(E, D, C, B, A)`` that the *true* Vs30 falls in each ASCE 7 / NEHRP
+    class, with a trailing axis of length 5. Scalars return a length-5 vector; arrays broadcast over
+    the input shape (so a whole Vs30 field maps to a per-cell class-probability stack). This turns the
+    Vs30 uncertainty into the quantity a geotechnical design consumer needs -- P(class) and, by
+    differencing the CDF, P(Vs30 crossing 180 / 360 / 760 m/s) -- rather than a raw percent sigma.
+
+    ``lognormal=True`` treats ``vs30_std`` as the sigma of ln(Vs30) (the field-standard multiplicative
+    error model); otherwise ``vs30_std`` is a linear m/s sigma (matching the dv/v-propagated 1-sigma).
+    A zero sigma collapses to a one-hot class assignment.
+    """
+    from scipy.stats import norm
+
+    mu = np.asarray(vs30_mean, dtype="float64")
+    sd = np.asarray(vs30_std, dtype="float64")
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if lognormal:
+            z = (np.log(NEHRP_BOUNDS) - np.log(mu)[..., None]) / sd[..., None]
+        else:
+            z = (NEHRP_BOUNDS - mu[..., None]) / sd[..., None]
+        cdf = norm.cdf(z)                                  # P(Vs30 <= each boundary), shape (..., 4)
+    lower = np.concatenate([np.zeros(cdf.shape[:-1] + (1,)), cdf], axis=-1)
+    upper = np.concatenate([cdf, np.ones(cdf.shape[:-1] + (1,))], axis=-1)
+    return upper - lower                                  # P in (E, D, C, B, A), shape (..., 5)
+
+
+def most_likely_nehrp_class(vs30_mean, vs30_std, lognormal=False):
+    """(class_label, probability) of the most probable NEHRP class for a *scalar* Vs30 estimate."""
+    p = nehrp_class_probabilities(vs30_mean, vs30_std, lognormal=lognormal)
+    i = int(np.argmax(p))
+    return NEHRP_CLASSES[i], float(p[i])
+
+
 def vs30_from_slope(slope_tif, region="active"):
     """Apply the Wald-Allen proxy to a slope raster (degrees); returns a Vs30 DataArray (m/s)."""
     import rioxarray as rxr

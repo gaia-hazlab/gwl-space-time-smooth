@@ -1897,6 +1897,37 @@ so the assimilated time signal is visible rather than swamped by the static rang
 (GWL), SNOTEL (soil moisture), seismic UW/CC (Vs30); remote-sensing inputs listed below the
 panels.](assets/digital_twin.gif){#fig-twin}
 
+### Vs30 uncertainty as site-class probability {#sec-siteclass}
+
+A geotechnical consumer does not act on a raw "15 % ± " on Vs30 — it acts on the **NEHRP/ASCE 7
+site class** and on the risk of crossing a design boundary (180 / 360 / 760 m s⁻¹). We therefore
+report the Vs30 uncertainty as a **site-class probability**: given the per-cell Vs30 mean and its
+propagated 1σ, `fetch_vs30.nehrp_class_probabilities` integrates a Gaussian (or lognormal) over the
+class boundaries to return $P(\text{E}, \text{D}, \text{C}, \text{B}, \text{A})$, and by differencing
+the CDF, the probability of crossing any single boundary. A cell that sits near a boundary honestly
+splits its mass across two classes rather than being forced into one.
+
+```{python}
+#| output: asis
+import os, sys
+for _p in (os.getcwd(), os.path.abspath("..")):        # kernel cwd is docs/; repo root holds src/
+    if os.path.isdir(os.path.join(_p, "src")) and _p not in sys.path:
+        sys.path.insert(0, _p)
+from src.data.fetch_vs30 import nehrp_class_probabilities, NEHRP_CLASSES
+examples = [("soft valley fill", 200.0, 30.0),
+            ("firm / stiff soil", 350.0, 40.0),
+            ("weathered rock", 620.0, 90.0)]
+print("| Representative cell | Vs30 (m/s) | 1σ | " + " | ".join(f"P({c})" for c in NEHRP_CLASSES) + " |")
+print("|---|---|---|" + "---|" * 5)
+for name, mu, sd in examples:
+    cells = " | ".join(f"{x:.2f}" for x in nehrp_class_probabilities(mu, sd))
+    print(f"| {name} | {mu:.0f} | {sd:.0f} | {cells} |")
+```
+
+The middle row makes the point: a 350 m s⁻¹ firm-soil cell 40 m s⁻¹ from the D|C boundary carries a
+real probability of being class C, and that split — not a symmetric percent bar — is what a
+site-response or liquefaction screen should propagate.
+
 ### Data provenance
 
 Every input, its access path, and its role. Point (in-situ) sources are assimilated; static and

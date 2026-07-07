@@ -7,7 +7,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.data.fetch_vs30 import wald_allen_vs30
+from src.data.fetch_vs30 import (
+    NEHRP_CLASSES,
+    most_likely_nehrp_class,
+    nehrp_class_probabilities,
+    wald_allen_vs30,
+)
 
 
 def test_monotone_and_nehrp_range():
@@ -30,8 +35,51 @@ def test_nan_slope_gives_nan():
     assert np.isnan(vs[0]) and np.isfinite(vs[1])
 
 
+def test_nehrp_probs_are_a_distribution_centered_on_the_class():
+    # 300 m/s with a tight sigma is almost surely NEHRP D (180-360); probs sum to 1
+    p = nehrp_class_probabilities(300.0, 20.0)
+    assert p.shape == (5,)
+    assert abs(p.sum() - 1.0) < 1e-9
+    assert NEHRP_CLASSES[int(p.argmax())] == "D"
+    assert p[1] > 0.98                                   # index 1 == class D
+    cls, prob = most_likely_nehrp_class(300.0, 20.0)
+    assert cls == "D" and prob > 0.98
+
+
+def test_nehrp_boundary_splits_mass_across_two_classes():
+    # sitting exactly on the D|C boundary (360) splits ~50/50 between D and C, little elsewhere
+    p = nehrp_class_probabilities(360.0, 15.0)
+    assert abs(p[1] - 0.5) < 0.05 and abs(p[2] - 0.5) < 0.05  # D and C
+    assert p[0] + p[3] + p[4] < 0.02                     # negligible E, B, A
+
+
+def test_nehrp_wider_sigma_spreads_probability():
+    tight = nehrp_class_probabilities(300.0, 10.0)
+    wide = nehrp_class_probabilities(300.0, 120.0)
+    # the modal (D) probability drops and mass leaks into neighbours as sigma grows
+    assert wide[1] < tight[1]
+    assert wide[2] > tight[2]                            # more chance of crossing up into C
+
+
+def test_nehrp_array_broadcasts_per_cell():
+    field = np.array([[190.0, 400.0], [800.0, 250.0]])
+    p = nehrp_class_probabilities(field, 30.0)
+    assert p.shape == (2, 2, 5)
+    assert np.allclose(p.sum(axis=-1), 1.0)
+
+
+def test_nehrp_lognormal_option_runs_and_normalizes():
+    p = nehrp_class_probabilities(300.0, 0.2, lognormal=True)   # sigma of ln(Vs30)
+    assert abs(p.sum() - 1.0) < 1e-9 and NEHRP_CLASSES[int(p.argmax())] == "D"
+
+
 if __name__ == "__main__":
     test_monotone_and_nehrp_range()
     test_bins_map_to_expected_classes()
     test_nan_slope_gives_nan()
+    test_nehrp_probs_are_a_distribution_centered_on_the_class()
+    test_nehrp_boundary_splits_mass_across_two_classes()
+    test_nehrp_wider_sigma_spreads_probability()
+    test_nehrp_array_broadcasts_per_cell()
+    test_nehrp_lognormal_option_runs_and_normalizes()
     print("all Vs30 tests passed")
