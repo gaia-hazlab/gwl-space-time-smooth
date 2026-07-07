@@ -1947,14 +1947,18 @@ carried, not hidden.
 | Soil moisture | domain-mean $r$; bias; RMSE | 0.85; −0.08; 0.095 | MERRA-2 root zone (incl. 2025) | **MODEL cross-check** |
 | Soil moisture (snow phase) | LOSO $r$ | 0.49 (tuning overfits to 0.44) | SNOTEL | **REAL** (n=5, upland) |
 | dv/v measurement | band recovery $r$ | > 0.95 | controlled synthetic | **SYNTHETIC** (circular: inverse undoes forward) |
-| Assimilation | posterior σ reduction | WTD ~53%, θ ~91% | near-station vs prior | **SYNTHETIC** (geometry only; zero measurement error injected) |
+| Assimilation | σ shrink (near-station vs far) | GWL ~84%, θ ~46%, Vs30 ~90% | inverted-state σ vs prior | **SYNTHETIC forcing, real chain** (measurement + inversion σ carried) |
 
 The **Basis** column is essential: only the groundwater block-CV RMSE and the SNOTEL LOSO are real
-independent skill. MERRA-2 is a model cross-check (shared forcing family). The dv/v recovery and the
-assimilation σ-reduction are synthetic-derived — the recovery is circular (the inverse undoing the
-forward operator on an imposed signal), and the σ-reduction reflects station geometry with **zero
-dv/v measurement error injected**, not demonstrated dv/v precision. These are pipeline demonstrations,
-not skill claims, until the real dv/v run lands.
+independent skill. MERRA-2 is a model cross-check (shared forcing family). The dv/v recovery is still
+circular (the inverse undoing the forward operator on an imposed signal). The assimilation
+σ-reduction, however, is **no longer geometry-only**: the twin now runs the full
+forward → measure → invert chain (issue #51) — a realistic measurement error is added to the
+synthetic band dv/v, each station-epoch is inverted with `invert_depth_profile`, and the states
+(relative WTD, θ, Vs30) are read off the *inverted* depth profile with its posterior covariance
+carried into the per-station assimilation σ (not zero, and not the ground truth). So the σ-reduction
+reflects measurement precision **and** geometry. The forcing is still a synthetic dv/v; the numbers
+become skill claims only when the real UW/CC waveform run supplies the measured dv/v.
 
 **Deviations shown, not smoothed**: each animated σ panel is the honest per-cell 1σ (static budget
 combined in quadrature with the per-frame assimilation posterior), so the viewer sees exactly where

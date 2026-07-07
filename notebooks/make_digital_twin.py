@@ -181,17 +181,31 @@ def _compute_stacks(static, grid):
     K = band_sensitivity_matrix(prof, fc)
     syn = dvv.synthetic_station_dvv(seis.lon.values, seis.lat.values, K,
                                     n_epoch=N_FRAMES, dt_days=DT_DAYS, water_table_km=WATER_TABLE_KM)
-    dvv_bt = syn["dvv_bt"]                       # (n_sta, n_band, n_epoch)
-    m_zt = syn["m_zt"]                           # (n_sta, n_depth, n_epoch)
-    depths = syn["depths_km"]
-
-    # per-station, per-frame state anomalies + representativeness-floored sigmas
-    wtd, _ = dvv.dvv_to_wtd_change(dvv_bt[:, 0, :], np.zeros_like(dvv_bt[:, 0, :]))     # deep band
-    dth, _ = dvv.dvv_to_theta_change(dvv_bt[:, -1, :], np.zeros_like(dvv_bt[:, -1, :]))  # shallow band
-    frac = np.stack([dvv.dvv_to_vs30_change(dvv.top_layer_mean_dvv(m_zt[i], depths, 0.03))[0]
-                     for i in range(m_zt.shape[0])], axis=0)                              # (n_sta, n_epoch)
+    dvv_bt = syn["dvv_bt"]                       # (n_sta, n_band, n_epoch) forward-modelled dv/v
     n_sta = dvv_bt.shape[0]
-    sig = dict(gwl=np.full(n_sta, 0.4), theta=np.full(n_sta, 0.02), vs30=np.full(n_sta, 0.02))
+
+    # HONEST measurement -> inversion chain (issue #51): add a realistic ambient-noise measurement
+    # error to the forward dv/v, then INVERT each station-epoch for the depth profile (kernels K
+    # built once above) and read the states off the inverted profile -- not off the ground truth --
+    # carrying the measurement + inversion covariance into the per-station sigma.
+    MEAS_SIGMA = 3e-4                            # per-band dv/v measurement std (~0.03%)
+    rng = np.random.RandomState(3)
+    dvv_meas = dvv_bt + rng.normal(0.0, MEAS_SIGMA, dvv_bt.shape)
+    cov_bands = np.diag(np.full(len(fc), MEAS_SIGMA ** 2))
+    FLOOR = dict(gwl=0.3, theta=0.01, vs30=0.01)  # small conversion/representativeness floor
+
+    wtd = np.full((n_sta, N_FRAMES), np.nan); dth = np.full_like(wtd, np.nan); frac = np.full_like(wtd, np.nan)
+    wtd_s = np.full_like(wtd, np.nan); dth_s = np.full_like(wtd, np.nan); frac_s = np.full_like(wtd, np.nan)
+    for i in range(n_sta):
+        for tt in range(N_FRAMES):
+            st = dvv.invert_states_from_bands(dvv_meas[i, :, tt], cov_bands, K, WATER_TABLE_KM, top_km=0.03)
+            w, ws = dvv.dvv_to_wtd_change(st["wtd_relative_dvv"], st["wtd_relative_dvv_std"])
+            th, ths = dvv.dvv_to_theta_change(st["soil_moisture_dvv"], st["soil_moisture_dvv_std"])
+            fr, frs = dvv.dvv_to_vs30_change(st["vs30_frac"], st["vs30_frac_std"])
+            wtd[i, tt], wtd_s[i, tt] = w, ws; dth[i, tt], dth_s[i, tt] = th, ths
+            frac[i, tt], frac_s[i, tt] = fr, frs
+    sig = dict(gwl=np.maximum(wtd_s, FLOOR["gwl"]), theta=np.maximum(dth_s, FLOOR["theta"]),
+               vs30=np.maximum(frac_s, FLOOR["vs30"]))     # per-station, per-epoch inversion sigma
     anom = dict(gwl=wtd, theta=dth, vs30=frac)
     prior = dict(gwl=0.5, theta=0.05, vs30=0.06)
     L = 25_000.0
@@ -204,7 +218,7 @@ def _compute_stacks(static, grid):
     for i in range(N_FRAMES):
         for p in static:
             fld, psig = assimilate_points(grid["x5070"], grid["y5070"], sx, sy,
-                                          anom[p][:, i], sig[p], L, prior[p])
+                                          anom[p][:, i], sig[p][:, i], L, prior[p])
             if p == "vs30":
                 field = base_disp[p] * (1.0 + fld)
                 s = np.sqrt(sigma_static[p] ** 2 + (base_disp[p] * psig) ** 2)

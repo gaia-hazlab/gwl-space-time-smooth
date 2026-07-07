@@ -342,6 +342,34 @@ def separate_depth(ens_by_band, velocity_profile, water_table_depth_km,
     return post, part
 
 
+def invert_states_from_bands(dvv_bands, cov_bands, kernels, water_table_km, top_km=0.03,
+                             prior_std=5e-3, corr_length_km=0.1):
+    """Invert one epoch's banded dv/v (with covariance) for the three state dv/v means + propagated σ.
+
+    The efficient, honest per-station entry point: pass PRE-BUILT ``kernels`` (so the ~12 s disba
+    kernel build happens once, not per call) and the measurement covariance ``cov_bands``. Returns
+    dict with the shallow (soil-moisture), deep (relative WTD), and top-``top_km`` (Vs30) mean dv/v
+    and their aggregated posterior σ -- all from the depth INVERSION, carrying measurement + inversion
+    error. σ is the RMS over the depth nodes (prior-correlated, so not reduced by sqrt(N)).
+    """
+    from codameter.uq_depth import invert_depth_profile
+
+    post = invert_depth_profile(np.asarray(dvv_bands), np.asarray(cov_bands), kernels,
+                                prior_std=prior_std, corr_length_km=corr_length_km)
+    z = np.asarray(kernels.depths_km); m, sd = np.asarray(post.mean), post.std
+    shallow, deep, top = z <= water_table_km, z > water_table_km, z <= top_km
+
+    def _agg(mask):
+        if not mask.any():
+            return np.nan, np.nan
+        return float(np.mean(m[mask])), float(np.sqrt(np.mean(sd[mask] ** 2)))
+
+    sm, sm_sd = _agg(shallow); wtd, wtd_sd = _agg(deep); v, v_sd = _agg(top)
+    return dict(soil_moisture_dvv=sm, soil_moisture_dvv_std=sm_sd,
+                wtd_relative_dvv=wtd, wtd_relative_dvv_std=wtd_sd,
+                vs30_frac=v, vs30_frac_std=v_sd)
+
+
 # ---------------------------------------------------------------------------
 # 5. Physically realistic band-dependent synthetic (for the digital-twin demo)
 # ---------------------------------------------------------------------------
