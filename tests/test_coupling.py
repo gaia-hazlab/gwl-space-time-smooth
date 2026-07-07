@@ -190,6 +190,19 @@ def test_assimilation_attribution_shares_sum_to_one_and_rank():
     assert attr["model"][0, 0] > 0.5                          # far corner reverts toward the model
 
 
+def test_feature_attribution_ranks_the_informative_feature():
+    from src.models.attribution import feature_attribution
+    rng = np.random.RandomState(4)
+    a = rng.rand(60, 60)
+    b = rng.rand(60, 60)
+    noise = rng.rand(60, 60)
+    target = 3.0 * a + 0.5 * b + 0.01 * noise           # 'a' dominates, 'noise' irrelevant
+    imp = feature_attribution(target, {"a": a, "b": b, "noise": noise}, n_estimators=60, sample=3000)
+    assert abs(sum(imp.values()) - 1.0) < 1e-6           # shares sum to 1
+    assert imp["a"] > imp["b"] > imp["noise"]            # importance tracks the true influence
+    assert imp["noise"] < 0.1
+
+
 def test_upscale_and_native_scale_comparison():
     fine = _grid(90.0, 40)
     fine = fine.copy(data=np.random.RandomState(0).rand(40, 40)).rio.write_crs("EPSG:5070")
@@ -212,5 +225,6 @@ if __name__ == "__main__":
     test_regression_and_ml_downscalers_are_mean_preserving()
     test_assimilate_points_precision_weighting_and_posterior_sigma()
     test_assimilation_attribution_shares_sum_to_one_and_rank()
+    test_feature_attribution_ranks_the_informative_feature()
     test_upscale_and_native_scale_comparison()
     print("all coupling/ensemble/downscale tests passed")

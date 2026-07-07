@@ -344,70 +344,87 @@ STREAM_COLOR = {"wells": OI["well"], "snotel": OI["snotel"], "seismic": "#009E73
 STREAM_LABEL = {"wells": "GWL wells", "snotel": "SNOTEL", "seismic": "seismic dv/v", "model": "model prior"}
 
 
-def make_attribution_figure(grid, static, path, L=25_000.0):
-    """Per-state attribution of the assimilated estimate to each data stream + the model prior.
+FEATURE_COLOR = {"HAND": "#0072B2", "TWI": "#56B4E9", "slope": "#8a8a99",
+                 "clay": "#8c6d31", "sand": "#E69F00", "dv/v": "#009E73"}
 
-    Top row: the dominant data stream at each cell (categorical map). Bottom row: the domain-mean
-    attribution share of each stream (stacked bar). Answers 'how much does each sensor/data stream
-    contribute to GWL, soil moisture, and Vs30' - computed exactly from the assimilation weights.
+
+def _covariates(grid):
+    """Load the static covariates on the display grid: HAND, TWI, slope, clay, sand."""
+    cov = {}
+    for name, tif in (("HAND", "terrain_hand_90m.tif"), ("TWI", "terrain_twi_90m.tif"),
+                      ("slope", "terrain_slope_90m.tif")):
+        r = rxr.open_rasterio(PROC / tif, masked=True).squeeze("band", drop=True)
+        cov[name] = _to_display(r, grid)
+    sol = xr.open_zarr(PROC / "solus100_wa.zarr").rio.write_crs("EPSG:5070")
+    for name, var in (("clay", "clay_pct"), ("sand", "sand_pct")):
+        cov[name] = _to_display(sol[var], grid)
+    return cov
+
+
+def make_attribution_figure(grid, static, fields, means, frame, path, L=25_000.0):
+    """Attribution of each state to its features (RF importance) and to its sensors (assimilation).
+
+    Top row: random-forest permutation importance of every feature -- static covariates (HAND, TWI,
+    slope, clay, sand) plus the dv/v observation -- for the field itself. This is the honest, field-
+    level answer: Vs30 is terrain-driven, not "99% seismic". Bottom row: the precision-weighted
+    share of each sensor in the near-station assimilation UPDATE (what the earlier view showed).
     """
-    from matplotlib.colors import to_rgba
     from matplotlib.patches import Patch
 
-    xy = _sensor_xy()
+    from src.models.attribution import feature_attribution
+
+    xy, cov = _sensor_xy(), _covariates(grid)
     order = ("gwl", "theta", "vs30")
     titles = {"gwl": "Groundwater (DTW)", "theta": "Soil moisture θ", "vs30": "Vs30"}
-    w, e, s, n = grid["extent"]
-    fig, axes = plt.subplots(2, 3, figsize=(13.6, 8.6), height_ratios=[3, 1.5],
+    fig, axes = plt.subplots(2, 3, figsize=(13.8, 8.8), height_ratios=[1.5, 1.0],
                              constrained_layout=True)
-    shares_out = {}
+    feat_out, sensor_out = {}, {}
     for c, p in enumerate(order):
-        spec = ATTR_SOURCES[p]
+        base_disp = _to_display(static[p]["base"], grid)
+        target = fields[p][frame]
+        feats = {**cov, "dv/v": target - base_disp}          # dv/v = the assimilated perturbation
+        imp = feature_attribution(target, feats)
+        feat_out[p] = imp
+
+        ax = axes[0, c]                                       # feature-importance bars (sorted)
+        items = sorted(imp.items(), key=lambda kv: np.nan_to_num(kv[1]), reverse=True)
+        labels = [k for k, _ in items]; vals = [float(np.nan_to_num(v)) for _, v in items]
+        ypos = np.arange(len(labels))[::-1]
+        ax.barh(ypos, vals, color=[FEATURE_COLOR.get(k, "#999999") for k in labels], edgecolor="white")
+        ax.set_yticks(ypos); ax.set_yticklabels(labels, fontsize=9)
+        ax.set_xlim(0, max(vals + [0.01]) * 1.18); ax.set_title(titles[p], fontsize=12.5, color=INK)
+        ax.set_xlabel("feature importance", fontsize=9)
+        for yp, v in zip(ypos, vals):
+            ax.text(v + 0.005, yp, f"{v*100:.0f}%", va="center", fontsize=8.5, color=INK)
+
+        spec = ATTR_SOURCES[p]                                # sensor precision-update share
         sources = {name: (xy[name][0], xy[name][1], sig) for name, sig in spec["streams"].items()}
         attr = assimilation_attribution(grid["x5070"], grid["y5070"], sources, spec["prior"], L)
-        cats = list(spec["streams"]) + ["model"]
-        valid = np.isfinite(_to_display(static[p]["base"], grid))
-
-        # dominant-source categorical map
-        stack = np.stack([attr[k] for k in cats])
-        dom = np.argmax(stack, axis=0)
-        rgba = np.zeros(dom.shape + (4,))
-        for k, name in enumerate(cats):
-            rgba[dom == k] = to_rgba(STREAM_COLOR[name])
-        rgba[~valid] = (0, 0, 0, 0)
-        ax = axes[0, c]
-        ax.imshow(rgba, extent=[w, e, s, n], origin="upper", interpolation="nearest", aspect="auto")
-        ax.set_xlim(w, e); ax.set_ylim(s, n); ax.set_xticks([]); ax.set_yticks([])
-        ax.set_title(titles[p], fontsize=12.5, color=INK)
-        for name in spec["streams"]:
-            ax.scatter(*_lonlat(xy[name], grid), s=8, c="k", alpha=0.35, linewidths=0, zorder=3)
-
-        # domain-mean shares (over valid cells) -> stacked horizontal bar
+        valid = np.isfinite(base_disp); cats = list(spec["streams"]) + ["model"]
         shares = {k: float(np.nanmean(attr[k][valid])) for k in cats}
-        ssum = sum(shares.values()) or 1.0
-        shares = {k: v / ssum for k, v in shares.items()}
-        shares_out[p] = shares
-        axb = axes[1, c]
-        left = 0.0
+        ssum = sum(shares.values()) or 1.0; shares = {k: v / ssum for k, v in shares.items()}
+        sensor_out[p] = shares
+        axb = axes[1, c]; left = 0.0
         for name in cats:
             axb.barh(0, shares[name], left=left, color=STREAM_COLOR[name], edgecolor="white")
             if shares[name] > 0.06:
                 axb.text(left + shares[name] / 2, 0, f"{shares[name]*100:.0f}%", ha="center",
-                         va="center", fontsize=10, color="white", fontweight="bold")
+                         va="center", fontsize=9.5, color="white", fontweight="bold")
             left += shares[name]
         axb.set_xlim(0, 1); axb.set_ylim(-0.5, 0.5); axb.set_yticks([])
-        axb.set_xticks([0, 0.5, 1.0]); axb.set_xticklabels(["0", "50", "100%"], fontsize=9)
-        axb.set_title("domain-mean attribution", fontsize=10, color=MUTED)
+        axb.set_xticks([0, 0.5, 1.0]); axb.set_xticklabels(["0", "50", "100%"], fontsize=8.5)
+        axb.set_title("assimilation update — sensor share near stations", fontsize=9.5, color=MUTED)
 
     handles = [Patch(facecolor=STREAM_COLOR[k], label=STREAM_LABEL[k])
                for k in ("wells", "snotel", "seismic", "model")]
-    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=10.5,
+    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=10,
                bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle("Data-stream attribution: which sensors set each state, and where",
-                 fontsize=13.5, fontweight="bold", color=INK)
+    fig.suptitle("Attribution — top: features explaining each state (RF importance); "
+                 "bottom: sensor share of the near-station update",
+                 fontsize=12.5, fontweight="bold", color=INK)
     fig.savefig(path, bbox_inches="tight", facecolor="white", dpi=150)
     plt.close(fig)
-    return shares_out
+    return dict(feature_importance=feat_out, sensor_update_share=sensor_out)
 
 
 def _lonlat(xy5070, grid):
@@ -432,8 +449,9 @@ def main():
     # copy GIF to assets for the report
     (ASSETS / "digital_twin.gif").write_bytes((OUT / "digital_twin.gif").read_bytes())
 
-    # data-stream attribution figure (which sensors set each state, and where)
-    shares = make_attribution_figure(grid, static, OUT / "digital_twin_attribution.png")
+    # attribution: RF feature importance (field-level) + sensor share (near-station update)
+    shares = make_attribution_figure(grid, static, fields, means, frame,
+                                     OUT / "digital_twin_attribution.png")
     (ASSETS / "digital_twin_attribution.png").write_bytes(
         (OUT / "digital_twin_attribution.png").read_bytes())
 

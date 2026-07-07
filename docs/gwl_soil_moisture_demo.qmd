@@ -394,14 +394,16 @@ GWL and soil moisture are shown as **anomalies** (Δ from the per-frame geospati
 text insert) so the assimilated signal is visible; Vs30 is absolute (turbo, the jet-like ramp
 geotechnical models expect).
 
-Because the assimilation is precision-weighted, we can attribute every estimate **exactly** to its
-data streams: each observation's contribution is its share of the total precision. Groundwater is
-set ~94% by the dense well network, soil moisture ~95% by the seismic dv/v (more stations than the
-sparse SNOTEL set), and Vs30 ~99% by seismic dv/v — with the maps showing where each stream wins and
-where the twin reverts to the model prior between sensors.
+Attribution is answered at two levels. **Field level** — a random forest over all features (static
+covariates HAND/TWI/slope/clay/sand + the dv/v observation) shows what actually explains each field:
+**Vs30 is ~100% terrain (HAND)**, groundwater ~61% HAND + ~26% clay, soil moisture ~89% sand. dv/v is
+a small field-level term in this MVP *by construction* — it only perturbs the state near the seismic
+stations. **Update level** — the precision-weighted assimilation share shows which sensor sets the
+near-station correction: ~94% wells (GWL), ~95% seismic dv/v (soil moisture), ~99% seismic (Vs30).
+The first is the honest field-wide accounting; the second describes only the near-station refinement.
 
-![Data-stream attribution: the dominant sensor per cell (top) and the domain-mean share per state
-(bottom), computed exactly from the assimilation weights.](../figures/demo/digital_twin_attribution.png)
+![Attribution: RF feature importance per state (top; covariates dominate, dv/v minor at the field
+level) and the sensor share of the near-station update (bottom).](../figures/demo/digital_twin_attribution.png)
 
 This is an **MVP with no big-data compute**: the dv/v is a physically realistic synthetic — low
 frequencies track slow groundwater, high frequencies track fast ET and rainfall — while the wells,

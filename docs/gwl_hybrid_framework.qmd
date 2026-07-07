@@ -1794,20 +1794,30 @@ Independent references used to score the twin (kept separate from the assimilate
 | SNOTEL θ (held out) | NRCS AWDB | point | soil-moisture phase (LOSO) |
 | NWIS wells (held out) | USGS | point | GWL baseline (spatial block-CV) |
 
-### Attribution: which data streams set each state
+### Attribution: what sets each state
 
-Because the assimilation is precision-weighted, each observation's contribution to a cell is exactly
-its share of the total precision, $w_i = \exp(-d^2/2L^2)/\sigma_i^2$; summing per source and adding
-the model-prior precision $p_0 = 1/\sigma_{\text{prior}}^2$ gives an **exact attribution** of every
-estimate to its data streams (and to the model). @fig-attr maps the dominant stream and reports the
-domain-mean shares: groundwater is set ~94% by the dense well network, soil moisture ~95% by the
-seismic dv/v (which has more stations than the sparse SNOTEL soil-moisture set), and Vs30 ~99% by
-the seismic dv/v. The maps show *where* each stream wins and where the estimate reverts to the model
-prior between sensors — a direct, per-pixel accounting of what the twin is actually listening to.
+Attribution is answered at two levels, because they say different things (@fig-attr).
 
-![Data-stream attribution. Top: the dominant data stream at each cell (wells, SNOTEL, seismic dv/v,
-or model prior). Bottom: domain-mean attribution share per state. Computed exactly from the
-assimilation weights.](assets/digital_twin_attribution.png){#fig-attr}
+**Field level — statistical learning across all features.** A random forest predicts each state from
+every feature — the static covariates (HAND, TWI, slope, clay, sand) and the dv/v observation — and
+its permutation importance is the honest, field-wide accounting: **Vs30 is ~100% terrain (HAND)**,
+groundwater is ~61% HAND and ~26% clay, and soil moisture is ~89% sand. The dv/v is a small
+field-level contributor here **by construction**: in this MVP it only perturbs the state near the
+seismic stations, so it cannot explain the covariate-driven structure that fills the domain. This is
+exactly why a point-assimilation "sensor share" is the wrong lens for the field, and why the MVP uses
+feature learning across all covariates — as real covariate/dv/v relations are learned, the same model
+generalizes the dv/v signal beyond station neighborhoods and its importance grows.
+
+**Update level — which sensor sets the near-station correction.** The precision-weighted assimilation
+gives the exact share of each observation in the *update* it applies on top of the covariate field:
+$w_i = \exp(-d^2/2L^2)/\sigma_i^2$ per station, against the model-prior precision
+$p_0 = 1/\sigma_{\text{prior}}^2$. Near the stations that correction is ~94% wells for groundwater,
+~95% seismic dv/v for soil moisture (more stations than the sparse SNOTEL set), and ~99% seismic for
+Vs30 — a real per-pixel number, but describing the *near-station refinement*, not the field.
+
+![Attribution. Top: random-forest feature importance for each state's field (static covariates +
+dv/v) — covariates dominate; dv/v is a minor field-level term in this MVP. Bottom: the
+precision-weighted sensor share of the near-station assimilation update.](assets/digital_twin_attribution.png){#fig-attr}
 
 ### Assumptions and physical models
 
