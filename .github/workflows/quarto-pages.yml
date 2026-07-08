@@ -38,14 +38,16 @@ jobs:
       - name: Stage for Pages
         run: |
           mkdir _site
-          cp docs/gwl_hybrid_framework.html _site/index.html
-          # The GWL + soil-moisture demo is a pre-rendered, self-contained page (its figures/GIFs
-          # come from gitignored real-data products, so it is not re-rendered on CI — it is served
-          # as committed). Link it from the GAIA soil-reanalysis chapter as:
-          #   https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html
-          if [ -f docs/gwl_soil_moisture_demo.html ]; then
-            cp docs/gwl_soil_moisture_demo.html _site/gwl_soil_moisture_demo.html
-          fi
+          # Landing page (hand-written, static — no Quarto render, so it deploys even if a report
+          # render fails) links all reports from one URL: https://gaia-hazlab.github.io/gwl-space-time-smooth/
+          cp docs/index.html _site/index.html
+          # The freshly rendered technical report is served at /report.html (linked from the landing).
+          cp docs/gwl_hybrid_framework.html _site/report.html
+          # Pre-rendered, self-contained pages (figures/GIFs come from gitignored real-data products,
+          # so they are served as committed rather than re-rendered on CI).
+          for f in gwl_soil_moisture_demo gwl_audit_framework; do
+            if [ -f "docs/$f.html" ]; then cp "docs/$f.html" "_site/$f.html"; fi
+          done
 
       - uses: actions/upload-pages-artifact@v3
         with:
