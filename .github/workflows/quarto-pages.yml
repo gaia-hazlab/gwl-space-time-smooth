@@ -36,12 +36,18 @@ jobs:
       # last-committed report HTML still deploy (the committed docs/gwl_hybrid_framework.html is
       # tracked, so a fresh render just overwrites it in place when it succeeds).
       - name: Render Quarto paper (HTML only — PDF skipped; no LaTeX on runner)
+        id: render
         continue-on-error: true
         run: quarto render docs/gwl_hybrid_framework.qmd --to html
 
+      # Make a failed render VISIBLE (annotation on the run) instead of silently serving stale HTML.
+      - name: Warn if the report render failed
+        if: steps.render.outcome == 'failure'
+        run: echo "::warning title=Report render failed::Deploying the landing page and the last-committed report.html; the technical report may be stale until the Quarto render is fixed."
+
       - name: Stage for Pages
         run: |
-          mkdir _site
+          mkdir -p _site
           # Landing page (hand-written, static — no Quarto render, so it deploys even if a report
           # render fails) links all reports from one URL: https://gaia-hazlab.github.io/gwl-space-time-smooth/
           cp docs/index.html _site/index.html
