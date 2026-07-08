@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GAIA Soil Reanalysis — GAIA HazLab</title>
+<style>
+  :root{
+    --ink:#1a1a2e; --muted:#5a5a6e; --line:#e4e4ec; --bg:#f7f7fb; --card:#ffffff;
+    --gwl:#0072B2; --sm:#009E73; --mech:#CC79A7; --accent:#D55E00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:clamp(1.5rem,4vw,4rem) clamp(1rem,4vw,2rem)}
+  header .tag{display:inline-block;font-size:.72rem;font-weight:600;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--muted);border:1px solid var(--line);
+    border-radius:999px;padding:.28rem .7rem;background:var(--card)}
+  h1{font-size:clamp(1.8rem,5vw,2.7rem);line-height:1.1;margin:1.1rem 0 .4rem;letter-spacing:-.02em}
+  .lede{font-size:1.08rem;color:var(--muted);max-width:64ch;margin:.2rem 0 0}
+  .lede b{color:var(--ink);font-weight:600}
+  .rule{height:1px;background:var(--line);margin:2.2rem 0 1.6rem}
+  .eyebrow{font-size:.78rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 1rem}
+  .grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  a.card{display:block;text-decoration:none;color:inherit;background:var(--card);
+    border:1px solid var(--line);border-radius:14px;padding:1.25rem 1.3rem;
+    transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease}
+  a.card:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(26,26,46,.08);border-color:#d4d4e0}
+  .card .dot{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;
+    justify-content:center;font-size:1.1rem;margin-bottom:.7rem}
+  .card h3{margin:0 0 .3rem;font-size:1.12rem}
+  .card p{margin:0;color:var(--muted);font-size:.95rem}
+  .card .go{margin-top:.8rem;font-size:.86rem;font-weight:600;color:var(--accent)}
+  .primary{grid-column:1/-1}
+  .primary .dot{background:rgba(0,114,178,.12)}
+  footer{margin-top:2.6rem;padding-top:1.4rem;border-top:1px solid var(--line);
+    color:var(--muted);font-size:.85rem;display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;justify-content:space-between}
+  footer a{color:var(--gwl);text-decoration:none}
+  @media (prefers-color-scheme:dark){
+    :root{--ink:#e8e8f0;--muted:#a0a0b4;--line:#2a2a3a;--bg:#141420;--card:#1c1c2a}
+    a.card:hover{box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="tag">GAIA HazLab</span>
+    <h1>GAIA Soil Reanalysis</h1>
+    <p class="lede">A <b>living hydromechanical state of the subsurface</b> — water table depth,
+      soil moisture, and near-surface stiffness — at the ~90 m space and time scales that downstream
+      <b>flood, landslide, and liquefaction</b> models need. Built from high-resolution static
+      layers, assimilated ground sensors and satellites, and a closed water budget, over the Pacific
+      Northwest.</p>
+  </header>
+
+  <div class="rule"></div>
+  <p class="eyebrow">Reports &amp; demonstrations</p>
+
+  <div class="grid">
+    <a class="card primary" href="report.html">
+      <div class="dot" style="background:rgba(0,114,178,.12)">📘</div>
+      <h3>Technical Report</h3>
+      <p>The full framework: mission, hydrological &amp; mechanical modeling, the coupled water
+        budget, uncertainty, validation, the digital-twin MVP, and the downstream LandLab coupling.</p>
+      <div class="go">Read the report →</div>
+    </a>
+
+    <a class="card" href="gwl_soil_moisture_demo.html">
+      <div class="dot" style="background:rgba(0,158,115,.14)">🌱</div>
+      <h3>GWL + Soil-Moisture Demo</h3>
+      <p>The two mature state variables produced end-to-end on real public data at 90 m — static
+        envelope × dynamic driver, with a tracked uncertainty budget.</p>
+      <div class="go">Open the demo →</div>
+    </a>
+
+    <a class="card" href="gwl_audit_framework.html">
+      <div class="dot" style="background:rgba(213,94,0,.14)">🌀</div>
+      <h3>Audit &amp; Forecast Framework</h3>
+      <p>The forecast-path audit: AI weather forecasts (GraphCast/AIFS) → antecedent hydrologic
+        state → hazard forcing, and the assumptions behind it.</p>
+      <div class="go">View the framework →</div>
+    </a>
+  </div>
+
+  <footer>
+    <span>Pacific Northwest · 90 m · EPSG:5070 · observation-anchored</span>
+    <span><a href="https://github.com/gaia-hazlab/gwl-space-time-smooth">Source on GitHub</a></span>
+  </footer>
+</div>
+</body>
+</html>
