@@ -357,7 +357,7 @@ $$
 S_t = S_{t-1} + C_t + I_t - Q_t - E_t - R_t, \qquad \theta_t = S_t/z_r,
 $$
 
-with the flux closures (mm month⁻¹; $[x]_+ \equiv \max(x,0)$)
+with the flux closures (mm month⁻¹; $[x]_+ \equiv \max(x,0)$ and $[x]_0^1 \equiv \min(\max(x,0),\,1)$ clamps to $[0,1]$)
 
 $$
 \begin{aligned}
