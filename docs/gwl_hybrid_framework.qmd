@@ -284,87 +284,165 @@ ridges), and temporally realistic (capturing seasonal and interannual variabilit
 
 ---
 
-## Prior Work: A Taxonomy of Hybrid Approaches {#sec-prior}
+## Scientific Grounds {#sec-grounds}
 
-The literature on GWL mapping and prediction spans a wide spectrum from pure physics to
-pure statistical learning. Here we organize relevant work into four categories and
-identify the gap our approach fills.
+This reanalysis rests on three scientific grounds and the data beneath them. The **hydrological**
+ground models the water state — groundwater level (GWL) and soil moisture; the **mechanical** ground
+models the near-surface stiffness state — shear-wave velocity $V_S$ and density; and a set of
+**petrophysical** models links the two, so a change in water produces a measurable change in
+stiffness. The three map onto the gaia-hazlab science pillars: Pillar-1 soil reanalysis (hydrology),
+the geotechnical hazard chain (mechanics — liquefaction and landslides), and the ambient-noise
+$\delta v/v$ channel (the petrophysical bridge). We take each in turn, then the data grounds
+(@sec-data-grounds) they all rest on.
 
-### Category 1: Full numerical flow models
+### Hydrological modeling grounds {#sec-hydro-grounds}
 
-MODFLOW (USGS) and ParFlow (LLNL, @maxwell2015connections) solve the 3-D
-groundwater flow equation:
-$$S_s \frac{\partial h}{\partial t} = \nabla \cdot (K \nabla h) + R$$
-where $h$ is hydraulic head, $K$ is hydraulic conductivity, $S_s$ is specific storage,
-and $R$ is a source/sink term. These produce physically consistent outputs but require
-aquifer geometry and hydraulic properties that are poorly known at regional scale.
-@reinecke2020importance showed that global groundwater models at coarse resolution
-(0.5°–5') cannot resolve the water table variability relevant to hazard applications.
-The global models of @degraaf2015global are scientifically valuable but produce
-~10 km outputs that cannot serve Sanger et al. or LandLab at the spatial resolution
-required for geotechnical or geomorphological applications.
+Groundwater level and soil moisture are two faces of one subsurface water balance — the saturated
+store below the water table and the vadose store above it — and both are modeled along the same
+spectrum from process physics to pure statistics. We give them equal footing.
 
-### Category 2: Global statistical products
+**Physical / process models.** The reference is the 3-D groundwater flow equation, solved by MODFLOW
+and ParFlow [@maxwell2015connections]:
+$$S_s \frac{\partial h}{\partial t} = \nabla \cdot (K \nabla h) + R,$$
+with head $h$, hydraulic conductivity $K$, specific storage $S_s$, and source/sink $R$. In the vadose
+zone the analogue is the Richards equation, routinely reduced for regional work to a Thornthwaite–Mather
+soil-water balance [@thornthwaite1957water]. These are physically consistent but demand aquifer
+geometry and hydraulic properties poorly known at regional scale; @reinecke2020importance and
+@degraaf2015global show that global models at 0.5°–10 km cannot resolve the water-table variability
+hazards need. Two process building blocks we reuse below are baseflow recession [@brutsaert1977recession],
+which sets a water-table drainage timescale, and the TOPMODEL topographic-wetness closure
+[@beven1979physically], which converts a mean deficit into a spatial saturation pattern; recharge —
+the vadose-to-saturated flux that couples the two stores — is itself a modeling choice with method-dependent
+spread [@scanlon2002choosing].
 
-@fan2013global regressed water table depth against 17 topographic, climatic, and soil
-variables using a combination of logistic (artesian vs. vadose) and linear regression,
-producing the first global 1 km WTD map. The product has been widely used but has
-four documented limitations relevant to our application:
+**Statistical interpolation.** @fan2013global regressed water-table depth on 17 terrain/climate/soil
+variables to the first global 1 km product, later improved by the ML-ensemble HydroGEN [@ma2023wtd;
+@ma2026highres]. These share four limitations for our use: DEM-tile artifacts, elevation bias (valley
+floors indistinguishable from ridge tops at equal elevation), no temporal variability, and severe
+western-US extrapolation from sparse wells — HydroGEN still shows a +7.2 m bias / 20.5 m RMSE against
+held-out PNW wells. The soil-moisture analogue is digital soil mapping: pedotransfer functions
+[@saxton2006soil] applied to ML-mapped soil properties [@nauman2024solus; @ramcharan2018soil], and
+regression kriging [@hengl2007regression], which separates a deterministic trend from kriged residuals.
 
-- **Tiling artifacts** at DEM tile boundaries, inherited from the GMTED2010 mosaic
-- **Elevation bias**: DEM elevation is the dominant predictor; the model cannot
-  distinguish valley floors from ridge tops at the same elevation
-- **No temporal variability**: the product is static (one climatological map)
-- **Western US failure**: sparse well density in arid/semi-arid terrain causes
-  severe extrapolation errors
+**Data-driven / time-series.** At gauged sites, LSTM networks reach state-of-the-art one-step GWL
+prediction [@wunsch2021groundwater; @liesch2019aquifer; @shen2018deeplearning] but do not generalize
+to ungauged locations; transfer-function-noise models [@vonasmuth2002tfn; @bakker2019timeseries]
+and the Pastas framework [@collenteur2019pastas] give parsimonious per-well impulse responses; and
+climate-index regression links GWL to SPI, ENSO, and PDO [@bloomfield2013analysis; @kuss2014multi]
+— the structure of our Stage-2 β-map. Random forests on terrain+geology regionalize groundwater
+properties [@rodriguez2014nitrate; @marcais2017prospecting].
 
-@ma2023wtd (the HydroGEN product) improves on @fan2013global by using an
-ensemble of ML models (random forest, gradient boosting, neural network) with a
-richer covariate set, but retains the static, climatological character and shows
-a +7.17 m positive bias and 20.46 m RMSE against held-out USGS wells in the PNW.
+**Hybrid — and the gap.** True hybrids pairing a spatial ML/geostatistical baseline with a temporal
+physics component are rare: process-model-augmented ML [@konapala2020hybrid; @heudorfer2019groundwater]
+and GRACE-assimilating filters [@cuthbert2019global] are the closest precedents. No published product
+combines HAND-based regression kriging, β-coefficient response maps, **and** a pixel-wise water budget
+delivered with provenance for geotechnical/geomorphological consumers.
 
-### Category 3: Temporal data-driven approaches
+**Our ground: a pixel-wise water budget.** Rather than solve the flow equation or memorize wells, we
+**enforce a closed water balance at every 90 m cell** (`src/models/water_budget.py`) and let
+observations anchor it. Over the fine SOLUS→Saxton–Rawls storage envelope [@saxton2006soil], each
+cell steps a monthly balance whose terms are all explicit:
 
-Several groups have modeled GWL time series at individual wells using ML, without
-spatial generalization:
+- **Vertical infiltration / recharge** $R$ — the deep-percolation flux when the root-zone store
+  exceeds field capacity, feeding a linear-reservoir water table $h_{t} = h_{t-1} + R/S_y - h_{t-1}/\tau$
+  with specific yield $S_y$ and recession timescale $\tau$ [@brutsaert1977recession];
+- **Capillary rise** — an upward flux from a shallow water table back into the root zone across a
+  capillary fringe, the return term that couples GWL to soil moisture;
+- **Evapotranspiration** — the atmospheric demand removed from the store toward wilting;
+- **Saturation-excess surface runoff** — generated where the store is at capacity;
+- **Subsurface lateral flow** — a TOPMODEL redistribution [@beven1979physically] setting each cell's
+  water-table deficit from its topographic wetness index, $d_i = \bar d - m\,(\mathrm{TWI}_i - \overline{\mathrm{TWI}})$.
 
-- **LSTM networks** [@wunsch2021groundwater; @liesch2019aquifer]: achieve state-of-the-art
-  one-step-ahead GWL prediction at gauged sites, but require site-specific training and
-  cannot generalize to ungauged locations.
-- **Climate index regression** [@bloomfield2013analysis; @kuss2014multi]:
-  @bloomfield2013analysis demonstrated that the Standardised Groundwater Index (SGI)
-  is well-predicted by SPI at most UK wells, with a regression structure identical to
-  our Stage 2 β-map approach. @kuss2014multi showed that ENSO and PDO are significant
-  predictors of GWL variability across the western US, with response lags of 0–6 months
-  depending on aquifer depth and soil type.
-- **Machine learning for spatial inference** [@rodriguez2014nitrate; @marcais2017prospecting]:
-  @rodriguez2014nitrate showed that random forests trained on terrain + geology covariates
-  can map groundwater properties and vulnerability across a region, and @marcais2017prospecting
-  argue for the broader interest of data-driven models in hydrological inference — together
-  providing a spatial regionalization framework relevant to β-map interpolation.
+The scheme conserves mass by construction — the change in storage equals capillary rise plus liquid
+input minus runoff, ET, and recharge — so the vertical exchange between soil moisture and the water
+table, and the downhill routing of excess water, are represented rather than assumed away. This is the
+sense in which the two water states are *coupled* and not merely co-located.
 
-### Category 4: Hybrid approaches (the gap)
+### Mechanical modeling grounds {#sec-mech-grounds}
 
-True hybrid methods — combining a spatial ML or geostatistical baseline with a
-temporal physics-informed component — are rare in the GWL literature. The closest
-precedents are:
+The mechanical state is the near-surface **shear-wave velocity** $V_S(z)$ and, through it, the small-strain
+stiffness that geotechnical hazard models consume. It is constrained three ways, in decreasing data cost.
+*Seismic tomography* from ambient noise inverts inter-station surface-wave dispersion for $V_S(z)$
+[@shapiro2005high] — the highest-fidelity but sparsest constraint. *Vs30 proxies* — the 30 m
+time-averaged velocity, $V_{S30} = 30 / \int_0^{30} dz/V_S(z)$ — trade fidelity for coverage: the
+Wald–Allen topographic-slope model [@waldallen2007], which we adopt at native 90 m, and geology- and
+geomorphon-based parametric models [@sanger2025parametric]. Vs30 maps to the NEHRP/ASCE-7 site class,
+and because the proxy carries large residual scatter we propagate that as a **site-class probability**
+rather than a point value (@sec-siteclass). Frequency sets depth: a Rayleigh wave of frequency $f$ is
+most sensitive near $L \approx V_S/3f$, so a band of frequencies reads a profile of depths — the basis
+of the depth kernels (`codameter`/`disba`) used by the $\delta v/v$ module. Bulk properties needed to
+turn velocity into stress — density and the lithologic control on stiffness — come from the same SOLUS
+static set (oven-dry bulk density, texture) and the geology/lithology layer that also feeds the storage
+envelope, so the mechanical and hydrological grounds share one static description of the subsurface.
+This stiffness field is the input to the Sanger liquefaction GLM [@sanger2025liquefaction] and, with
+the water table, to the LandLab landslide chain (@sec-landlab).
 
-- **Regression kriging** [@hengl2007regression]: a two-step approach where a
-  deterministic trend (ML or regression) is first subtracted and then kriging is applied
-  to the residuals. This is standard practice in soil property mapping but has been
-  rarely applied to GWL.
-- **Conceptual model + ML** [@konapala2020hybrid; @heudorfer2019groundwater]:
-  uses a process-based model to generate synthetic training data that augments sparse
-  well records. Closest in spirit to our approach but focused on streamflow rather
-  than GWL.
-- **Geostatistical data assimilation**: combines GRACE satellite total water storage
-  with well records through ensemble Kalman filtering, producing a temporally smooth
-  GWL product. Reviewed in @cuthbert2019global.
+### Petrophysical linking models {#sec-petro-grounds}
 
-**The gap**: No existing published product combines (a) HAND-based spatial regression
-kriging, (b) per-site climate response functions interpolated as β-coefficient maps, and
-(c) STAC-provenance outputs suitable for direct integration into geotechnical or
-geomorphological modeling frameworks. This is the contribution of the present work.
+The two grounds meet in petrophysics: water changes stiffness, and the ambient-noise velocity change
+$\delta v/v$ measures it [@denolle2026unified]. Two regimes, split at the water table, carry two
+different hydrologic signals.
+
+**Saturated zone — pore pressure.** Below the water table a change in head changes effective stress
+and thus velocity, the poroelastic response of Biot's theory of a fluid-saturated porous solid
+[@biot1941general]. To first order the module writes it as a linear relation $\delta v/v = k_{sat}\,\Delta h$,
+so a *relative* water-table change is recovered (a rising table — smaller depth-to-water — lowers
+effective stress and softens the medium). This is the mechanism by which the ambient field tracks
+groundwater: seasonal velocity variations follow the water table at volcanoes and aquifers alike
+[@senss2006passive], and @clements2018tracking recover GWL time series directly from $\delta v/v$.
+Consistent with that literature, $\delta v/v$ constrains a relative, not an absolute, level.
+
+**Vadose zone — partial saturation and suction.** Above the water table stiffness is governed by
+grain-contact mechanics (Hertz–Mindlin) modulated by capillary **suction**: as the soil dries,
+matric suction pulls grains together and stiffens the frame, so wetting *softens* it. The module
+writes $\delta v/v = S_\theta\,\Delta\theta$ with $S_\theta < 0$. The material sensitivity is order
+$S_\theta \approx -1$ per unit $\theta$ (a $\sim$10 % velocity change per 0.1 m³ m⁻³ locally), but a
+raw seismic band averages this fine near-surface response over its whole depth kernel; only the top
+$\sim$1 m of the kernel is $\theta$-active, so a single band shows the depth-diluted
+$S_{\theta,\text{band}} \approx -0.08$ that reproduces the observed 0.1–1 % seasonal band $\delta v/v$.
+The depth inversion deconvolves this dilution and returns the material value, which is why the module
+applies $S_\theta = -1$ to the *inverted* profile and $S_{\theta,\text{band}}$ only to a raw band.
+
+Splitting the depth-separated $\delta v/v$ profile at the water table therefore yields two hydrologic
+states from one seismic measurement — a shallow **soil-moisture** change (vadose, suction) and a deep
+**relative water-table** change (saturated, poroelastic) — each assimilated into the matching
+hydrological state above.
+
+## Data Grounds {#sec-data-grounds}
+
+Every quantity above rests on data, and the data are heterogeneous in kind, resolution, and honesty.
+Only two kinds are ever *assimilated* — **ground sensors** and **satellite retrievals** (observations);
+everything else is a static prior or a physical/statistical model (@sec-classification). The three
+kinds differ in a way that dictates the whole design.
+
+**Ground sensors — dense in time, sparse in space, and not pristine.** USGS NWIS wells give real
+depth-to-water but mix aquifers: a HAND-based shallow model must screen out deep confined-outwash
+screens or it fits the wrong surface. SNOTEL and USCRN soil-moisture probes are point measurements at
+a fixed sensor depth (typically 5 cm), with network gaps and a mountain/valley sampling bias. The UW
+and CC seismic stations give continuous waveforms but $\delta v/v$ is a raw *processing* choice — coda
+window, reference epoch, estimator — whose spread must be carried as data covariance, not hidden. The
+common thread: raw sensor data are dense in time at a handful of points, so they anchor timing and
+correct bias but cannot, alone, make a field.
+
+**Satellite / gridded products — dense in space, sparse in time, at many scales.** These make the
+field, but their **native resolution caps the resolution of anything derived from them**, and the
+scales span three orders of magnitude: SMAP root-zone soil moisture at 9 km (36 km native L-band
+footprint, sensing only the top $\sim$5 cm); MERRA-2 reanalysis at 0.5°; NLDAS at $\sim$12 km; GRACE
+total-water-storage at $\sim$300 km; and the forcing climatologies TerraClimate ($\sim$4 km)
+[@abatzoglou2018terraclimate] and PRISM (4 km, 800 m licensed). Treating a downscaled 9 km pixel as a
+native 90 m observation — *footprint leakage* — is the central data hazard, so every downscaled field
+records its native versus delivered resolution in provenance.
+
+**Static high-resolution layers — the fine skeleton.** Time-invariant but sharp, these carry the 90 m
+spatial texture that the coarse dynamic drivers lack: SOLUS100 soil (clay/sand/silt, pH, CEC, bulk
+density, depth-to-lithic) at 100 m [@nauman2024solus], the USGS 3DEP DEM and its HAND/TWI/slope
+derivatives at 10 m, the Vs30 field, and surficial geology/lithology. They set what the subsurface
+*can* hold and how stiff it *can* be — the envelope that the dynamic observations modulate.
+
+The consequence for the architecture is the static-envelope × dynamic-driver design used throughout:
+fine static layers supply spatial structure, coarse observations supply the time signal, and the two
+are reconciled at 90 m with an explicit, provenance-tracked uncertainty budget. The per-product access
+paths, roles, and evaluation datasets are tabulated in @sec-twin and @sec-classification.
 
 ---
 
