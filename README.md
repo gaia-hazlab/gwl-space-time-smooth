@@ -469,6 +469,49 @@ Detailed lookup tables and decision trees the skill can point to. Add a new file
 
 ---
 
+## Contributing — a modular reanalysis
+
+The project is built to be **extended, not forked**: the physics, the data, and the downscalers are
+each a small, swappable interface, so you can improve one without touching the others. Add your method,
+register it, add a standalone test, and open a PR. The three seams:
+
+### 1. Physics — swap or add a model
+
+| To change… | Edit / add | Pattern |
+|---|---|---|
+| **K_sat / transmissivity** pedotransfer | `src/models/soil_hydraulics.py` | Add a function + an entry in `KSAT_METHODS` / `TRANSMISSIVITY_METHODS`; callers select by name. Keeps our hydrology and LandLab's Factor-of-Safety on one choice. |
+| **Water-budget flux** (recharge, ET, capillary, runoff, lateral) | `src/models/water_budget.py` | Add/replace a closure in `coupled_water_budget`; keep the balance `ΔS = C + I − Q − E − R` mass-conserving. |
+| **Soil-moisture envelope / bucket** | `src/models/soil_moisture.py` | New pedotransfer or dynamic driver; keep `θ = θ_wp + w·(θ_fc − θ_wp)`. |
+| **dv/v petrophysics** (poroelastic / suction sensitivity) | `src/models/dvv.py` | Adjust `k_sat` (saturated) / `S_θ` (vadose); document sign + units. |
+| **Vs30 model** | `src/data/fetch_vs30.py` | Add a source to `get_vs30(source=…)` (Wald-Allen / USGS / Sanger-Maurer / provided). |
+
+### 2. Data — add a source
+
+Follow the fetcher pattern in `src/data/` (`fetch_public.py` is the reference: windowed read, native CRS,
+output byte-compatible with what the models consume, graceful fallback). Add a `pixi` task in `pixi.toml`
+`[tasks]`. **Assimilation rule**: only *ground sensors* or *satellite retrievals* are assimilated;
+everything else is a static prior or a model. Record native resolution — a downscaled cell is never a
+native observation (footprint-leakage).
+
+### 3. Downscalers — add a method
+
+Register a new operator in `src/models/downscale.py` (the `downscale(..., method=…)` registry:
+`bilinear` / `TWI` / `regression` / `ML`). It must be **mean-preserving** and take the fine static
+envelope as a covariate. Everything downstream (soil moisture 90 m, LandLab export) picks it up by name.
+
+### Conventions
+
+- **Environment**: `pixi` only (no bare `conda`/`pip`). Python 3.11, SI units, EPSG:5070 analysis grid,
+  `pathlib` (no `os.path`), logging (no `print`).
+- **Tests**: each module has a standalone test (`tests/test_<module>.py`) that also runs as
+  `pixi run python -m tests.test_<module>`. Add one with your change.
+- **Citations**: every DOI in `docs/references.bib` is Crossref-verified — never add an unverified DOI.
+- **PRs**: small and focused; the report (`docs/gwl_hybrid_framework.qmd`) and this README are the
+  source of truth for the approach — update them when the physics/data/interface changes.
+
+See the report's **Scientific & Data Grounds** for the equations each seam implements, and
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md) for the full coding rules.
+
 ## Key Documents
 
 - [`docs/assumptions.md`](docs/assumptions.md) — All simplifying assumptions with severity ratings

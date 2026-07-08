@@ -415,7 +415,7 @@
 <main>
 
   <div class="hero">
-    <div class="hero-eyebrow">Project Audit · gwl-space-time-smooth · June 2026</div>
+    <div class="hero-eyebrow">Project Audit · gwl-space-time-smooth · June 2026 · status updated July 2026</div>
     <h1>Groundwater Level Modeling:<br>Audit &amp; Framework Revision for PNW Geohazard Applications</h1>
     <div class="hero-meta">
       <span>Scope: Pacific Northwest</span>
@@ -425,6 +425,43 @@
       <span>Target: 1 km monthly GWL, 2000–present</span>
     </div>
   </div>
+
+  <section id="status-update" class="green-border">
+    <h2><span class="section-num">§0</span> Status Update — July 2026: Where We Stand</h2>
+    <p>
+      This audit (June 2026) framed the project as a groundwater-level product with four gaps. Since
+      then it has become the coupled <strong>GAIA Soil Reanalysis</strong> — groundwater level, soil
+      moisture, and near-surface stiffness at 90 m — and most of the audit's revisions have shipped.
+      The current, authoritative write-up is the
+      <a href="report.html">technical report</a> (mission, scientific &amp; data grounds, governing
+      equations, validation, digital-twin MVP, LandLab coupling). This banner records what has been
+      done relative to the audit below; the gap analysis and framework rationale that follow remain
+      the historical record of why.
+    </p>
+    <div class="callout callout-green">
+      <strong>Shipped since the audit</strong>
+      <span class="chip chip-green">done</span> HAND replaces DEM as the spatial predictor (Gap&nbsp;1);
+      lat/lon dropped ·
+      <span class="chip chip-green">done</span> Climate backbone — per-site β-maps (SPI-3, SWE, PDO) + kriged residuals (Gap&nbsp;2) ·
+      <span class="chip chip-green">done</span> <strong>Soil-moisture module</strong> — SOLUS→Saxton-Rawls envelope × Thornthwaite-Mather bucket; r&nbsp;=&nbsp;0.98 vs TerraClimate, r&nbsp;=&nbsp;0.85 vs MERRA-2 ·
+      <span class="chip chip-green">done</span> <strong>Closed pixel-wise water budget</strong> — recharge, capillary rise, ET, saturation-excess runoff, TOPMODEL lateral flow (mass-conserving) ·
+      <span class="chip chip-green">done</span> <strong>dv/v module end-to-end</strong> — ambient noise → depth-separated soil moisture + relative water table; digital-twin MVP ·
+      <span class="chip chip-green">done</span> <strong>Real Vs30</strong> (Wald-Allen slope proxy) + NEHRP site-class probability ·
+      <span class="chip chip-green">done</span> Aquifer-aware well screening (shallow unconfined; Gap on confined mixing) ·
+      <span class="chip chip-green">done</span> Peer-review remediation (data classification, synthetic/real separation, S_θ recalibration) ·
+      <span class="chip chip-green">done</span> <strong>LandLab handoff live</strong> — <code>landlab_export</code> writes canonical dynamic fields (water table, saturation fraction, recharge) + modular K<sub>sat</sub> registry ·
+      <span class="chip chip-green">done</span> Scientific &amp; Data Grounds + governing equations added to the report ·
+      <span class="chip chip-green">done</span> Single published landing page linking report / demo / this roadmap
+    </div>
+    <div class="callout callout-amber">
+      <strong>In progress / next (the current priorities)</strong>
+      <span class="chip chip-amber">next</span> <strong>Forecast forcing</strong> — drive the water budget with observed rainfall (<strong>PRISM preferred</strong>) for hindcasts, and AI weather forecasts (<strong>GraphCast / ACE2</strong>, precipitation downscaled to 90 m) for a forward antecedent-state ensemble ·
+      <span class="chip chip-amber">next</span> Independent cross-validation vs a gridded product (SMAP multi-year; <strong>ERA5-Land</strong> optional) ·
+      <span class="chip chip-amber">next</span> Real multi-year dv/v run over UW/CC + borehole-calibrated poroelastic k<sub>sat</sub> (relative → absolute head) ·
+      <span class="chip chip-amber">next</span> Per-domain valley-fill RMSE/coverage; denser Cascade soil-moisture network ·
+      <span class="chip chip-amber">next</span> Surface runoff routing + subsurface lateral flow for the flood/landslide antecedent state
+    </div>
+  </section>
 
   <section id="status" class="green-border">
     <h2><span class="section-num">§1</span> Current State Assessment</h2>
