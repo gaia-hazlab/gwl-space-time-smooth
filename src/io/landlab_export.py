@@ -78,9 +78,10 @@ def align_to_grid(da: xr.DataArray, template: xr.DataArray, resampling: str = "b
 def apply_confidence_mask(da: xr.DataArray, mask: xr.DataArray) -> xr.DataArray:
     """Blank ``da`` (-> NaN) where ``mask`` is not positive, so unsupported cells export as no-data.
 
-    ``mask`` is the variogram-driven well-density / confidence mask (1 = supported, 0 = masked). It
-    is aligned to ``da`` first (nearest, to preserve the 0/1 classes)."""
-    m = mask.rio.reproject_match(da, resampling=_nearest()) if mask.shape != da.shape else mask
+    ``mask`` is the variogram-driven well-density / confidence mask (1 = supported, 0 = masked). It is
+    always ``reproject_match``-ed onto ``da`` (nearest, to preserve the 0/1 classes) — matching shape
+    is not enough, since two grids can share a cell count but differ in CRS/transform/origin."""
+    m = mask.rio.reproject_match(da, resampling=_nearest())
     return da.where(m > 0)
 
 
@@ -286,6 +287,13 @@ def main():
     p.add_argument("--rf-std", default=f"{d}/baseline_rf_std_m.tif")
     p.add_argument("--krige-std", default=f"{d}/baseline_kriging_std_m.tif")
     p.add_argument("--mask", default=f"{d}/well_density_mask.tif")
+    p.add_argument("--dtw-series", default=None,
+                   help="Optional monthly depth-to-water Zarr (time, y/lat, x/lon); when given, also "
+                        "exports the seasonal-high water table. No operational monthly series exists "
+                        "yet (only a short pilot), so this is unset by default.")
+    p.add_argument("--dtw-series-var", default="dtw", help="Variable name in --dtw-series.")
+    p.add_argument("--seasonal-quantile", type=float, default=0.1,
+                   help="Shallow-tail quantile of depth-to-water for the seasonal-high state.")
     p.add_argument("--sm-zarr", default=f"{d}/soil_moisture_monthly_puget.zarr")
     p.add_argument("--forcing-zarr", default=f"{d}/terraclimate_monthly_puget.zarr")
     p.add_argument("--template", default=None, help="Raster defining the export grid (default: --dtw grid).")
@@ -298,8 +306,20 @@ def main():
     import rioxarray as rxr
 
     template = rxr.open_rasterio(args.template or args.dtw, masked=True).squeeze("band", drop=True)
+
+    dtw_series = None
+    if args.dtw_series:
+        dss = xr.open_zarr(args.dtw_series)
+        var = args.dtw_series_var if args.dtw_series_var in dss.data_vars else list(dss.data_vars)[0]
+        dtw_series = dss[var]
+        if "lat" in dtw_series.dims or "lon" in dtw_series.dims:
+            dtw_series = _georef_latlon(dtw_series)
+        logger.info("seasonal-high water table from %s[%s] (%d epochs)",
+                    args.dtw_series, var, dtw_series.sizes.get("time", 0))
+
     fields = []
-    fields += load_water_table_field(args.dtw, args.rf_std, args.krige_std, args.mask)
+    fields += load_water_table_field(args.dtw, args.rf_std, args.krige_std, args.mask,
+                                     dtw_series=dtw_series, seasonal_quantile=args.seasonal_quantile)
     try:
         fields.append(load_saturation_field(args.sm_zarr))
     except Exception as exc:                                            # pragma: no cover

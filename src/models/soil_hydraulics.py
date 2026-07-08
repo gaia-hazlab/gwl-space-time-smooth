@@ -34,6 +34,7 @@ Transmissivity methods
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 # Unit conversions to the canonical K_sat unit (m day⁻¹).
 _MM_PER_HR_TO_M_PER_DAY = 24.0 / 1000.0
@@ -45,7 +46,8 @@ TRANSMISSIVITY_METHODS = ("ksat_x_thickness", "ksat_x_thickness_anisotropy", "to
 DEFAULT_ANISOTROPY = 2.5
 
 
-def ksat_saxton_rawls(sand_pct, clay_pct, om_pct=2.5):
+def ksat_saxton_rawls(sand_pct: ArrayLike, clay_pct: ArrayLike,
+                      om_pct: ArrayLike = 2.5) -> np.ndarray:
     """K_sat [m day⁻¹] from Saxton & Rawls (2006) texture PTF (reuses the soil-moisture envelope)."""
     from src.models.soil_moisture import saxton_rawls_envelope
 
@@ -53,7 +55,8 @@ def ksat_saxton_rawls(sand_pct, clay_pct, om_pct=2.5):
     return np.asarray(env["ksat"], dtype="float64") * _MM_PER_HR_TO_M_PER_DAY  # mm/hr -> m/day
 
 
-def ksat_solus_pedotransfer(ph, clay_pct, silt_pct, cec, unit_scale=1.0):
+def ksat_solus_pedotransfer(ph: ArrayLike, clay_pct: ArrayLike, silt_pct: ArrayLike,
+                            cec: ArrayLike, unit_scale: float = 1.0) -> np.ndarray:
     """K_sat from the log-linear PTF used by ``gaia-hazlab/landslide-data-prep``.
 
     ``log10(K_sat) = 0.40220 + 0.26122·pH + 0.44565 - 0.02329·clay - 0.01265·silt - 0.01038·CEC``
@@ -72,8 +75,11 @@ def ksat_solus_pedotransfer(ph, clay_pct, silt_pct, cec, unit_scale=1.0):
     return (10.0 ** log10_ksat) * float(unit_scale)
 
 
-def saturated_conductivity(method="saxton_rawls", *, sand_pct=None, clay_pct=None, silt_pct=None,
-                           ph=None, cec=None, om_pct=2.5, ksat_field=None, unit_scale=1.0):
+def saturated_conductivity(method: str = "saxton_rawls", *,
+                           sand_pct: ArrayLike | None = None, clay_pct: ArrayLike | None = None,
+                           silt_pct: ArrayLike | None = None, ph: ArrayLike | None = None,
+                           cec: ArrayLike | None = None, om_pct: ArrayLike = 2.5,
+                           ksat_field: ArrayLike | None = None, unit_scale: float = 1.0) -> np.ndarray:
     """Dispatch to a K_sat PTF. Returns K_sat as an array in the method's documented unit (m day⁻¹
     for ``saxton_rawls``; see each method for the others).
 
@@ -94,8 +100,9 @@ def saturated_conductivity(method="saxton_rawls", *, sand_pct=None, clay_pct=Non
     raise ValueError(f"unknown ksat_method {method!r}; choose from {KSAT_METHODS}")
 
 
-def transmissivity(ksat, thickness_m, method="ksat_x_thickness", *,
-                   anisotropy=DEFAULT_ANISOTROPY, decay_depth_m=None):
+def transmissivity(ksat: ArrayLike, thickness_m: ArrayLike, method: str = "ksat_x_thickness", *,
+                   anisotropy: float = DEFAULT_ANISOTROPY,
+                   decay_depth_m: ArrayLike | None = None) -> np.ndarray:
     """Transmissivity from K_sat and soil thickness. Returns T in K_sat-units × metres.
 
     With K_sat in m day⁻¹ and thickness in m, T is in m² day⁻¹.
@@ -115,9 +122,12 @@ def transmissivity(ksat, thickness_m, method="ksat_x_thickness", *,
     raise ValueError(f"unknown transmissivity_method {method!r}; choose from {TRANSMISSIVITY_METHODS}")
 
 
-def soil_hydraulic_properties(method="saxton_rawls", *, transmissivity_method="ksat_x_thickness",
-                              thickness_m=None, anisotropy=DEFAULT_ANISOTROPY, decay_depth_m=None,
-                              **ksat_kwargs):
+def soil_hydraulic_properties(method: str = "saxton_rawls", *,
+                              transmissivity_method: str = "ksat_x_thickness",
+                              thickness_m: ArrayLike | None = None,
+                              anisotropy: float = DEFAULT_ANISOTROPY,
+                              decay_depth_m: ArrayLike | None = None,
+                              **ksat_kwargs: ArrayLike) -> dict:
     """Convenience: K_sat plus (if thickness given) T, from one call.
 
     Returns a dict with ``ksat`` (and ``transmissivity`` when ``thickness_m`` is provided). Extra

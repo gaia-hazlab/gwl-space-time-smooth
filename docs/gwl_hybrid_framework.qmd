@@ -2168,10 +2168,14 @@ LandLab-ready ESRI ASCII (`.asc`) plus a COG and a provenance manifest:
 | `soil_water__recharge_rate` | groundwater recharge (water budget) | mm day⁻¹ | monthly (mean/max) | σ ≈ 0.1·mean |
 
 The landslide-relevant state is the **wet-season high** table (small depth-to-water), not the annual
-mean, so `seasonal_high_water_table` exports the shallow-tail quantile of depth-to-water alongside
-the mean. Every field carries its per-cell 1σ and the variogram-driven confidence mask (@sec-validation):
-LandLab ingests uncertainty, and masked upland cells (fractured hillslopes — precisely the sparse-well
-regime where this framework is weakest) are exported as no-data rather than a false mean.
+mean: when a monthly depth-to-water series is supplied (`--dtw-series`), `seasonal_high_water_table`
+also exports its shallow-tail quantile. The operational monthly GWL series is still in progress — only
+a short pilot exists today — so the default run writes the mean, and the seasonal-high path is wired
+and ready rather than populated. Every exported field carries its per-cell 1σ; the **water table** is
+additionally blanked by the variogram-driven well-density confidence mask (@sec-validation) so
+unsupported upland cells (fractured hillslopes — precisely the sparse-well regime where this framework
+is weakest) export as no-data rather than a false mean. The saturation-fraction and recharge fields are
+model quantities: they carry σ but not the well-density mask, which is specific to the groundwater state.
 
 The command `python -m src.io.landlab_export` (pixi task `landlab-export`) assembles this bundle from
 the real products: the water table from the baseline depth-to-water with its RF ⊕ kriging σ and the
