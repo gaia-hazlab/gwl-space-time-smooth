@@ -14,9 +14,16 @@ Sources
   via ``/vsicurl/`` (HTTP range requests), never the full CONUS COG.
 
 Note: SOLUS100 does **not** publish saturated hydraulic conductivity (ksat); it is a
-derived quantity. We therefore write the *measured* texture fractions (clay, sand) only.
-The baseline model uses whichever SOLUS variables are present, so ksat simply stays absent
-until sourced separately (e.g. POLARIS) rather than being silently synthesised here.
+derived quantity. We fetch the *measured* SOLUS static soil-hydromechanical set — texture
+(clay/sand/silt), pH, CEC, oven-dry bulk density, and depth-to-lithic (soil thickness) —
+which is exactly the static set the LandLab landslide data-prep (``gaia-hazlab/landslide-data-prep``)
+consumes. K_sat is then derived on demand and *modularly* by ``src.models.soil_hydraulics`` (choose
+Saxton-Rawls, the LandLab pedotransfer, or a provided field), never silently synthesised here, so
+our water-budget K_sat and LandLab's transmissivity can be held to the same pedotransfer.
+
+Scaling caveat: pH / CEC / bulk-density SOLUS COGs may carry an embedded ``scale_factor``; we read
+with ``mask_and_scale=True`` so any such scaling is applied. Confirm the returned magnitudes (pH ~4-8,
+CEC in cmol(+) kg⁻¹, bulk density ~1.0-1.8 g cm⁻³) match the pedotransfer's expected units before use.
 
 Usage
 -----
@@ -44,8 +51,18 @@ SOLUS_NODATA = 255  # uint8 percent fields
 # res is "800m" (~30 arc-sec) or "4km". Returns a zip of the BIL raster (NAD83 geographic).
 PRISM_NORMALS_URL = "https://services.nacse.org/prism/data/get/normals/us/{res}/ppt/14"
 
-# SOLUS property short-name -> output variable name expected by the models.
-SOLUS_PROPS = {"claytotal": "clay_pct", "sandtotal": "sand_pct"}
+# SOLUS depth-resolved properties: short-name -> (output var, is_percent). All are the shared
+# static soil-hydromechanical set consumed by both our water budget and LandLab's Factor-of-Safety.
+SOLUS_PROPS = {
+    "claytotal": ("clay_pct", True),
+    "sandtotal": ("sand_pct", True),
+    "silttotal": ("silt_pct", True),
+    "ph1to1h2o": ("ph", False),          # pH (H2O)
+    "cec7": ("cec", False),              # cation exchange capacity, cmol(+)/kg
+    "dbovendry": ("bulk_density", False),  # oven-dry bulk density, g/cm3
+}
+# SOLUS single-value (not depth-resolved) properties: filename stem -> output var.
+SOLUS_SINGLE = {"anylithicdpt_cm": "soil_thickness_cm"}  # depth to any lithic contact = soil thickness
 # Depths (cm) averaged to a representative 0–5 cm value (SOLUS predicts at points 0, 5, …).
 SOLUS_DEPTHS = (0, 5)
 
@@ -63,34 +80,50 @@ def _bbox_5070(bbox_wgs84: tuple[float, float, float, float]) -> tuple[float, fl
 def fetch_solus(
     bbox_wgs84: tuple[float, float, float, float], output_dir: Path
 ) -> Path:
-    """Fetch SOLUS100 clay% and sand% (0–5 cm) → solus100_wa.zarr on the native 100 m grid.
+    """Fetch the SOLUS100 static soil-hydromechanical set → solus100_wa.zarr (native 100 m grid).
 
-    Output schema matches ``src.data.fetch_gaia.fetch_solus100``: data variables
-    ``clay_pct`` / ``sand_pct`` on EPSG:5070 ``x`` / ``y`` coordinates, so
-    ``baseline_regression`` consumes it unchanged.
+    Writes the shared static set consumed by both our water budget and LandLab's Factor-of-Safety:
+    ``clay_pct`` / ``sand_pct`` / ``silt_pct`` (0–5 cm), ``ph`` / ``cec`` / ``bulk_density`` (0–5 cm),
+    and ``soil_thickness_cm`` (depth to any lithic contact). Data variables are on EPSG:5070 ``x`` /
+    ``y`` coordinates. ``clay_pct`` / ``sand_pct`` keep the schema ``baseline_regression`` and
+    ``src.data.fetch_gaia.fetch_solus100`` expect, so downstream consumers are unchanged; the extra
+    variables are additive.
     """
     import rioxarray  # noqa: F401
     import xarray as xr
 
     minx, miny, maxx, maxy = _bbox_5070(bbox_wgs84)
+
+    def _read(url):
+        # mask_and_scale applies any embedded nodata + scale_factor (needed for pH/CEC/bulk density).
+        da = rioxarray.open_rasterio(url, mask_and_scale=True).squeeze("band", drop=True)
+        return da.rio.clip_box(minx, miny, maxx, maxy)
+
     data_vars = {}
-    for prop, out_name in SOLUS_PROPS.items():
+    for prop, (out_name, is_percent) in SOLUS_PROPS.items():
         layers = []
         for depth in SOLUS_DEPTHS:
             url = f"{SOLUS_BASE}/{prop}_{depth}_cm_p.tif"
             logger.info("Reading %s", url)
-            da = rioxarray.open_rasterio(url, masked=True).squeeze("band", drop=True)
-            da = da.rio.clip_box(minx, miny, maxx, maxy)
-            # Force-mask the sentinel in case a COG's nodata metadata is missing/inconsistent,
-            # so 255 is never averaged in as a real 255 % value.
-            da = da.where(da != SOLUS_NODATA)
+            da = _read(url)
+            if is_percent:
+                # Belt-and-suspenders: mask the 255 sentinel for percent fields whose COG nodata
+                # metadata may be missing, so it is never averaged in as a real 255 % value.
+                da = da.where(da != SOLUS_NODATA)
             layers.append(da)
-        # The SOLUS depth COGs share one 100 m EPSG:5070 grid, so clipped windows align
-        # and can be averaged directly to a representative 0–5 cm value.
+        # The SOLUS depth COGs share one 100 m EPSG:5070 grid, so clipped windows align.
         mean = xr.concat(layers, dim="depth").mean("depth") if len(layers) > 1 else layers[0]
         data_vars[out_name] = mean.astype("float32")
-        logger.info("%s: %d×%d cells, median=%.1f%%", out_name, mean.sizes["x"], mean.sizes["y"],
+        logger.info("%s: %d×%d cells, median=%.2f", out_name, mean.sizes["x"], mean.sizes["y"],
                     float(np.nanmedian(mean.values)))
+
+    # Single-value (non-depth-resolved) layers, e.g. depth-to-lithic (soil thickness).
+    for stem, out_name in SOLUS_SINGLE.items():
+        url = f"{SOLUS_BASE}/{stem}_p.tif"
+        logger.info("Reading %s", url)
+        da = _read(url).astype("float32")
+        data_vars[out_name] = da
+        logger.info("%s: median=%.1f cm", out_name, float(np.nanmedian(da.values)))
 
     ds = xr.Dataset(data_vars)
     ds = ds.rio.write_crs("EPSG:5070")
@@ -99,7 +132,7 @@ def fetch_solus(
     # Drop the spatial_ref scalar so the Zarr matches the plain x/y schema the sampler expects.
     ds = ds.drop_vars("spatial_ref", errors="ignore")
     ds.to_zarr(out, mode="w", consolidated=True)
-    logger.info("SOLUS100 (clay, sand) → %s", out)
+    logger.info("SOLUS100 static set (%s) → %s", ", ".join(ds.data_vars), out)
     return out
 
 
