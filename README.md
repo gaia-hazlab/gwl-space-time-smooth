@@ -1,18 +1,31 @@
 # GAIA Soil Reanalysis — GAIA HazLab
 
-> Formerly **gwl-space-time-smooth**. The project has grown from a groundwater-level product into a
-> coupled **soil reanalysis**: groundwater level, soil moisture, and near-surface stiffness (Vs30) at
-> 90 m, with uncertainty and ambient-noise dv/v assimilation. The GitHub repository rename to
-> `gaia-soil-reanalysis` is pending; the badge/site URLs below still use the old slug until then.
+> Formerly **gwl-space-time-smooth**. The GitHub slug rename to `gaia-soil-reanalysis` is pending;
+> the badge/site URLs below still use the old slug until then.
 
 [![Render & Publish Quarto Site](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml/badge.svg)](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml)
 
-**[📄 Read the technical report →](https://gaia-hazlab.github.io/gwl-space-time-smooth/)**
+**A living hydromechanical state of the subsurface** — water table depth, soil moisture, and
+near-surface stiffness (Vs) — at the ~90 m space and time scales that downstream **flood, landslide,
+and liquefaction** models need, over the Pacific Northwest. It is built from high-resolution static
+layers, assimilated ground sensors and satellites, a **closed pixel-wise water budget**, and
+ambient-noise **dv/v** assimilation, integrated with the [GAIA HazLab](https://gaia-hazlab.github.io)
+ecosystem. Outputs feed the Sanger liquefaction GLM (valleys/basins) and the LandLab landslide chain
+(mountain slopes).
 
-Observation-anchored 90 m reanalysis of the near-surface state for Washington State (Pacific
-Northwest) — groundwater level, soil moisture, and Vs30 — integrated with the
-[GAIA HazLab](https://gaia-hazlab.github.io) ecosystem. Outputs support Sanger et al. liquefaction
-models (valleys/basins) and LandLab landslide modeling (mountain slopes).
+## Published pages
+
+Everything is served from one landing page (self-contained HTML — no build needed to view):
+
+| Page | What it is |
+|------|------------|
+| **[Landing](https://gaia-hazlab.github.io/gwl-space-time-smooth/)** | Entry point linking everything below |
+| **[Technical report](https://gaia-hazlab.github.io/gwl-space-time-smooth/report.html)** | Full framework: mission, scientific & data grounds, coupled water budget, dv/v, Vs30 + NEHRP, uncertainty, validation, digital-twin MVP, LandLab coupling |
+| **[GWL + soil-moisture demo](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html)** | The two mature states produced end-to-end on real public data at 90 m, with animated GIFs |
+| **[Audit & forecast framework](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_audit_framework.html)** | AI weather forecast → antecedent hydrologic state → hazard forcing |
+
+The report source is `docs/gwl_hybrid_framework.qmd` (Quarto → `report.html`); the demo and audit pages
+are pre-rendered self-contained HTML committed under `docs/`.
 
 > **Core philosophy**: Real wells first. HAND-based terrain physics second. Climate
 > response functions third. Never trust a gridded product until validated against
@@ -93,36 +106,56 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   ├── data/
 │   │   ├── download_nwis.py      ← USGS NWIS well download (state-by-state, checkpointed)
 │   │   ├── qc_nwis.py            ← QC chain + monthly aggregation (no gap filling)
-│   │   ├── download_3dep.py      ← 3DEP 10 m DEM via py3dep (replaces download_dem.py)
-│   │   ├── fetch_gaia.py         ← SOLUS100/PRISM/Vs30/dtb/lithology from s3://cresst via odc.stac
+│   │   ├── download_3dep.py      ← 3DEP 10 m DEM via py3dep
+│   │   ├── fetch_gaia.py         ← SOLUS100/POLARIS/Vs30/dtb/lithology from s3://cresst via odc.stac
+│   │   ├── fetch_public.py       ← same layers from ORIGINAL public hosts (SOLUS100 full set, PRISM) — GAIA-independent
+│   │   ├── fetch_vs30.py         ← Vs30: Wald-Allen slope proxy / USGS grid / Sanger-Maurer + NEHRP class prob.
+│   │   ├── fetch_terraclimate.py ← TerraClimate P/PET/soil monthly driver (~4 km)
+│   │   ├── fetch_prism_monthly.py← PRISM monthly obs driver (ppt+tmean → Hamon PET)
+│   │   ├── fetch_{snotel,uscrn}.py ← in-situ soil-moisture station networks (anchors + validation)
+│   │   ├── fetch_{smap,merra2}.py  ← satellite / reanalysis soil moisture (native-scale checks)
+│   │   ├── fetch_seismic.py      ← UW + CC seismic station metadata / waveforms (seisfetch)
 │   │   ├── rasterize_geology.py  ← LOCAL DNR geology polygons → lithology_90m.tif (pre-DataHub)
 │   │   └── fetch_climate.py      ← PDO index, SNODAS SWE, SPI-3 derivation
 │   ├── features/
-│   │   ├── compute_grid.py          ← canonical 90 m EPSG:5070 grid definition
-│   │   ├── compute_terrain.py       ← HAND, TWI, slope, contributing area from 3DEP DEM
-│   │   └── hydrogeologic_domains.py  ← domain mask from lithology + HAND + dist-coast (issue #2)
+│   │   ├── compute_grid.py           ← canonical 90 m EPSG:5070 grid definition
+│   │   ├── compute_terrain.py        ← HAND, TWI, slope, contributing area from 3DEP DEM
+│   │   ├── hydrogeologic_domains.py  ← domain mask from lithology + HAND + dist-coast (issue #2)
+│   │   └── well_hydrostratigraphy.py ← screen wells to the shallow unconfined water table (issue #46)
 │   ├── models/
-│   │   ├── baseline_regression.py   ← Stage 1: random forest + regression kriging
+│   │   ├── baseline_regression.py   ← Stage 1: random forest + regression kriging (GWL)
 │   │   ├── climate_response.py      ← Stage 2: per-site OLS β-maps
 │   │   ├── interpolate_residuals.py ← Stage 3: krige residuals + final assembly
-│   │   ├── soil_moisture.py         ← SCAFFOLD: soil-moisture state (soil-hydromechanics)
-│   │   ├── soil_mechanics.py        ← SCAFFOLD: soil-mechanics state (Vs30 + dv/v)
-│   │   ├── interpolate_baseline.py  ← LEGACY: co-kriging MM1 (comparison only)
-│   │   └── interpolate_anomalies.py ← LEGACY: ordinary kriging of anomalies
+│   │   ├── soil_moisture.py         ← soil-moisture state (Saxton-Rawls envelope × T-M bucket)
+│   │   ├── water_budget.py          ← coupled pixel-wise water budget (recharge/capillary/runoff/lateral)
+│   │   ├── soil_hydraulics.py       ← modular K_sat / transmissivity registry (shared with LandLab)
+│   │   ├── dvv.py                   ← ambient-noise dv/v → depth-separated soil moisture + rel. WTD
+│   │   ├── dvv_coupling.py          ← dv/v ↔ state coupling parameters
+│   │   ├── downscale.py             ← static-envelope × coarse-driver downscalers + σ budget
+│   │   ├── anchor.py                ← precision-weighted point assimilation (obs anchoring)
+│   │   ├── attribution.py           ← RF permutation feature-importance attribution
+│   │   ├── soil_mechanics.py        ← SCAFFOLD: full soil-mechanics coupling (#19)
+│   │   └── interpolate_{baseline,anomalies}.py ← LEGACY co-kriging (comparison only)
 │   ├── evaluation/
-│   │   ├── cross_validate.py        ← verde.BlockShuffleSplit spatial block CV
-│   │   ├── uncertainty_stack.py     ← combine σ_lgbm + σ_krige + σ_response
-│   │   └── pillar1_compare.py       ← compare vs GAIA Pillar 1 d_wt
+│   │   ├── cross_validate.py        ← spatial block CV (variogram-sized blocks)
+│   │   ├── domain_gates.py          ← per-hydrogeologic-domain RMSE/coverage gates
+│   │   ├── confidence_mask.py       ← variogram-driven well-density confidence mask
+│   │   ├── coverage.py              ← calibrated-uncertainty coverage / PIT / CRPS
+│   │   └── uncertainty_stack.py     ← combine static / dynamic / downscaling σ
+│   ├── viz/fonts.py                 ← bundled Inter registration for figures
 │   └── io/
+│       ├── landlab_export.py        ← dynamic hydro export (canonical .asc/COG + manifest) for LandLab
 │       ├── zarr_io.py               ← xarray.DataTree write/read + CF attrs
 │       └── stac_publish.py          ← STAC item + GAIA four-part provenance
 │
-├── notebooks/
-│   ├── 01_eda.ipynb              ← well data + HAND vs DTW scatter
-│   ├── 02_hydrogen_eda.ipynb     ← HydroGEN vs random-forest baseline comparison
-│   ├── 03_temporal_model.ipynb   ← climate response + residual kriging
-│   ├── 04_climate_response.ipynb ← β maps, terrain-zone sensitivity
-│   └── 05_gaia_integration.ipynb ← SOLUS100 loading, DataTree output demo
+├── notebooks/                   ← figure + product generators (each has a `pixi run` task)
+│   ├── make_products_90m.py         ← 90 m GWL + θ GIFs and the downscaling uncertainty budget
+│   ├── make_digital_twin.py         ← digital-twin MVP: 2×3 animated state + σ, dv/v assimilation
+│   ├── make_dvv_figures.py          ← dv/v module: kernels → banded dv/v (UQ) → SM & rel. WTD
+│   ├── make_water_budget_figure.py  ← coupled water-budget demo
+│   ├── make_well_screening_figure.py← shallow vs deep-confined well screen
+│   ├── make_landlab_export_figure.py← exported LandLab bundle (fields + per-cell σ)
+│   └── build_demo_qmd.py / 01_eda.ipynb ← demo-page assembler; EDA
 │
 ├── data/                      ← all data files are git-ignored
 │   ├── raw/
@@ -248,20 +281,28 @@ make baseline-legacy   # Old co-kriging MM1
 make anomalies-legacy  # Old ordinary kriging of anomalies
 ```
 
-#### gaia-soil-hydromechanics state modules — coupled subsurface state
+#### Coupled subsurface-state modules
 
-This repo is being repositioned as **`gaia-soil-hydromechanics`** — a coupled
-subsurface-state estimator (soil moisture + groundwater level + soil mechanics) for the
-liquefaction / landslide / flood digital twins. Each state variable is built the same way:
-a **fine 90 m static envelope** (what the ground can hold / where water sits) combined with a
-**coarse dynamic driver** (how it varies in time), statistically downscaled to 90 m with a
-tracked uncertainty budget.
+The **GAIA Soil Reanalysis** is a coupled subsurface-state estimator (soil moisture + groundwater
+level + near-surface stiffness) for the liquefaction / landslide / flood digital twins. Each state
+variable is built the same way: a **fine 90 m static envelope** (what the ground can hold / where
+water sits / how stiff it can be) combined with a **coarse dynamic driver** (how it varies in time),
+statistically downscaled to 90 m with a tracked uncertainty budget.
 
-| State variable | Static (fine) | Dynamic (coarse) | Status |
+| State variable | Static (fine) | Dynamic (coarse / observed) | Status |
 |---|---|---|---|
-| Groundwater level | HAND + SOLUS → RF baseline (90 m) | kriged monthly well anomalies | **live** |
-| Soil moisture | SOLUS100 → Saxton-Rawls envelope (90 m) | TerraClimate P&PET → T-M bucket (4 km) | **live** |
-| Soil mechanics | Vs30 (Sanger & Maurer) + SOLUS | dv/v ambient-noise seismic | scaffold (#19) |
+| Groundwater level | HAND + SOLUS → RF baseline (90 m) | kriged monthly well anomalies; coupled pixel-wise water budget | **live** |
+| Soil moisture | SOLUS100 → Saxton-Rawls envelope (90 m) | TerraClimate P&PET → T-M bucket (4 km); SNOTEL/USCRN anchors, SMAP/MERRA-2 checks | **live** |
+| Near-surface stiffness (Vs) | Vs30 Wald-Allen slope proxy (90 m) + SOLUS | ambient-noise dv/v, depth-separated into soil moisture + relative water table | **live (MVP)** — real multi-year waveform run staged (#30) |
+
+The three coupled through a **closed pixel-wise water budget** (`src/models/water_budget.py`:
+recharge, capillary rise, ET, saturation-excess runoff, TOPMODEL lateral flow) and a **petrophysical
+bridge** (`src/models/dvv.py`: pore-pressure ↔ dv/v poroelastic, dv/v ↔ partial-saturation/suction).
+A modular **K_sat / transmissivity registry** (`src/models/soil_hydraulics.py`) keeps our hydrology
+and the LandLab Factor-of-Safety on one pedotransfer, and `src/io/landlab_export.py` exports the
+dynamic hydrological state (`water_table__depth`, `soil_moisture__saturation_fraction`, recharge) as
+LandLab-ready fields. See the report's **Scientific & Data Grounds** and **Downstream: LandLab
+coupling** sections.
 
 **Run the soil-moisture + 90 m coupled demo** (needs `baseline` and `terrain` outputs first):
 
@@ -284,9 +325,25 @@ pixi run snotel && pixi run snotel-validate   # → snotel_soil_moisture_monthly
 # 4. Assemble the self-contained demo page (static figures + GIFs + provenance → Quarto HTML).
 pixi run demo                  # → docs/gwl_soil_moisture_demo.html  (also re-runs 1-panel figures)
 
-# soil mechanics (dv/v) is still a scaffold — exits with a message:
+# soil mechanics (full coupling) is still a scaffold — exits with a message:
 pixi run soil-mechanics        # SCAFFOLD (#19)
 ```
+
+**Mechanics, water budget, digital twin, and the LandLab export:**
+
+```bash
+pixi run vs30                  # Vs30 (Wald-Allen slope proxy by default) → vs30_90m.tif
+pixi run dvv-demo              # dv/v module figure: kernels → banded dv/v (UQ) → SM + rel. WTD
+pixi run water-budget          # coupled water-budget demo (recharge/capillary/runoff/lateral)
+pixi run digital-twin          # digital-twin MVP GIF: GWL + θ + Vs30 (+ σ) with dv/v assimilation
+pixi run landlab-export        # dynamic hydro export → canonical .asc/COG + manifest (for LandLab)
+pixi run landlab-export-figure # figure of the exported LandLab bundle (fields + per-cell σ)
+```
+
+The LandLab export writes `water_table__depth`, `soil_moisture__saturation_fraction`, and
+`soil_water__recharge_rate` on the shared grid so they drop onto the landslide-data-prep static stack;
+static soil-hydromechanical parameters (K_sat, transmissivity) are ingested and reconciled via the
+modular `soil_hydraulics` registry, not re-exported.
 
 Each stage is independent Python (`src/data/fetch_terraclimate.py`, `src/models/soil_moisture.py`,
 `src/models/gwl_dynamic.py`, `src/models/downscale.py`) with a validated unit test
