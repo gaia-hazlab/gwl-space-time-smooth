@@ -32,7 +32,11 @@ jobs:
       - name: Install Python dependencies for figures
         run: pip install jupyter matplotlib numpy scipy scikit-learn
 
+      # continue-on-error so a render failure does NOT fail the job: the landing page and the
+      # last-committed report HTML still deploy (the committed docs/gwl_hybrid_framework.html is
+      # tracked, so a fresh render just overwrites it in place when it succeeds).
       - name: Render Quarto paper (HTML only — PDF skipped; no LaTeX on runner)
+        continue-on-error: true
         run: quarto render docs/gwl_hybrid_framework.qmd --to html
 
       - name: Stage for Pages
@@ -41,8 +45,9 @@ jobs:
           # Landing page (hand-written, static — no Quarto render, so it deploys even if a report
           # render fails) links all reports from one URL: https://gaia-hazlab.github.io/gwl-space-time-smooth/
           cp docs/index.html _site/index.html
-          # The freshly rendered technical report is served at /report.html (linked from the landing).
-          cp docs/gwl_hybrid_framework.html _site/report.html
+          # Technical report at /report.html — freshly rendered if the render step succeeded, else the
+          # committed (possibly stale) copy. Conditional so a missing HTML never fails the deploy.
+          if [ -f docs/gwl_hybrid_framework.html ]; then cp docs/gwl_hybrid_framework.html _site/report.html; fi
           # Pre-rendered, self-contained pages (figures/GIFs come from gitignored real-data products,
           # so they are served as committed rather than re-rendered on CI).
           for f in gwl_soil_moisture_demo gwl_audit_framework; do
