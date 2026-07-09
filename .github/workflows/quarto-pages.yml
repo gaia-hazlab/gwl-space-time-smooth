@@ -45,14 +45,28 @@ jobs:
         if: steps.render.outcome == 'failure'
         run: echo "::warning title=Report render failed::Deploying the landing page and the last-committed report.html; the technical report may be stale until the Quarto render is fixed."
 
+      # The multi-doc site is the primary documentation (linked chapters). It is a Quarto website
+      # project; render it to docs/twin/_site and serve it at /twin/. continue-on-error so a chapter
+      # render failure does not take the whole Pages deploy down.
+      - name: Render multi-doc site
+        id: site
+        continue-on-error: true
+        run: quarto render docs/twin
+
+      - name: Warn if the site render failed
+        if: steps.site.outcome == 'failure'
+        run: echo "::warning title=Multi-doc site render failed::The /twin/ chapters may be stale until the render is fixed."
+
       - name: Stage for Pages
         run: |
           mkdir -p _site
-          # Landing page (hand-written, static — no Quarto render, so it deploys even if a report
-          # render fails) links all reports from one URL: https://gaia-hazlab.github.io/gwl-space-time-smooth/
+          # Landing page (hand-written, static — no Quarto render, so it deploys even if a render
+          # fails) links everything from one URL: https://gaia-hazlab.github.io/gwl-space-time-smooth/
           cp docs/index.html _site/index.html
-          # Technical report at /report.html — freshly rendered if the render step succeeded, else the
-          # committed (possibly stale) copy. Conditional so a missing HTML never fails the deploy.
+          # Primary documentation: the multi-doc chapter site at /twin/.
+          if [ -d docs/twin/_site ]; then cp -r docs/twin/_site _site/twin; fi
+          # Archived single-file technical report at /report.html — freshly rendered if the render
+          # step succeeded, else the committed copy. Conditional so a missing HTML never fails deploy.
           if [ -f docs/gwl_hybrid_framework.html ]; then cp docs/gwl_hybrid_framework.html _site/report.html; fi
           # Pre-rendered, self-contained pages (figures/GIFs come from gitignored real-data products,
           # so they are served as committed rather than re-rendered on CI).

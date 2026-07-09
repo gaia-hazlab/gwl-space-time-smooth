@@ -1,0 +1,45 @@
+---
+title: "2 · Evaluation data"
+---
+
+Evaluation data are used to **score** the twin and are kept strictly separate from processing,
+compared at the native resolution of the sensor. They fall into two kinds — genuinely independent
+references, and model products that share part of our modelling chain — and the distinction between
+them is the difference between validation and a consistency check.
+
+## Independent references
+
+Held out of the estimator entirely; the honest test of skill:
+
+| Dataset | Source & access | Native res | Evaluates |
+|---|---|---|---|
+| SMAP L4 root-zone / L3 | NASA (`earthaccess`) | 9 km | soil moisture (gridded, native-scale) |
+| NLDAS-2 soil moisture | NASA GES DISC (`earthaccess`) | ~12 km | soil moisture (gridded evaluation) |
+| SNOTEL / USCRN θ (held out) | NRCS AWDB; NOAA NCEI | point | soil-moisture phase (leave-one-station-out) |
+| NWIS wells (held out) | USGS | point | GWL baseline (spatial block-CV) |
+
+Gridded satellite layers (SMAP L4, NLDAS) are compared **upscale-then-compare** at native scale
+rather than as points, so a coarse product is never mistaken for a fine observation.
+
+## Model / reanalysis evaluation datasets
+
+Model products used as evaluation datasets — **MERRA-2** root-zone soil moisture (0.5°, incl. 2025),
+and reanalysis soil-water fields such as TerraClimate's. Correlation against these is *inter-model
+agreement*, not independent validation.
+
+| Dataset | Source & access | Native res | Evaluates |
+|---|---|---|---|
+| MERRA-2 root-zone SM | NASA GES DISC (`earthaccess`), incl. 2025 | 0.5° | soil moisture (upscale-then-compare) |
+| TerraClimate soil-water | Climatology Lab THREDDS | ~4 km | soil moisture (shared-forcing consistency) |
+
+## Consistency check vs independent validation
+
+The critical honesty point: a model that shares our **forcing and model family** cannot
+independently validate us. When our soil moisture agrees with a reanalysis soil-water field at
+domain-mean $r \approx 0.94$ but that field is driven by the *same* precipitation and the *same*
+Thornthwaite–Mather balance, the agreement is a **consistency check** — it confirms a sane
+implementation, not accuracy. A genuinely independent check requires observations *outside* the
+forcing chain: the in-situ SNOTEL/USCRN comparison (pooled $r \approx 0.33$ against measured θ in the
+sparse Cascades) reads far lower, exactly as an honest independent test should. Which class each
+comparison belongs to is reported alongside every number in
+[Soil-state evaluation](05-state-evaluation.qmd).

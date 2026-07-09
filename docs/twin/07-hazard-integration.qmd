@@ -1,0 +1,50 @@
+---
+title: "7 · Hazard integration"
+---
+
+The point of the twin is the handoff: delivering the coupled subsurface state to the models that
+turn it into flood, landslide, and liquefaction hazard — on the shared 90 m grid, with per-cell
+uncertainty, and with a clean division of labour so this repository owns the *dynamic* state and the
+downstream data-prep owns the *static* stack.
+
+## The digital-twin MVP
+
+The pieces compose into an uncertainty-aware, 90 m, co-located estimate that evolves as data are
+assimilated: one hydrologic year at 5-day cadence, with the state (groundwater depth-to-water, soil
+moisture, Vs30) on top and the matching per-cell 1σ below. In the MVP the time evolution comes from a
+physically realistic synthetic dv/v assimilated onto the real static fields, so the animation shows the
+assimilation *machinery* at work — the state updates and σ shrinks where and when sensors constrain it
+— and the same operators run on measured dv/v once the multi-year waveform run lands.
+
+## LandLab landslide coupling (dynamic export)
+
+The complementary downstream consumer is the **LandLab** landslide chain (the infinite-slope
+`LandslideProbability` Factor of Safety). The interface is clean because the two repositories own
+different halves of the input stack:
+
+- `landslide-data-prep` owns the **static stack** (DEM, SOLUS soil, NLCD → cohesion/φ/LAI);
+- this twin owns the **dynamic hydrological state** and exports only those fields, on the same grid.
+
+`src.io.landlab_export` writes `water_table__depth` (mean and seasonal-high), `soil_moisture__saturation_fraction`,
+and `soil_water__recharge_rate` in the DataHub canonical vocabulary as LandLab-ready ESRI ASCII (`.asc`)
++ COG + a provenance manifest, with per-cell σ and the confidence mask applied. The *static*
+soil-hydromechanical parameters that both sides need — chiefly $K_{sat}$ and soil thickness — are held
+to one shared pedotransfer through the modular registry (`src.models.soil_hydraulics`), so our water
+budget and LandLab's transmissivity stay consistent.
+
+## Liquefaction: Vs30 → NEHRP site-class probability
+
+For the Sanger liquefaction GLM, the near-surface stiffness is delivered not as a raw Vs30 with a
+percent σ but as a **NEHRP/ASCE-7 site-class probability**: `fetch_vs30.nehrp_class_probabilities`
+integrates the Vs30 estimate and its 1σ over the class boundaries (180 / 360 / 760 / 1500 m s⁻¹) to
+return $P(\text{E},\text{D},\text{C},\text{B},\text{A})$ per cell, and by differencing the CDF, the
+probability of crossing any design boundary. A cell near a boundary honestly splits its mass across two
+classes rather than being forced into one — the quantity a design engineer acts on.
+
+## Flood antecedent state
+
+For compound-flood models, the twin supplies the **antecedent hydrologic state** — how full the
+subsurface stores already are when a storm arrives. A water table raised by a preceding
+atmospheric-river sequence turns the next event into runoff faster; the [forecast](06-forecast.qmd)
+path delivers that antecedent state ahead of the event, while a surface routing/hydrograph model (out
+of scope here, #55) converts it into flood depth.

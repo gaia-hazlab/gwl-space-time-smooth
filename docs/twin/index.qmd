@@ -1,0 +1,31 @@
+---
+title: "GAIA Digital Twin of Soil"
+subtitle: "A coupled 90 m soil reanalysis for the Pacific Northwest — GAIA HazLab"
+---
+
+**Mission.** Maintain *a living hydromechanical state of the subsurface* — water table depth, soil
+moisture, and near-surface stiffness — at the space and time scales that downstream **flood,
+landslide, and liquefaction** models need. This is a GAIA digital twin of soil (one of potentially
+many digital twins); its end product is a coupled soil *reanalysis*.
+
+The one constraint that governs every design choice: **the target spatial scale is set by the hazard,
+not by whatever data happen to be available** — so the state lives on a 90 m grid from the start, and
+every input is placed onto it at its own native resolution, update rate, and uncertainty.
+
+::: {.callout-note}
+This documentation is organised as independent, linked chapters. The single-file technical report
+remains available on the [landing page](../index.html) as an archived full read.
+:::
+
+## The chapters
+
+| # | Chapter | What it covers |
+|---|---------|----------------|
+| 0 | [Structural model](00-structural-model.qmd) | The architecture: three coupled states, the static-envelope × dynamic-driver design, the hazard-driven grid |
+| 1 | [Input data](01-input-data.qmd) | Static layers, ground sensors, satellite products; the assimilation principle; provenance |
+| 2 | [Evaluation data](02-evaluation-data.qmd) | Independent references and model evaluation datasets, held out from processing |
+| 3 | [Physics — hydrology](03a-physics-hydrology.qmd) · [hydromechanics](03b-physics-hydromechanics.qmd) | The constrained water budget; the petrophysical stiffness–water link |
+| 4 | [Assimilation](04-assimilation.qmd) | Precision-weighted fusion of sensors, dv/v depth separation, the uncertainty budget |
+| 5 | [Soil-state evaluation](05-state-evaluation.qmd) | How the estimated soil moisture and GWL are scored |
+| 6 | [Forecast](06-forecast.qmd) | Driving the twin forward from observed and AI-forecast precipitation |
+| 7 | [Hazard integration](07-hazard-integration.qmd) | Handoff to landslide (LandLab), liquefaction, and flood models |

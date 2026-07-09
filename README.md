@@ -1,7 +1,9 @@
-# GAIA Soil Reanalysis — GAIA HazLab
+# GAIA Digital Twin of Soil
 
-> Formerly **gwl-space-time-smooth**. The GitHub slug rename to `gaia-soil-reanalysis` is pending;
-> the badge/site URLs below still use the old slug until then.
+> The product is a **GAIA digital twin of soil** (one of potentially many digital twins); its end
+> product is a coupled soil *reanalysis*.
+> Repo formerly **gwl-space-time-smooth** (the GitHub slug rename to `gaia-soil-reanalysis` is
+> pending; badge/site URLs below still use the old slug until then).
 
 [![Render & Publish Quarto Site](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml/badge.svg)](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml)
 
@@ -20,12 +22,14 @@ Everything is served from one landing page (self-contained HTML — no build nee
 | Page | What it is |
 |------|------------|
 | **[Landing](https://gaia-hazlab.github.io/gwl-space-time-smooth/)** | Entry point linking everything below |
-| **[Technical report](https://gaia-hazlab.github.io/gwl-space-time-smooth/report.html)** | Full framework: mission, scientific & data grounds, coupled water budget, dv/v, Vs30 + NEHRP, uncertainty, validation, digital-twin MVP, LandLab coupling |
+| **[Documentation](https://gaia-hazlab.github.io/gwl-space-time-smooth/twin/)** | The framework as linked chapters (0 structural · 1 input · 2 evaluation data · 3 physics · 4 assimilation · 5 evaluation · 6 forecast · 7 hazards) — **start here** |
 | **[GWL + soil-moisture demo](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html)** | The two mature states produced end-to-end on real public data at 90 m, with animated GIFs |
-| **[Audit & forecast framework](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_audit_framework.html)** | AI weather forecast → antecedent hydrologic state → hazard forcing |
+| **[Audit & roadmap](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_audit_framework.html)** | Project audit + status: what has shipped, current priorities, forecast path |
+| **[Full report (archived)](https://gaia-hazlab.github.io/gwl-space-time-smooth/report.html)** | The original single-file technical report, superseded by the chapter docs |
 
-The report source is `docs/gwl_hybrid_framework.qmd` (Quarto → `report.html`); the demo and audit pages
-are pre-rendered self-contained HTML committed under `docs/`.
+The chapter documentation is a Quarto **website** under `docs/twin/` (built to `/twin/`); the archived
+report source is `docs/gwl_hybrid_framework.qmd`; the demo and audit are pre-rendered self-contained
+HTML committed under `docs/`.
 
 > **Core philosophy**: Real wells first. HAND-based terrain physics second. Climate
 > response functions third. Never trust a gridded product until validated against
@@ -56,9 +60,10 @@ Four signals modelled:
 Shows two of the three gaia-soil-hydromechanics state variables modelled from one data-driven
 pipeline over the Puget Sound pilot: the mature **groundwater-level** module and the new
 **soil-moisture** module (`src/models/soil_moisture.py`). Soil moisture combines a static
-SOLUS100 → Saxton-Rawls hydraulic envelope with a dynamic TerraClimate (P & PET)
-Thornthwaite-Mather water balance; the estimate reproduces TerraClimate's *independent*
-soil-water field at **r = 0.98**. Both products are delivered at **90 m** — the coarse dynamic
+SOLUS100 → Saxton-Rawls hydraulic envelope with a dynamic **precipitation**-driven (P & PET)
+Thornthwaite-Mather water balance — the precipitation source is swappable (PRISM, a gridded
+reanalysis, or a downscaled forecast). Against a peer soil-water field it agrees at domain-mean
+**r ≈ 0.94** (a *shared-forcing consistency check*, not independent validation). Both products are delivered at **90 m** — the coarse dynamic
 signal is statistically downscaled onto the fine static envelope, with a tracked
 **static / dynamic / downscaling** uncertainty budget and **animated GIFs** of GWL and θ evolving
 month-by-month. Rebuild the whole page with `pixi run terraclimate && pixi run soil-moisture && pixi run demo`.
@@ -283,8 +288,9 @@ make anomalies-legacy  # Old ordinary kriging of anomalies
 
 #### Coupled subsurface-state modules
 
-The **GAIA Soil Reanalysis** is a coupled subsurface-state estimator (soil moisture + groundwater
-level + near-surface stiffness) for the liquefaction / landslide / flood digital twins. Each state
+The **GAIA Digital Twin of Soil** is a coupled subsurface-state estimator (soil moisture + groundwater
+level + near-surface stiffness) — a soil reanalysis end product — for the liquefaction / landslide /
+flood hazard chains. Each state
 variable is built the same way: a **fine 90 m static envelope** (what the ground can hold / where
 water sits / how stiff it can be) combined with a **coarse dynamic driver** (how it varies in time),
 statistically downscaled to 90 m with a tracked uncertainty budget.
@@ -292,7 +298,7 @@ statistically downscaled to 90 m with a tracked uncertainty budget.
 | State variable | Static (fine) | Dynamic (coarse / observed) | Status |
 |---|---|---|---|
 | Groundwater level | HAND + SOLUS → RF baseline (90 m) | kriged monthly well anomalies; coupled pixel-wise water budget | **live** |
-| Soil moisture | SOLUS100 → Saxton-Rawls envelope (90 m) | TerraClimate P&PET → T-M bucket (4 km); SNOTEL/USCRN anchors, SMAP/MERRA-2 checks | **live** |
+| Soil moisture | SOLUS100 → Saxton-Rawls envelope (90 m) | precipitation & PET → T-M bucket (PRISM / TerraClimate, ~4 km); SNOTEL/USCRN anchors, SMAP/MERRA-2 checks | **live** |
 | Near-surface stiffness (Vs) | Vs30 Wald-Allen slope proxy (90 m) + SOLUS | ambient-noise dv/v, depth-separated into soil moisture + relative water table | **live (MVP)** — real multi-year waveform run staged (#30) |
 
 The three coupled through a **closed pixel-wise water budget** (`src/models/water_budget.py`:
@@ -349,8 +355,8 @@ Each stage is independent Python (`src/data/fetch_terraclimate.py`, `src/models/
 `src/models/gwl_dynamic.py`, `src/models/downscale.py`) with a validated unit test
 (`tests/test_soil_moisture.py`). Tests run standalone: `pixi run python -m tests.test_soil_moisture`.
 
-**Outputs & validation.** The soil-moisture θ reproduces TerraClimate's *independent* soil-water
-field at **r = 0.98**; the uncertainty budget separates static / dynamic / **downscaling**
+**Outputs & validation.** The soil-moisture θ agrees with a peer soil-water field at domain-mean
+**r ≈ 0.94** — a shared-forcing *consistency check*, not independent validation; the uncertainty budget separates static / dynamic / **downscaling**
 representativeness for both products (see `data/processed/provenance.json`). The demo page —
 `docs/gwl_soil_moisture_demo.html`, published to
 `gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html` — is a self-contained

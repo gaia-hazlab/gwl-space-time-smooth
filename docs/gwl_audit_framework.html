@@ -430,7 +430,7 @@
     <h2><span class="section-num">§0</span> Status Update — July 2026: Where We Stand</h2>
     <p>
       This audit (June 2026) framed the project as a groundwater-level product with four gaps. Since
-      then it has become the coupled <strong>GAIA Soil Reanalysis</strong> — groundwater level, soil
+      then it has become the coupled <strong>GAIA Digital Twin of Soil</strong> (a soil reanalysis) — groundwater level, soil
       moisture, and near-surface stiffness at 90 m — and most of the audit's revisions have shipped.
       The current, authoritative write-up is the
       <a href="report.html">technical report</a> (mission, scientific &amp; data grounds, governing
@@ -1131,8 +1131,7 @@
 
     <h3>Stage IV and the Precipitation Intercomparison</h3>
     <p>
-      The convective-thunderstorms use case (Anderson-Frey, Kharita, Denolle) is building a
-      precipitation product intercomparison that includes Stage IV radar-gauge analysis.
+      A precipitation-product intercomparison that includes Stage IV radar-gauge analysis is being developed.
       This work is directly actionable for the GWL climate response functions (Stage 2):
     </p>
     <ul>
@@ -1211,7 +1210,7 @@
         <li>Replace MERIT Hydro DEM with 3DEP 10 m for PNW HAND computation (OpenTopography API key already in GAIA)</li>
         <li>Load SOLUS100 soil properties from <code>s3://cresst/solus-stac</code> instead of gSSURGO download</li>
         <li>Pull staged PRISM from <code>prism-stac</code> for SPI-3 derivation — <code>gaia-cli stage prism -i PNW_bbox</code></li>
-        <li>Coordinate with Anderson-Frey/Kharita on Stage IV intercomparison outputs: request per-terrain-zone precipitation product rankings</li>
+        <li>Coordinate on Stage IV intercomparison outputs: request per-terrain-zone precipitation product rankings</li>
         <li>Align output format to GAIA standard: COG/Zarr on <code>s3://cresst</code> with STAC provenance, EPSG:5070, source/measurement/resolution/uncertainty four-part statement</li>
         <li>Add <code>d_wt</code> from Pillar 1 as cross-validation target in validation notebook — compare at 863 WA+OR NWIS sites</li>
         <li>Wire gwl-space-time-smooth GWT output as the lower boundary condition for Pillar 1's Richards solver</li>

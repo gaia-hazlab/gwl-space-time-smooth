@@ -1,5 +1,5 @@
 ---
-title: "GAIA Soil Reanalysis — Coupled Groundwater, Soil Moisture &amp; Vs30"
+title: "GAIA Digital Twin of Soil — Coupled Groundwater, Soil Moisture &amp; Vs30"
 subtitle: "A data-driven demo over the Puget Sound pilot (90 m)"
 date: today
 author: "GAIA HazLab · gaia-soil-hydromechanics"
@@ -103,7 +103,7 @@ physically meaningful data — never from lat/lon memorisation.
   <tr><td><b class="gwl">Groundwater level</b></td><td>HAND terrain + SOLUS texture → RF baseline</td>
       <td>kriged well residuals (β-map / TFN next)</td><td><span class="pill">live</span></td></tr>
   <tr><td><b class="sm">Soil moisture</b></td><td>SOLUS100 → Saxton-Rawls hydraulic envelope</td>
-      <td>TerraClimate P&amp;PET → Thornthwaite-Mather bucket</td><td><span class="pill">live (new)</span></td></tr>
+      <td>precipitation &amp; PET → Thornthwaite-Mather bucket</td><td><span class="pill">live (new)</span></td></tr>
   <tr><td>Soil mechanics</td><td>Vs30 (Sanger &amp; Maurer) + SOLUS</td>
       <td><b>dv/v</b> ambient-noise seismic</td><td>scaffold (#19)</td></tr>
 </table>
@@ -129,7 +129,7 @@ pilot well — note the pronounced 2021 drought draw-down.](../figures/demo/gwl_
 
 The static **Saxton & Rawls (2006)** pedotransfer functions turn SOLUS100 sand/clay into a physical
 hydraulic envelope (wilting point ≤ field capacity ≤ porosity) at 90 m; a monthly
-**Thornthwaite-Mather** water balance driven by **TerraClimate** precipitation and reference ET fills
+**Thornthwaite-Mather** water balance driven by **precipitation** and reference ET fills
 that envelope through time to give volumetric θ(t) with per-cell θ_std.
 
 - **Physical envelope** from texture alone: field capacity 0.17–0.25, porosity
@@ -158,7 +158,7 @@ at each station and comparing to the in-situ θ gives the project's **first genu
 validation**.
 
 The result is a sobering, useful one: **pooled r&nbsp;=&nbsp;0.40**
-(788 station-months) — far below the shared-forcing r=0.98, exactly as
+(788 station-months) — far below the shared-forcing r≈0.94, exactly as
 an honest independent check should read. It also pinpointed the missing physics: the bare bucket
 has **no snowpack**, so a **temperature-index snow module** (accumulate winter precip as SWE,
 release it by degree-day spring melt) was added. It lifts the snowiest sites' seasonal skill
@@ -169,7 +169,7 @@ calibration against SNOTEL SWE and a Cascade domain extension ([#28](https://git
 
 ![Model θ vs SNOTEL in-situ θ at upland stations: pooled scatter (bias-limited), a best-site
 hydrograph showing the snow module recovering the snowmelt phase (grey no-snow → green snow),
-and per-station r (snow off→on). The independent r sits far below the shared-forcing r=0.98 — as
+and per-station r (snow off→on). The independent r sits far below the shared-forcing r≈0.94 — as
 it should.](../figures/demo/snotel_validation.png)
 
 ```{=html}
@@ -215,7 +215,7 @@ stations). Right: leave-one-station-out skill.](../figures/demo/snotel_anchor.pn
 
 ### Depth-matched validation against MERRA-2 reanalysis (native 0.5°, incl. 2025)
 
-The 2024–2025 comparison uses **MERRA-2** (NASA reanalysis) — a model cross-check rather than an
+The 2024–2025 comparison uses **MERRA-2** (NASA reanalysis) — a model evaluation dataset rather than an
 independent satellite retrieval, but its **root-zone** field (~0–1 m) is *depth-matched* to our
 bucket and it covers **2025**, the period of interest. It's a lightweight, locally-cached fetch
 (one small file per month) rather than SMAP's ~650 MB global granules. Upscaling our θ to MERRA-2's
@@ -315,7 +315,7 @@ ET, so the forcing is a drop-in. Running the *same* envelope and bucket under **
 **forcing ensemble**: the two agree at r&nbsp;=&nbsp;0.98, and their spread is an explicit
 *forcing-uncertainty* term (median ≈ 0.003 m³/m³) — a fourth budget component for
 bootstrapping/UQ. Because PRISM precipitation is independent of TerraClimate's, a PRISM-forced
-estimate also makes the TerraClimate cross-check more genuinely independent.
+estimate also makes the TerraClimate evaluation dataset more genuinely independent.
 
 ![Same envelope + Thornthwaite–Mather bucket under two independent forcings (TerraClimate vs
 PRISM): domain-mean θ agreement, the per-cell forcing-σ, and the four-component θ uncertainty
@@ -505,7 +505,7 @@ Error components are treated as (assumed) independent and combined in quadrature
 
 ### What would make this independently validated
 
-The current cross-check shares forcing with the model, so it cannot confirm accuracy. Genuinely
+The current evaluation dataset shares forcing with the model, so it cannot confirm accuracy. Genuinely
 independent validation needs observations **outside the forcing chain** — **SMAP** satellite soil
 moisture and in-situ probes for θ ([#20](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/20)), and the continuous-recorder network for GWL
 phase/recession ([#6](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/6)).

@@ -1,0 +1,44 @@
+---
+title: "5 · Soil-state evaluation"
+---
+
+Every number here is tagged with its **basis** — is it a real, independent test, a shared-forcing
+consistency check, or a synthetic demonstration? — because the honest value of a score depends
+entirely on which it is ([Evaluation data](02-evaluation-data.qmd)).
+
+## Groundwater-level evaluation
+
+The groundwater baseline is scored by **spatial block cross-validation** with variogram-sized blocks,
+so nearby wells never appear in both train and test folds. This gives a deliberately hard **pooled
+RMSE ≈ 18.5 m** against held-out wells — a *real* number. Per-domain gates report the achieved
+valley-fill RMSE/bias/coverage separately from the pooled figure, since the shallow valley regime that
+liquefaction cares about is far better constrained than the fractured uplands.
+
+## Soil-moisture evaluation — consistency vs independent
+
+Two comparisons, two very different meanings:
+
+- Against **MERRA-2** root-zone reanalysis (a *model evaluation dataset*), the model tracks at
+  domain-mean **r = 0.85** (bias −0.08 m³ m⁻³, RMSE 0.095), depth-matched with the total-water store.
+  This is inter-model agreement.
+- Against **in-situ SNOTEL** θ held out of the estimator (a *genuinely independent* reference), the
+  pooled skill is **r ≈ 0.33** in the sparse Cascade uplands — far below the shared-forcing consistency
+  figure, exactly as an honest independent test should read. That gap is the point: it localised the
+  missing physics (no snowpack in the bare bucket), motivating a temperature-index snow module and a
+  per-station representativeness anchor.
+
+## dv/v recovery and depth support
+
+The dv/v pipeline is validated end-to-end on a controlled synthetic with a known imposed velocity
+change: coda-wave stretching recovers the banded $\delta v/v$ at **r > 0.95**, and the depth inversion
+returns the imposed profile within its propagated covariance. The honest caveat is **depth support**:
+the shallowest realistic ambient-noise band peaks near ~45 m, below the top-30 m Vs30 window, so the
+Vs30 response to a shallow signal is diluted by the 30 m average — a real depth-resolution limit, not a
+tuning artefact.
+
+## Calibrated uncertainty (coverage / PIT / CRPS)
+
+Uncertainty is calibrated, not decorative: from out-of-fold `(mean, σ)` we report empirical **interval
+coverage** at the 50/80/90/95% levels, the **PIT** mean, and the **CRPS**. A product whose stated σ
+does not cover the observations at the nominal rate is recalibrated before release, so the per-cell σ
+that travels to the hazard models ([Hazard integration](07-hazard-integration.qmd)) means what it says.

@@ -71,3 +71,7 @@ figures/
 
 # HTTP fetch cache (aiohttp/requests)
 cache/
+
+# Quarto multi-doc site build output
+docs/twin/_site/
+docs/twin/.quarto/

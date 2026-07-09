@@ -1,0 +1,66 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "GAIA Digital Twin of Soil"
+  description: "A GAIA HazLab digital twin of soil — a coupled 90 m soil reanalysis for the Pacific Northwest."
+  reader-mode: true
+  page-navigation: true
+  navbar:
+    background: dark
+    search: true
+    right:
+      - text: "Landing"
+        href: "../index.html"
+      - icon: github
+        href: "https://github.com/gaia-hazlab/gwl-space-time-smooth"
+  sidebar:
+    style: docked
+    collapse-level: 2
+    contents:
+      - text: "Overview"
+        href: index.qmd
+      - section: "0 · Structural model"
+        href: 00-structural-model.qmd
+      - section: "1 · Input data"
+        href: 01-input-data.qmd
+      - section: "2 · Evaluation data"
+        href: 02-evaluation-data.qmd
+      - section: "3 · Physics"
+        contents:
+          - text: "Part 1 — Hydrology"
+            href: 03a-physics-hydrology.qmd
+          - text: "Part 2 — Hydromechanics"
+            href: 03b-physics-hydromechanics.qmd
+      - section: "4 · Assimilation"
+        href: 04-assimilation.qmd
+      - section: "5 · Soil-state evaluation"
+        href: 05-state-evaluation.qmd
+      - section: "6 · Forecast"
+        href: 06-forecast.qmd
+      - section: "7 · Hazard integration"
+        href: 07-hazard-integration.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    fig-format: svg
+    fig-dpi: 150
+    html-math-method: katex
+    code-fold: true
+    embed-resources: false
+
+bibliography: ../references.bib
+csl: https://raw.githubusercontent.com/citation-style-language/styles/master/american-geophysical-union.csl
+
+execute:
+  echo: false
+  warning: false
+  message: false
+  freeze: auto
+
+jupyter: python3
