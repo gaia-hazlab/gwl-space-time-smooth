@@ -2,20 +2,121 @@
 title: "3 · Physics — Part 1: Hydrology"
 ---
 
-::: {.callout-note appearance="simple"}
-**Scope.** The water physics the twin constrains: how groundwater level and soil moisture are modelled
-(physical / statistical / data-driven), and our ground — the closed pixel-wise **water budget**
-(recharge, capillary rise, ET, saturation-excess runoff, TOPMODEL lateral flow) with its governing
-equations.
-:::
+Groundwater level and soil moisture are two faces of one subsurface water balance — the saturated
+store below the water table and the vadose store above it — and both are modelled along the same
+spectrum from process physics to pure statistics. We give them equal footing, then enforce a closed
+water budget at every pixel.
 
-*Content migrating from "Hydrological modeling grounds", the water-budget equations, "PNW
-Hydroclimatic Signals", the GWL stage pipeline, and the soil-moisture envelope/bucket.*
+## How GWL and soil moisture are modelled — three paradigms
 
-## How GWL and soil moisture are modelled (three paradigms)
+**Physical / process models.** The reference is the 3-D groundwater flow equation, solved by MODFLOW
+and ParFlow [@maxwell2015connections]:
+$$S_s \frac{\partial h}{\partial t} = \nabla \cdot (K \nabla h) + R,$$
+with head $h$, hydraulic conductivity $K$, specific storage $S_s$, and source/sink $R$. In the vadose
+zone the analogue is the Richards equation, routinely reduced for regional work to a
+Thornthwaite–Mather soil-water balance [@thornthwaite1957water]. These are physically consistent but
+demand aquifer geometry and hydraulic properties poorly known at regional scale; @reinecke2020importance
+and @degraaf2015global show that global models at 0.5°–10 km cannot resolve the water-table variability
+hazards need. Two process building blocks we reuse below are baseflow recession [@brutsaert1977recession],
+which sets a water-table drainage timescale, and the TOPMODEL topographic-wetness closure
+[@beven1979physically], which converts a mean deficit into a spatial saturation pattern; recharge — the
+vadose-to-saturated flux that couples the two stores — is itself a modelling choice with
+method-dependent spread [@scanlon2002choosing].
 
-## The constrained water budget (governing equations)
+**Statistical interpolation.** @fan2013global regressed water-table depth on 17 terrain/climate/soil
+variables to the first global 1 km product, later improved by the ML-ensemble HydroGEN [@ma2023wtd;
+@ma2026highres]. These share four limitations: DEM-tile artifacts, elevation bias (valley floors
+indistinguishable from ridge tops at equal elevation), no temporal variability, and severe western-US
+extrapolation from sparse wells — HydroGEN still shows a +7.2 m bias / 20.5 m RMSE against held-out PNW
+wells. The soil-moisture analogue is digital soil mapping: pedotransfer functions [@saxton2006soil]
+applied to ML-mapped soil properties [@nauman2024solus; @ramcharan2018soil], and regression kriging
+[@hengl2007regression], which separates a deterministic trend from kriged residuals.
+
+**Data-driven / time-series.** At gauged sites, LSTM networks reach state-of-the-art one-step GWL
+prediction [@wunsch2021groundwater; @liesch2019aquifer; @shen2018deeplearning] but do not generalise to
+ungauged locations; transfer-function-noise models [@vonasmuth2002tfn; @bakker2019timeseries] and the
+Pastas framework [@collenteur2019pastas] give parsimonious per-well impulse responses; and climate-index
+regression links GWL to SPI, ENSO, and PDO [@bloomfield2013analysis; @kuss2014multi]. Random forests on
+terrain+geology regionalise groundwater properties [@rodriguez2014nitrate; @marcais2017prospecting].
+
+**Hybrid — and the gap.** True hybrids pairing a spatial ML/geostatistical baseline with a temporal
+physics component are rare [@konapala2020hybrid; @heudorfer2019groundwater; @cuthbert2019global]. No
+published product combines HAND-based regression kriging, β-coefficient response maps, **and** a
+pixel-wise water budget delivered with provenance for geotechnical/geomorphological consumers.
+
+## Our ground: the constrained water budget
+
+Rather than solve the flow equation or memorise wells, we **enforce a closed water balance at every
+90 m cell** (`src/models/water_budget.py`) and let observations anchor it. Over the fine
+SOLUS→Saxton–Rawls storage envelope [@saxton2006soil], each cell steps a monthly balance of: vertical
+infiltration/recharge, capillary rise, evapotranspiration, saturation-excess runoff, and a TOPMODEL
+lateral redistribution of the water table.
+
+The root-zone store $S=\theta\,z_r$ (mm over root depth $z_r$) is stepped each month against the
+Saxton–Rawls limits $S_x=\theta_x z_r$ ($x\in\{wp,fc,sat\}$), enforcing the closed balance
+
+$$
+S_t = S_{t-1} + C_t + I_t - Q_t - E_t - R_t, \qquad \theta_t = S_t/z_r,
+$$
+
+with the flux closures (mm month⁻¹; $[x]_+ \equiv \max(x,0)$ and $[x]_0^1 \equiv \min(\max(x,0),\,1)$
+clamps to $[0,1]$)
+
+$$
+\begin{aligned}
+R_t &= \gamma\,[\,S-S_{fc}\,]_+ && \text{recharge (deep percolation)},\\
+Q_t &= [\,S+I_t-S_{sat}\,]_+ && \text{saturation-excess runoff},\\
+E_t &= \min\!\big(\mathrm{PET}_t,\ [\,S-S_{wp}\,]_+\big) && \text{evapotranspiration},\\
+C_t &= C_{\max}\,\Big[\tfrac{(z_r+z_f)-d_{t-1}}{z_r+z_f}\Big]_0^1\,\tfrac{S_{sat}-S}{S_{sat}-S_{wp}} && \text{capillary rise},
+\end{aligned}
+$$
+
+and the water table advanced as a recharge-fed, laterally-redistributed linear reservoir
+
+$$
+h_t = h_{t-1} + \frac{R_t}{S_y} - \frac{h_{t-1}}{\tau},\quad d_t = d_0 - h_t; \qquad
+d_i = \bar d - m\,(\mathrm{TWI}_i - \overline{\mathrm{TWI}}),
+$$
+
+with specific yield $S_y$, recession time $\tau$ [@brutsaert1977recession], capillary fringe $z_f$, and
+the TOPMODEL slope $m$ [@beven1979physically]. This is the *integrated, per-pixel* counterpart of the
+3-D flow equation above: we do not solve the PDE, we **enforce its mass balance at every cell** —
+$\Delta S = C + I - Q - E - R$, exact by construction — and let observations anchor the coefficients.
+The vertical exchange between soil moisture and the water table (recharge $\leftrightarrow$ capillary
+rise) and the downhill routing of excess water are therefore represented, not assumed away; this is the
+sense in which the two water states are *coupled* rather than merely co-located.
+
+## The soil-moisture bucket
+
+The temporal signal is a monthly Thornthwaite–Mather [-@thornthwaite1957water] balance in a single
+root-zone bucket of capacity $\mathrm{AWC}=(\theta_{fc}-\theta_{wp})\,z_r$, forced by **precipitation**
+$P$ and reference ET (the source is swappable — PRISM, a reanalysis, or a forecast, see
+[Forecast](06-forecast.qmd)):
+
+$$
+S_t = \begin{cases}
+\min\!\big(S_{t-1} + (P_t - \mathrm{PET}_t),\; \mathrm{AWC}\big), & P_t \ge \mathrm{PET}_t,\\[4pt]
+\mathrm{AWC}\,\exp\!\big(-\mathrm{APWL}_t / \mathrm{AWC}\big), & P_t < \mathrm{PET}_t,
+\end{cases}
+$$
+
+with APWL the accumulated potential water loss. The relative wetness $w_t=S_t/\mathrm{AWC}\in[0,1]$
+fills the fine 90 m static envelope, $\theta_t=\theta_{wp}+w_t(\theta_{fc}-\theta_{wp})$, capped at
+$\theta_{sat}$ — so the 90 m spatial texture is the static envelope while the temporal signal stays at
+the driver scale.
 
 ## The groundwater-level pipeline
 
-## The soil-moisture envelope and bucket
+The operational GWL estimate writes the field in **anomaly space**, so each stage owns one term:
+
+$$
+h(x,t)=\underbrace{\overline{\mathrm{DTW}}(x)}_{\text{baseline mean}}+\underbrace{\Delta h(x,t)}_{\text{dynamics}}+\underbrace{r(x,t)}_{\text{assimilation residual}}.
+$$
+
+The **baseline** is an observation-anchored random forest on **HAND** (Height Above Nearest Drainage)
+and SOLUS/terrain covariates — deliberately excluding coordinates so it cannot memorise well locations.
+The **dynamics** sit on a ladder of increasing physical content: the lowest rung is a static-gain
+climate-response β-map (per-site regression on SPI-3, ΔSWE, PDO), which reproduces *correlation* but no
+memory; the higher rungs add a transfer-function/linear-reservoir memory (the same water table advanced
+above). The **residual** is ordinary kriging of the observed well anomalies, precision-weighted into the
+state ([Assimilation](04-assimilation.qmd)).

@@ -2,19 +2,117 @@
 title: "3 · Physics — Part 2: Hydromechanics"
 ---
 
-::: {.callout-note appearance="simple"}
-**Scope.** The mechanical state and its link to water: near-surface stiffness (Vs30, NEHRP), and the
-petrophysical effective-medium relation by which water changes velocity — poroelastic pore pressure
-(saturated) and dynamic capillarity (vadose), measured by ambient-noise dv/v.
-:::
+The mechanical state is the near-surface stiffness that geotechnical hazard models consume, and the
+petrophysical link is how a change in water produces a measurable change in seismic velocity — through
+an effective-medium relation with material parameters, not an empirical correlation.
 
-*Content migrating from "Mechanical modeling grounds" and "Petrophysical linking models" (the
-effective-medium derivation, acoustoelastic β, dynamic capillary stress).*
+## Mechanical modelling grounds
 
-## Mechanical modelling grounds (Vs30, tomography, NEHRP)
+The mechanical state is the near-surface **shear-wave velocity** $V_S(z)$ and, through it, the
+small-strain stiffness that geotechnical hazard models consume. It is constrained three ways, in
+decreasing data cost. *Seismic tomography* from ambient noise inverts inter-station surface-wave
+dispersion for $V_S(z)$ [@shapiro2005high] — the highest-fidelity but sparsest constraint. *Vs30
+proxies* — the 30 m time-averaged velocity, $V_{S30} = 30 / \int_0^{30} dz/V_S(z)$ — trade fidelity
+for coverage: the Wald–Allen topographic-slope model [@waldallen2007], which we adopt at native 90 m,
+and geology- and geomorphon-based parametric models [@sanger2025parametric]. Vs30 maps to the
+NEHRP/ASCE-7 site class, and because the proxy carries large residual scatter we propagate that as a
+**site-class probability** rather than a point value (see [Hazard integration](07-hazard-integration.qmd)).
+Frequency sets depth: a Rayleigh wave of frequency $f$ is most sensitive near $L \approx V_S/3f$, so a
+band of frequencies reads a profile of depths — the basis of the depth kernels (`codameter`/`disba`)
+used by the $\delta v/v$ module. Bulk properties needed to turn velocity into stress — density and the
+lithologic control on stiffness — come from the same SOLUS static set (oven-dry bulk density, texture)
+and the geology/lithology layer that also feeds the storage envelope, so the mechanical and
+hydrological grounds share one static description of the subsurface. This stiffness field is the input
+to the Sanger liquefaction GLM [@sanger2025liquefaction] and, with the water table, to the LandLab
+landslide chain ([Hazard integration](07-hazard-integration.qmd)).
 
 ## Petrophysical link: velocity, stiffness, and water
 
-## Saturated zone — pore pressure (poroelastic + acoustoelastic)
+The two grounds meet in petrophysics: **water changes stiffness, and $\delta v/v$ measures the
+change** — not as an empirical correlation but through an effective-medium relation with measurable
+material parameters [@denolle2026unified]. The observable is a depth-averaged, frequency-dependent
+surface-wave phase-velocity change,
 
-## Vadose zone — partial saturation and dynamic capillarity
+$$
+\frac{\delta v}{v}(f,t) \approx \frac{\delta c}{c}(f,t)
+= \frac{1}{c(f)}\int_0^{\infty} \frac{\partial c}{\partial V_S}(z,f)\,\frac{\delta V_S}{V_S}(z,t)\,V_S\,dz,
+$$
+
+so a band of frequencies reads a *profile* of $\delta V_S(z)$ (peak sensitivity near $L\approx V_S/3f$),
+recovered through the Rayleigh kernels. What changes $V_S=\sqrt{\mu_{\rm eff}/\rho}$ is, to leading
+order, the **effective shear modulus** $\mu_{\rm eff}$, not the density: a wetting-driven density change
+contributes $\delta V_S/V_S = -\tfrac12\,\delta\rho/\rho$, two to three orders of magnitude smaller than
+the modulus term for typical soils [@denolle2026unified]. The modulus is set by grain-contact mechanics
+— Hertz–Mindlin gives $\mu_{\rm eff}\propto P_e^{1/3}$, so the pressure derivative $\mu'=d\mu/dP\sim\mu/P$
+is very large at the low confining pressures of the near surface; this is why seasonal $\delta v/v$
+exceeds $0.1\%$ in soft sediments but is below $0.01\%$ in crystalline rock, and why the signal lives in
+the shallowest layers. The two hydrologic regimes, split at the water table, differ in *what sets the
+effective pressure* $P_e$.
+
+### Saturated zone — pore pressure (poroelastic + acoustoelastic)
+
+Below the water table the effective stress is overburden minus pore pressure (Terzaghi/Biot
+[@biot1941general]); a head change $\Delta h$ raises pore pressure by $\rho_w g\,\Delta h$, lowers
+effective stress, and softens the frame. In the poroelastic surface-wave form the pore-pressure term
+$u^0$ reduces velocity, $\left(\delta V_S/V_S\right)_{\rm Rayleigh} = -\tfrac{\mu'}{2\mu}u^0 +
+\tfrac{\mu'+1}{12\mu}T^0_{33}$, and the underlying acoustoelastic (third-order-elastic) sensitivity
+$\delta v/v = \beta\,\epsilon_{kk}$ is bridged to the seismological moduli by
+
+$$
+\beta = -\frac{\mu'\,\kappa}{2\mu}, \qquad \kappa_u = \frac{\kappa}{1-\alpha_B B},
+$$
+
+of order $\beta\approx-400$ for shallow sediments [@denolle2026unified; @clements2023seismic]. Whether
+the *drained* modulus $\kappa$ or the *undrained* $\kappa_u$ (Biot coefficient $\alpha_B$, Skempton $B$)
+applies is set by a Péclet number $\mathrm{Pe}=\omega L^2/c$ comparing the forcing rate to pore-pressure
+diffusion — so a *rapid* rainfall pulse and a *slow* seasonal water-table change of equal magnitude
+produce different $\delta v/v$ amplitudes. This is the mechanism by which the ambient field tracks
+groundwater [@senss2006passive; @clements2018tracking]; our operational $\delta v/v = k_{sat}\,\Delta h$
+is its linearization, with $k_{sat}$ identified as $-\beta\,\rho_w g$ (a calibratable acoustoelastic
+coefficient), and only a *relative* level is recovered.
+
+### Vadose zone — partial saturation and dynamic capillarity
+
+Above the water table the effective confining pressure carries a **capillary stress**, and
+$V_S=\sqrt{\mu_{\rm eff}/\rho}$ with $\mu_{\rm eff}$ set by [@shi2026agroseismology; @denolle2026unified]
+
+$$
+P_e(z,t) = \sigma'_g(z,t) + P_c^{\rm eq}(S_w) + \tau(S_w)\,\frac{\partial S_w}{\partial t},
+$$
+
+the gravitational overburden $\sigma'_g$, the *equilibrium* capillary pressure $P_c^{\rm eq}(S_w)$ set
+by the soil's water-retention curve, and a *rate-dependent dynamic* capillary stress
+$\tau(S_w)\,\partial_t S_w$ (Hassanizadeh–Gray non-equilibrium capillarity). Drying raises suction,
+raises $P_e$, and stiffens the frame; wetting softens it. Shi et al. (2026) show three things that
+matter here: dynamic capillarity is *essential* (a static-suction model underestimates the
+evaporation-driven velocity rise by ~50%); the dynamic coefficient $\tau(S_w)$ differs between wetting
+and drying, so the $\delta v/v$–saturation relation is **hysteretic** (path-dependent, not
+single-valued); and capillary suction can raise $|\beta|$ by factors of 2–5. Our operational
+$\delta v/v = S_\theta\,\Delta\theta$ is therefore the *local linearization* of a hysteretic,
+retention-curve-controlled relation: $S_\theta$ is a **material property** — set by porosity, the
+Hertz–Mindlin contact stiffness, and $P_c(S_w)$ — not a universal constant. Its material value
+($\approx-1$ per unit $\theta$; the depth-diluted single-band value is $\approx-0.08$) applies to the
+*inverted* profile.
+
+### From velocity change to stress — the interface
+
+Because both regimes act through $V_S=\sqrt{\mu_{\rm eff}/\rho}$, the depth-separated $\delta V_S/V_S$
+profile converts to a *physical stress* change through the stress meter
+
+$$
+\Delta\sigma_{ij}(z,t) = \beta_{ij}(z)\,\frac{\delta V_S}{V_S}(z,t),
+\qquad \mu(z)=\rho V_S^2,\quad \kappa(z)=\rho\!\left(V_P^2-\tfrac43 V_S^2\right),
+$$
+
+with $\beta_{ij}$ built from those layered moduli and $\mu'(z)$ [@denolle2026unified]. This is what
+separates the approach from a fitted correlation: the conversion of $\delta v/v$ to soil moisture and
+head is anchored to **measurable material properties** — density $\rho$, bulk and shear moduli
+$\kappa,\mu$, the acoustoelastic $\beta$, and the retention curve $P_c(S_w)$ — which become the
+borehole/lab **calibration targets** that carry the MVP's constant $S_\theta$ and $k_{sat}$ toward a
+material-property-based, hysteresis-aware conversion. The banded measurements are inverted through the
+Rayleigh kernels $\mathbf{G}$, $\ \mathbf{d}=\mathbf{G}\,\mathbf{m}+\boldsymbol{\epsilon}$, with
+$\mathrm{cov}(\boldsymbol{\epsilon})$ marginalised over the processing ensemble
+([`codameter`](https://github.com/Denolle-Lab/codameter)); splitting the profile at the water table
+yields two hydrologic states from one measurement — a shallow **soil-moisture** change (vadose, dynamic
+capillarity) and a deep **relative water-table** change (saturated, poroelastic) — each assimilated
+into the matching hydrological state above ([Assimilation](04-assimilation.qmd)).
