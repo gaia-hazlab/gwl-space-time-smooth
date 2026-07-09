@@ -1466,8 +1466,7 @@ Four distinct timescales drive PNW GWL variability:
 4. **Atmospheric rivers (impulse)**: individual AR events deliver 20–40% of annual
    precipitation in 1–3 days. Their GWL response is sub-monthly and partially missed
    by monthly SPI-3. The AR term (β₄) is a placeholder in the current framework;
-   integration with Stage IV radar-gauge data will quantify it once the precipitation
-   intercomparison (Anderson-Frey, Kharita, Denolle) is complete.
+   integration with Stage IV radar-gauge data will quantify it once a precipitation-product intercomparison is complete.
 
 ---
 
@@ -2458,8 +2457,7 @@ condition at the water table.
 ### Atmospheric rivers as the missing signal
 
 The AR term (β₄) is currently set to zero because no spatially consistent, ranked
-AR catalog exists for the PNW at 4 km resolution. The Stage IV radar-gauge intercomparison
-underway with the Kharita and Anderson-Frey groups will deliver this. Once AR counts are
+AR catalog exists for the PNW at 4 km resolution. A Stage IV radar-gauge precipitation intercomparison will deliver this. Once AR counts are
 available, β₄ maps will capture the ~20–40% of PNW annual precipitation delivered in
 AR events, closing the largest gap in the climate response framework.
 
