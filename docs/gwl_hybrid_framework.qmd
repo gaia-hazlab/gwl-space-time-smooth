@@ -1,6 +1,6 @@
 ---
 title: |
-  The Digital Twin of Soils: Observation-Anchored Groundwater Level, Soil Moisture,
+  The GAIA Digital Twin of Soil: Observation-Anchored Groundwater Level, Soil Moisture,
   and Near-Surface Stiffness for the Pacific Northwest
 subtitle: "GAIA HazLab Technical Report"
 author:
@@ -15,7 +15,7 @@ author:
 date: today
 date-format: long
 abstract: |
-  The Digital Twin of Soils — a coupled soil reanalysis as its end product — maintains a *living
+  The GAIA Digital Twin of Soil — a coupled soil reanalysis as its end product — maintains a *living
   hydromechanical state of the subsurface* —
   water table depth, soil moisture, and near-surface stiffness — at the space and time
   scales that downstream hazard models (flood, landslide, liquefaction) require. The state is
@@ -48,7 +48,7 @@ abstract: |
   statistical downscaling to 90 m, and a tracked uncertainty budget — generalizes beyond
   groundwater into a coupled *soil-reanalysis* framework: we additionally implement a
   soil-moisture state variable (a SOLUS-derived Saxton–Rawls hydraulic envelope forced by a
-  TerraClimate-driven Thornthwaite–Mather water balance) and outline a third,
+  precipitation-driven Thornthwaite–Mather water balance) and outline a third,
   seismically-constrained soil-mechanics variable (ambient-noise dv/v), each delivered at
   90 m with an explicit static / dynamic / downscaling error decomposition.
 keywords:
@@ -137,7 +137,7 @@ native resolution, update rate, and uncertainty.
 
 ```{python}
 #| label: fig-mission
-#| fig-cap: "**The Digital Twin of Soils framework.** Three information streams constrain a
+#| fig-cap: "**The GAIA Digital Twin of Soil framework.** Three information streams constrain a
 #|   coupled subsurface state through a water budget and a hydromechanical rheology. Only ground
 #|   sensors and satellites are *assimilated*; static layers form the prior; validation is held out
 #|   and scored at native sensor resolution. The downstream hazard sets the target scale (90 m),
@@ -1693,7 +1693,7 @@ envelope and a dynamic driver:
 | State variable | Static envelope (fine) | Dynamic driver (coarse) | Status |
 |---|---|---|---|
 | Groundwater level | HAND + SOLUS100 → RF baseline (90 m) | kriged monthly well anomalies | mature (this report) |
-| Soil moisture | SOLUS100 → Saxton–Rawls envelope (90 m) | TerraClimate $P$ & PET → Thornthwaite–Mather bucket | implemented |
+| Soil moisture | SOLUS100 → Saxton–Rawls envelope (90 m) | precipitation $P$ & PET → Thornthwaite–Mather bucket | implemented |
 | Soil mechanics | Vs30 [@sanger2025parametric] + SOLUS | ambient-noise dv/v | implemented (module) |
 
 The differentiator relative to hydrology-only products is the third row: seismic velocity
@@ -1715,13 +1715,14 @@ water retention. Over the Puget Sound pilot these estimates yield field capacity
 $0.17$–$0.25$, porosity $0.45$–$0.46$ m³ m⁻³, and plant-available water capacity $100$–$150$
 mm, with finer valley soils holding more — consistent with the alluvial setting.
 
-### Soil-moisture dynamic driver — an honest accounting of TerraClimate
+### Soil-moisture dynamic driver — precipitation forcing and an honest evaluation
 
 The temporal signal comes from a monthly Thornthwaite–Mather [-@thornthwaite1957water]
 soil-water balance. A single root-zone bucket of capacity
-$\mathrm{AWC} = (\theta_{fc}-\theta_{wp})\,z_r$ (root depth $z_r = 1$ m) is forced by
-**TerraClimate** [@abatzoglou2018terraclimate] monthly precipitation $P$ and reference
-evapotranspiration PET:
+$\mathrm{AWC} = (\theta_{fc}-\theta_{wp})\,z_r$ (root depth $z_r = 1$ m) is forced by monthly
+**precipitation** $P$ and reference evapotranspiration PET. The precipitation source is
+deliberately not fixed — it is a swappable input (station-based PRISM, a gridded reanalysis, or a
+downscaled forecast); the MVP shown here happens to use TerraClimate [@abatzoglou2018terraclimate]:
 
 $$
 S_t = \begin{cases}
@@ -1734,11 +1735,11 @@ where APWL is the accumulated potential water loss over the dry run. The relativ
 $w_t = S_t/\mathrm{AWC} \in [0,1]$ fills the static envelope,
 $\theta_t = \theta_{wp} + w_t\,(\theta_{fc}-\theta_{wp})$, capped at $\theta_{sat}$.
 
-Two roles of TerraClimate must be kept distinct. Its **precipitation and reference ET are
-forcing inputs** to our water balance. Its own **soil-water-storage product is used only as a
-cross-check** — it never enters the estimator. Because TerraClimate derives that soil field
-from a Thornthwaite–Mather balance driven by the *same* $P$ and PET, the $r = 0.94$ agreement
-between our $\theta$ and TerraClimate soil (domain mean; per-cell median $0.93$, for the shipped
+Two roles must be kept distinct. The **precipitation and reference ET are forcing inputs** to our
+water balance. A separate **soil-water-storage product** (here TerraClimate's) is used only as a
+**evaluation dataset** — it never enters the estimator. Because, in this MVP, both the forcing and that
+evaluation dataset field derive from a Thornthwaite–Mather balance driven by the *same* $P$ and PET, the
+$r = 0.94$ agreement between our $\theta$ and the TerraClimate soil field (domain mean; per-cell median $0.93$, for the shipped
 total-water bucket) is a **consistency check that the envelope and bucket are implemented sensibly —
 not an independent validation of accuracy**, since the two models share both forcing and model
 family. A genuinely *independent* check requires observations outside the forcing chain. A
@@ -1770,7 +1771,7 @@ a denser soil-moisture network is what unlocks the rest.
 
 Over the lowland pilot and the recent period of interest (2024–2025, including 2025), the model
 is compared against **MERRA-2** reanalysis at its native 0.5°×0.625° scale (upscale-then-compare).
-MERRA-2 is a model cross-check rather than an independent satellite retrieval, but its *root-zone*
+MERRA-2 is a model evaluation dataset rather than an independent satellite retrieval, but its *root-zone*
 field is depth-matched to the bucket: the model tracks it at domain-mean $r \approx 0.81$ (per-cell
 $r \approx 0.79$), with the seasonal cycle and the 2024/2025 interannual swing lining up and only
 the familiar field-capacity dry bias ($-0.11$ m³ m⁻³) remaining. The independent-satellite check
@@ -1780,7 +1781,7 @@ small monthly subsets so the comparison can be re-aggregated without repeating t
 ### One downscaling and uncertainty budget for both variables
 
 Each state variable solves its dynamic component at its native coarse resolution — ~4 km for
-the TerraClimate-forced wetness, ~2 km for the kriged GWL anomaly — and bilinearly
+the precipitation-forced wetness, ~2 km for the kriged GWL anomaly — and bilinearly
 downscales it onto the 90 m static grid. Fine spatial texture therefore comes from the static
 envelope; the temporal signal is coarse and *interpolated*, not independently resolved at
 90 m. Rather than hide this, the per-cell variance is decomposed into three
@@ -1802,7 +1803,7 @@ hard-wired**: the bucket needs only precipitation and reference ET, so running i
 TerraClimate (reanalysis) and PRISM (station observations; PET via the Hamon method) yields a
 *forcing ensemble* — the two agree at $r = 0.98$ and their spread is an explicit
 forcing-uncertainty term (a fourth budget component), with the observation-based PRISM forcing
-also making the TerraClimate cross-check more independent. Second, **downscaling is modular**:
+also making the TerraClimate evaluation more independent. Second, **downscaling is modular**:
 the coarse→90 m step is a registry whose default is bilinear resampling — a baseline that adds
 no new fine-scale information (the representativeness term quantifies exactly that) — so smarter,
 data-informed or model-driven downscalers (covariate regression, ML super-resolution,
@@ -1957,7 +1958,7 @@ over a densely-instrumented window.
 ### Soil moisture
 
 The static SOLUS→Saxton-Rawls envelope sets the physical bounds at 90 m (wilting point, field
-capacity, porosity, available water); a **total-water bucket** forced by TerraClimate fills it
+capacity, porosity, available water); a **total-water bucket** forced by precipitation fills it
 through time. Unlike a plant-available Thornthwaite-Mather store, which caps θ at field capacity
 and biases the product dry, the total-water store spans wilting point to porosity: wet months
 saturate above field capacity and drain gravitationally, so θ ranges from ≈0.05 to ≈0.46 m³ m⁻³
@@ -2123,7 +2124,7 @@ Independent references used to score the twin (kept separate from the assimilate
 |---|---|---|---|
 | MERRA-2 root-zone SM | NASA GES DISC (`earthaccess`), incl. 2025 | 0.5° | soil moisture (upscale-then-compare) |
 | SMAP L4 root-zone / L3 | NASA (`earthaccess`) | 9 km | soil moisture (gridded, native-scale) |
-| NLDAS-2 soil moisture | NASA GES DISC (`earthaccess`) | ~12 km | soil moisture (gridded cross-check) |
+| NLDAS-2 soil moisture | NASA GES DISC (`earthaccess`) | ~12 km | soil moisture (gridded evaluation dataset) |
 | SNOTEL / USCRN θ (held out) | NRCS AWDB; NOAA NCEI | point | soil-moisture phase (LOSO) |
 | NWIS wells (held out) | USGS | point | GWL baseline (spatial block-CV) |
 
@@ -2139,7 +2140,7 @@ should be able to tell which is which.
 
 - **Observation (real).** In-situ ground sensors and satellite retrievals. These are the only inputs
   that are *assimilated* (see the principle below).
-- **Reanalysis / model cross-check.** Model products (TerraClimate, PRISM, MERRA-2, NLDAS) used as
+- **Evaluation dataset (model / reanalysis).** Model products (TerraClimate, PRISM, MERRA-2, NLDAS) used as
   forcing or as a consistency check. Correlation against these is inter-model agreement, not
   independent validation.
 - **Statistical / physical model.** Fields learned or computed from covariates (the HAND-based RF
@@ -2169,7 +2170,7 @@ synthetic placeholders -- the real data that will replace it.
 | Vs30 | **statistical/physical** (Wald-Allen slope proxy from 3DEP) | no (prior) | USGS global Vs30 grid; Sanger-Maurer parametric (GAIA vs-STAC); measured Vs30 (MASW / borehole) |
 | dv/v | **synthetic** (band generator) | no (yet) | real UW/CC ambient noise via `seisfetch` + `codameter` (pipeline exists) |
 | Twin evolution / attribution / sigma-reduction | **synthetic-derived** | no | follows once dv/v is real |
-| Soil-moisture validation | MERRA-2 (model cross-check); SNOTEL (real); SMAP (real, staged) | n/a | SMAP L3/L4, NLDAS, lowland USCRN / ISMN |
+| Soil-moisture validation | MERRA-2 (model evaluation dataset); SNOTEL (real); SMAP (real, staged) | n/a | SMAP L3/L4, NLDAS, lowland USCRN / ISMN |
 
 **The water budget (first-pass closure).** The standalone bucket removed above-field-capacity water as
 drainage that *left the system*, so groundwater and soil moisture were only co-located. The
@@ -2192,7 +2193,7 @@ channel routing to a hydrograph belongs to a downstream runoff model (#55); the 
 recession time, capillary reach, and TOPMODEL scale are nominal pending borehole/streamflow
 calibration.
 
-![Coupled water budget on real domain-mean TerraClimate forcing and the real 90 m TWI field. Left:
+![Coupled water budget on real domain-mean precipitation forcing and the real 90 m TWI field. Left:
 monthly fluxes (precip, AET, recharge, saturation-excess runoff, capillary rise). Middle: soil
 moisture θ and the water-table depth co-evolving — vadose recharge raises the table, a shallow table
 feeds capillary rise back up. Right: subsurface lateral flow — the TOPMODEL steady-state water table
@@ -2254,13 +2255,13 @@ carried, not hidden.
 | Component | Metric | Value | Reference | Basis |
 |---|---|---|---|---|
 | Groundwater baseline | block-CV RMSE | ≈ 18.5 m (pooled; per-domain valley-fill TBD) | held-out wells | **REAL** |
-| Soil moisture | domain-mean $r$; bias; RMSE | 0.85; −0.08; 0.095 | MERRA-2 root zone (incl. 2025) | **MODEL cross-check** |
+| Soil moisture | domain-mean $r$; bias; RMSE | 0.85; −0.08; 0.095 | MERRA-2 root zone (incl. 2025) | **MODEL (evaluation)** |
 | Soil moisture (snow phase) | LOSO $r$ | 0.49 (tuning overfits to 0.44) | SNOTEL | **REAL** (n=5, upland) |
 | dv/v measurement | band recovery $r$ | > 0.95 | controlled synthetic | **SYNTHETIC** (circular: inverse undoes forward) |
 | Assimilation | σ shrink (near-station vs far) | GWL ~84%, θ ~46%, Vs30 ~90% | inverted-state σ vs prior | **SYNTHETIC forcing, real chain** (measurement + inversion σ carried) |
 
 The **Basis** column is essential: only the groundwater block-CV RMSE and the SNOTEL LOSO are real
-independent skill. MERRA-2 is a model cross-check (shared forcing family). The dv/v recovery is still
+independent skill. MERRA-2 is a model evaluation dataset (shared forcing family). The dv/v recovery is still
 circular (the inverse undoing the forward operator on an imposed signal). The assimilation
 σ-reduction, however, is **no longer geometry-only**: the twin now runs the full
 forward → measure → invert chain (issue #51) — a realistic measurement error is added to the
@@ -2349,7 +2350,7 @@ model quantities: they carry σ but not the well-density mask, which is specific
 The command `python -m src.io.landlab_export` (pixi task `landlab-export`) assembles this bundle from
 the real products: the water table from the baseline depth-to-water with its RF ⊕ kriging σ and the
 well-density confidence mask, the saturation fraction from the soil-moisture θ over the porosity, and
-recharge from the coupled water budget run over the TerraClimate forcing (@fig-landlab-export).
+recharge from the coupled water budget run over the precipitation forcing (@fig-landlab-export).
 
 ![LandLab dynamic export: the three canonical hydrological fields (top) and their per-cell 1σ
 (bottom), on the 90 m grid, the water table masked to the well-supported domain. The water table
@@ -2357,7 +2358,7 @@ recharge from the coupled water budget run over the TerraClimate forcing (@fig-l
 downscaled the same way as the rest of the product and the digital twin (coarse relative wetness
 re-expressed through the fine 90 m soil envelope, $\theta = \theta_{wp} + sf\,(\theta_{sat}-\theta_{wp})$),
 so its 90 m detail is the static texture while its temporal signal stays at the driver scale.
-Recharge is exported at the ~4 km TerraClimate forcing scale (a P/PET-dominated flux, so its
+Recharge is exported at the coarse ~4 km forcing scale (a P/PET-dominated flux, so its
 information is genuinely coarse; visible as blocky cells). Each field's spatial scale is recorded in
 the manifest so a resampled cell is not read as a native observation.](assets/landlab_export.png){#fig-landlab-export}
 
@@ -2414,7 +2415,7 @@ caution). A physics-based downscaler for this step is future work (@sec-roadmap)
 The pilot demonstrates the coupled machinery; the path to an operational product is staged.
 The **independent-satellite check** against SMAP (≈9 km surface soil moisture) is implemented
 and awaits a full multi-year run; it is the truly independent validation the reanalysis
-cross-check cannot supply. A **denser Cascade soil-moisture network** is what lets the anchor
+evaluation dataset cannot supply. A **denser Cascade soil-moisture network** is what lets the anchor
 correct station-specific representativeness rather than only the systematic bias. The
 **snow module** should be calibrated against SNOTEL snow-water-equivalent directly, not only
 through soil-moisture correlation. On the dynamics side, the **dv/v module** is now implemented
@@ -2497,8 +2498,7 @@ estimation in the Pacific Northwest that:
 
 5. **Generalizes to a coupled soil-reanalysis** (@sec-soilmoisture): the same
    static-envelope × dynamic-driver × statistical-downscaling design produces a
-   companion 90 m **soil-moisture** state variable (SOLUS→Saxton–Rawls envelope forced
-   by a TerraClimate-driven Thornthwaite–Mather balance), with a shared, explicitly
+   companion 90 m **soil-moisture** state variable (SOLUS→Saxton–Rawls envelope forced by a precipitation-driven Thornthwaite–Mather balance), with a shared, explicitly
    decomposed static / dynamic / downscaling uncertainty budget across both variables.
 
 The principal remaining gaps are: (a) sparse well density above 500 m in the Cascades,
@@ -2507,7 +2507,7 @@ the missing AR term pending Stage IV intercomparison; (c) coastal boundary
 conditions for SoDo sea level and subsidence (Stage 4, deferred); and (d) the third
 coupled state variable — soil mechanics constrained by ambient-noise dv/v — which
 remains in development, and truly *independent* validation of the soil-moisture product
-(SMAP, in-situ), the current cross-check against TerraClimate being a consistency test
+(SMAP, in-situ), the current evaluation against TerraClimate being a consistency test
 rather than an accuracy test. These are honest limitations of any observation-anchored
 product and document the minimum investment in monitoring infrastructure needed to close
 the uncertainty.
