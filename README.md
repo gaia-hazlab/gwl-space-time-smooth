@@ -22,12 +22,14 @@ Everything is served from one landing page (self-contained HTML — no build nee
 | Page | What it is |
 |------|------------|
 | **[Landing](https://gaia-hazlab.github.io/gwl-space-time-smooth/)** | Entry point linking everything below |
-| **[Technical report](https://gaia-hazlab.github.io/gwl-space-time-smooth/report.html)** | Full framework: mission, scientific & data grounds, coupled water budget, dv/v, Vs30 + NEHRP, uncertainty, validation, digital-twin MVP, LandLab coupling |
+| **[Documentation](https://gaia-hazlab.github.io/gwl-space-time-smooth/twin/)** | The framework as linked chapters (0 structural · 1 input · 2 evaluation data · 3 physics · 4 assimilation · 5 evaluation · 6 forecast · 7 hazards) — **start here** |
 | **[GWL + soil-moisture demo](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_soil_moisture_demo.html)** | The two mature states produced end-to-end on real public data at 90 m, with animated GIFs |
-| **[Audit & forecast framework](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_audit_framework.html)** | AI weather forecast → antecedent hydrologic state → hazard forcing |
+| **[Audit & roadmap](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_audit_framework.html)** | Project audit + status: what has shipped, current priorities, forecast path |
+| **[Full report (archived)](https://gaia-hazlab.github.io/gwl-space-time-smooth/report.html)** | The original single-file technical report, superseded by the chapter docs |
 
-The report source is `docs/gwl_hybrid_framework.qmd` (Quarto → `report.html`); the demo and audit pages
-are pre-rendered self-contained HTML committed under `docs/`.
+The chapter documentation is a Quarto **website** under `docs/twin/` (built to `/twin/`); the archived
+report source is `docs/gwl_hybrid_framework.qmd`; the demo and audit are pre-rendered self-contained
+HTML committed under `docs/`.
 
 > **Core philosophy**: Real wells first. HAND-based terrain physics second. Climate
 > response functions third. Never trust a gridded product until validated against
