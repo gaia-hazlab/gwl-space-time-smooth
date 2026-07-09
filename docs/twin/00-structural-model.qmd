@@ -2,18 +2,6 @@
 title: "0 · Structural model"
 ---
 
-```{python}
-#| label: setup
-#| echo: false
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-import warnings
-warnings.filterwarnings("ignore")
-plt.rcParams.update({"font.family": "sans-serif", "font.sans-serif": ["DejaVu Sans", "Arial"],
-                     "figure.facecolor": "white"})
-```
-
 The **structural model** is the fine, time-invariant description of *what the subsurface is* — its
 terrain, soils, geology, and mechanical stiffness. These are the **static layers**: the prior that sets
 what the ground *can* hold, where water sits, and how stiff it can be. The dynamic states (water table,
@@ -61,49 +49,20 @@ grid would blur the valley-vs-ridge distinction that governs the hazard. Two con
 
 ## The static-layer catalog
 
-The static layers needed for the soil-hydromechanical state and the downstream hazards, each delivered
-at 90 m (illustrative — the panels are schematic, not the real rasters):
+The static layers needed for the soil-hydromechanical state and the downstream hazards, each built to
+the same 90 m analysis grid (@fig-static-layers shows the **real** data over the Puget Sound / Cascades
+pilot):
 
-```{python}
-#| label: fig-static-layers
-#| fig-cap: "**The static-layer stack (illustrative).** The fine, time-invariant layers aggregated to
-#|   the 90 m grid: terrain derivatives from 3DEP (10 m), the SOLUS100 soil-hydromechanical set (100 m),
-#|   and the geologic/mechanical layers. These set the envelope of hydraulic and mechanical properties
-#|   that the dynamic states modulate. Panels are stylised schematics, not the real data."
-def field(n=70, seed=0, smooth=9.0):
-    rng = np.random.default_rng(seed)
-    F = np.fft.fftshift(np.fft.fft2(rng.standard_normal((n, n))))
-    yy, xx = np.mgrid[-n // 2:n - n // 2, -n // 2:n - n // 2]
-    F *= np.exp(-(xx ** 2 + yy ** 2) / (2 * smooth ** 2))
-    z = np.real(np.fft.ifft2(np.fft.ifftshift(F)))
-    return (z - z.min()) / (z.max() - z.min() + 1e-9)
+![**The static-layer catalog — real 90 m data.** Nine of the static layers over the Puget Sound /
+Cascades analysis footprint, all on the 90 m EPSG:5070 grid: terrain derivatives HAND / slope / TWI
+(from the 3DEP DEM), the SOLUS100 soil texture (clay / sand), the Saxton–Rawls hydraulic envelope
+(saturated conductivity Ksat, field-capacity θ, available water capacity AWC), and the Wald–Allen
+Vs30. Water bodies and cells outside the terrain footprint are masked. Regenerate with
+`pixi run static-layers` (reads `data/processed/`).](assets/static_layers.png){#fig-static-layers}
 
-# (title, native-res tag, colormap, categorical?)
-LAYERS = [
-    ("HAND",            "3DEP 10 m",   "YlGnBu_r", False),
-    ("Slope",           "3DEP 10 m",   "magma",    False),
-    ("TWI",             "3DEP 10 m",   "GnBu",     False),
-    ("Clay %",          "SOLUS 100 m", "YlOrBr",   False),
-    ("Sand %",          "SOLUS 100 m", "YlOrBr",   False),
-    ("Bulk density",    "SOLUS 100 m", "copper",   False),
-    ("Lithology",       "geology map", "tab10",    True),
-    ("Vs30",            "slope proxy", "viridis",  False),
-    ("Depth to bedrock","subsurface",  "cividis",  False),
-]
-fig, axes = plt.subplots(3, 3, figsize=(9.6, 9.4), constrained_layout=True)
-for i, (ax, (title, res, cmap, cat)) in enumerate(zip(axes.ravel(), LAYERS)):
-    z = field(seed=i)
-    if cat:
-        z = np.digitize(z, [0.2, 0.4, 0.6, 0.8])          # 5 discrete material classes
-        ax.imshow(z, cmap=cmap, interpolation="nearest")
-    else:
-        ax.imshow(z, cmap=cmap)
-    ax.set_title(title, fontsize=11, fontweight="bold", pad=3)
-    ax.text(0.5, -0.06, f"{res}  →  90 m", transform=ax.transAxes, ha="center", va="top",
-            fontsize=8, color="#5a5a6e")
-    ax.set_xticks([]); ax.set_yticks([])
-plt.show()
-```
+Additional static layers used by the pipeline but not shown above (lithology / geology, depth-to-bedrock,
+distance-to-coast, and the derived hydrogeologic-domain mask) are built the same way and enter the
+domain stratification.
 
 | Layer | Measures | Source (native → 90 m) | Role in hydromechanics / hazards |
 |---|---|---|---|

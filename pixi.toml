@@ -112,6 +112,8 @@ digital-twin = "python notebooks/make_digital_twin.py"
 water-budget = "python notebooks/make_water_budget_figure.py"
 # Well hydrostratigraphic screen diagnostic: shallow water-table vs deep confined-outwash (#46).
 well-screen = "python notebooks/make_well_screening_figure.py"
+# Static-layer catalog figure (real 90 m rasters) for the structural-model chapter.
+static-layers = "python notebooks/make_static_layers_figure.py"
 # LandLab dynamic export (#64): water table + saturation fraction + recharge -> canonical .asc + COG.
 landlab-export = "python -m src.io.landlab_export"
 # Demo figure of the exported LandLab bundle (fields + per-cell sigma).
