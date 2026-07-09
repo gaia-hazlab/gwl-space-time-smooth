@@ -35,7 +35,7 @@ budget and LandLab's transmissivity stay consistent.
 ## Liquefaction: Vs30 → NEHRP site-class probability
 
 For the Sanger liquefaction GLM, the near-surface stiffness is delivered not as a raw Vs30 with a
-percent σ but as a **NEHRP/ASCE-7 site-class probability**: `fetch_vs30.nehrp_class_probabilities`
+percent σ but as a **NEHRP/ASCE-7 site-class probability**: `src.data.fetch_vs30.nehrp_class_probabilities`
 integrates the Vs30 estimate and its 1σ over the class boundaries (180 / 360 / 760 / 1500 m s⁻¹) to
 return $P(\text{E},\text{D},\text{C},\text{B},\text{A})$ per cell, and by differencing the CDF, the
 probability of crossing any design boundary. A cell near a boundary honestly splits its mass across two
