@@ -2,19 +2,62 @@
 title: "1 · Input data"
 ---
 
-::: {.callout-note appearance="simple"}
-**Scope.** Everything that goes *into* the twin: high-resolution static layers (the prior),
-assimilated ground sensors, and satellite/gridded products. Their native scales, roles, raw-sensor
-issues, and the assimilation principle (only ground sensors and satellites are assimilated).
-:::
+Everything that goes *into* the twin is heterogeneous in kind, resolution, and honesty. Only two
+kinds are ever **assimilated** — ground sensors and satellite retrievals; everything else is a static
+prior or a physical/statistical model. The three kinds differ in a way that dictates the whole
+design.
 
-*Content migrating from the report's "Data Grounds" (input side), "Demonstration Data", and the data
-provenance / assimilation-principle tables.*
+## Static high-resolution layers — the fine skeleton
 
-## Static high-resolution layers (the prior)
+Time-invariant but sharp, these carry the 90 m spatial texture the coarse dynamic drivers lack, and
+set what the subsurface *can* hold and how stiff it *can* be — the envelope the dynamic observations
+modulate:
 
-## Ground sensors — dense in time, sparse in space
+- **SOLUS100 soil** (clay/sand/silt, pH, CEC, bulk density, depth-to-lithic) at 100 m
+  [@nauman2024solus];
+- the **USGS 3DEP DEM** and its HAND / TWI / slope derivatives at 10 m → 90 m;
+- the **Vs30** field (Wald–Allen slope proxy) and surficial **geology / lithology**.
 
-## Satellite / gridded products — dense in space, sparse in time
+## Ground sensors — dense in time, sparse in space, and not pristine
 
-## The assimilation principle and provenance
+USGS NWIS wells give real depth-to-water but **mix aquifers**: a HAND-based shallow model must screen
+out deep confined-outwash screens or it fits the wrong surface. SNOTEL and USCRN soil-moisture probes
+are point measurements at a fixed sensor depth (typically 5 cm), with network gaps and a
+mountain/valley sampling bias. The UW and CC seismic stations give continuous waveforms, but
+$\delta v/v$ is a raw *processing* choice — coda window, reference epoch, estimator — whose spread
+must be carried as data covariance, not hidden. The common thread: raw sensor data are dense in time
+at a handful of points, so they anchor timing and correct bias but cannot, alone, make a field.
+
+## Satellite / gridded products — dense in space, sparse in time, at many scales
+
+These make the field, but their **native resolution caps the resolution of anything derived from
+them**, and the scales span three orders of magnitude. The gridded **precipitation forcing** (PRISM,
+a reanalysis such as TerraClimate at ~4 km, or a downscaled forecast) drives the water budget;
+satellite retrievals that *evaluate* the state — SMAP (9 km; 36 km native L-band, top ~5 cm), MERRA-2
+(0.5°), NLDAS (~12 km), GRACE (~300 km) — are covered in [Evaluation data](02-evaluation-data.qmd).
+Treating a downscaled 9 km pixel as a native 90 m observation — *footprint leakage* — is the central
+data hazard, so every downscaled field records its native versus delivered resolution in provenance.
+
+## Provenance and the assimilation principle
+
+Every input, its access path, and its role:
+
+| Dataset | Source & access | Native res | Role in the twin |
+|---|---|---|---|
+| USGS NWIS wells (863) | USGS Water Data OGC API (`dataretrieval`), param 72019 | point | GWL assimilation + anchor |
+| NRCS SNOTEL (SMS) | NRCS AWDB REST API, element SMS | point | soil-moisture assimilation (mountain) |
+| NOAA USCRN | NOAA NCEI public flat files (`fetch_uscrn`) | point | soil-moisture assimilation (valley/lowland) |
+| ISMN networks | ISMN registered export (`read_ismn`) | point | soil-moisture assimilation (SCAN, mesonets, …) |
+| Seismic UW + CC (74) | EarthScope/IRIS FDSN via `seisfetch` | point | dv/v → ΔWTD, Δθ, ΔVs30 (assimilated) |
+| SOLUS100 | USDA-NRCS, GAIA STAC / public COGs | 100 m | soil-hydraulic envelope; GWL predictor |
+| USGS 3DEP DEM | 3DEP (`py3dep`) → HAND/TWI/slope | 10 m → 90 m | terrain prior; feeds Vs30 |
+| Vs30 (Wald-Allen slope proxy) | 3DEP slope → `fetch_vs30`; USGS grid / Sanger-Maurer optional | 90 m | Vs30 static base |
+| Precipitation + PET | PRISM web service; Climatology Lab THREDDS (TerraClimate); forecast | ~4 km | dynamic forcing (P, PET) |
+
+**The assimilation principle.** Only two kinds of quantity are ever assimilated into the state:
+(1) **ground-based in-situ sensors** (NWIS wells; SNOTEL / USCRN / ISMN soil moisture; seismic dv/v)
+and (2) **satellite / remote observations** at their native scale (SMAP, and later NISAR, SWOT,
+GRACE). Everything else — terrain covariates, soil texture, precipitation forcing, and the RF /
+kriging / bucket models built from them — is **statistical learning or physical modelling**, and is
+the model *prior* that observations correct, never an assimilated observation itself. How that
+correction is applied is the subject of [Assimilation](04-assimilation.qmd).
