@@ -2,20 +2,38 @@
 title: "6 · Forecast of the soil state"
 ---
 
-::: {.callout-note appearance="simple"}
-**Scope.** Driving the twin forward: forcing the water budget with observed precipitation (PRISM
-preferred) for hindcasts and with AI weather forecasts (GraphCast / ACE2, precipitation downscaled
-to 90 m) for a forward antecedent-state ensemble. The output is the antecedent hydrologic state, not
-a flood hydrograph.
-:::
-
-*Content migrating from the report's Roadmap forecast path and the "Toward forecast forcing"
-section; tracked in issues #70–#73.*
+The same closed water budget that produces the hindcast state ([Physics — hydrology](03a-physics-hydrology.qmd))
+can be driven **forward** to produce the *antecedent* hydrologic state a hazard is about to encounter.
+The forecast product is the antecedent state — water table, soil moisture, saturation — not the flood
+hydrograph itself. This work is tracked as epic #73 (issues #70–#72).
 
 ## Precipitation forcing (source-agnostic)
 
-## Hindcast from observed precipitation
+The water budget's precipitation input is deliberately not tied to any one product. It accepts observed
+precipitation for hindcasts and forecast precipitation for the forward run, each downscaled to the
+90 m grid and bias-aware. Every downscaled field records its native versus delivered resolution, so a
+coarse forecast pixel is never read as a native observation.
+
+## Hindcast from observed precipitation (PRISM preferred)
+
+For hindcasts, the preferred rainfall source is **PRISM** — gauge-anchored and best-resolved for the
+PNW — driving the budget over a documented event to produce the GWL/θ/saturation/recharge history
+(#70). A reanalysis such as TerraClimate can be substituted; **ERA5-Land** is reserved as an
+*independent evaluation* dataset, not a forcing (#72).
 
 ## Forward forcing from AI weather forecasts + downscaling
 
+For the forward ensemble, quantitative precipitation forecasts from **GraphCast** and/or **ACE2** are
+ingested via [earth2studio](https://github.com/NVIDIA/earth2studio) (#71). The ~25 km forecast
+precipitation is **downscaled to 90 m** with orographic physics — bilinear resampling loses the
+Cascade atmospheric-river enhancement — and bias-corrected against the PRISM climatology. Running the
+budget forward over the ensemble yields a forecast antecedent state with spread, handed off through the
+dynamic export ([Hazard integration](07-hazard-integration.qmd)).
+
 ## Antecedent state, not hydrograph — scope and caveats
+
+The forecast forces the *subsurface antecedent state*, not the surface flood response: converting
+recharge and runoff into a flood hydrograph requires a separate surface-routing model (#55). The value
+here is that a saturated antecedent state — a water table already raised by a winter AR sequence — is
+what turns the next storm into a landslide or a liquefaction-susceptible condition, and that is exactly
+the state the twin forecasts.
