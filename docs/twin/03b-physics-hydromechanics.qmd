@@ -1,0 +1,20 @@
+---
+title: "3 · Physics — Part 2: Hydromechanics"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** The mechanical state and its link to water: near-surface stiffness (Vs30, NEHRP), and the
+petrophysical effective-medium relation by which water changes velocity — poroelastic pore pressure
+(saturated) and dynamic capillarity (vadose), measured by ambient-noise dv/v.
+:::
+
+*Content migrating from "Mechanical modeling grounds" and "Petrophysical linking models" (the
+effective-medium derivation, acoustoelastic β, dynamic capillary stress).*
+
+## Mechanical modelling grounds (Vs30, tomography, NEHRP)
+
+## Petrophysical link: velocity, stiffness, and water
+
+## Saturated zone — pore pressure (poroelastic + acoustoelastic)
+
+## Vadose zone — partial saturation and dynamic capillarity

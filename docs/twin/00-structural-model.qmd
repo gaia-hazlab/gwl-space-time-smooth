@@ -1,0 +1,20 @@
+---
+title: "0 · Structural model"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** The overall architecture of the digital twin: the three coupled subsurface states, the
+static-envelope × dynamic-driver design, the assimilation principle, and the hazard-driven target
+scale that fixes the data structure from the start.
+:::
+
+*Content migrating from the technical report's "Mission and Framework" section (the system schematic
+and the five information classes) and the coupled-state framing.*
+
+## Mission and the hazard-driven scale
+
+## The three coupled states
+
+## Static envelope × dynamic driver
+
+## The operating loop (assimilate → update → validate)

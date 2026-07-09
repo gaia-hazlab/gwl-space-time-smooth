@@ -1,0 +1,18 @@
+---
+title: "2 · Evaluation data"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** The datasets used to *score* the twin, kept separate from processing and compared at
+native sensor resolution. Independent references (in-situ, satellite) versus model evaluation
+datasets — and why a product that shares our forcing is a consistency check, not validation.
+:::
+
+*Content migrating from the report's "Evaluation datasets" section and the evaluation-dataset
+(model / reanalysis) classification.*
+
+## Independent references (in-situ, satellite)
+
+## Model / reanalysis evaluation datasets
+
+## Consistency check vs independent validation

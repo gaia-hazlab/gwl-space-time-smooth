@@ -1,0 +1,20 @@
+---
+title: "4 · Assimilation"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** How observations update the state: precision-weighted spatial fusion of sensors, the
+depth separation of dv/v into soil-moisture and water-table states, and the static / dynamic /
+downscaling uncertainty budget with the variogram-driven confidence mask.
+:::
+
+*Content migrating from the assimilation machinery, "Uncertainty Quantification", and the
+confidence-mask sections.*
+
+## Precision-weighted point assimilation
+
+## dv/v depth separation into hydrologic states
+
+## The uncertainty budget (static / dynamic / downscaling)
+
+## Confidence mask and honest masking

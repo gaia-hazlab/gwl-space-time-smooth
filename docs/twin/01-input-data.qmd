@@ -1,0 +1,20 @@
+---
+title: "1 · Input data"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** Everything that goes *into* the twin: high-resolution static layers (the prior),
+assimilated ground sensors, and satellite/gridded products. Their native scales, roles, raw-sensor
+issues, and the assimilation principle (only ground sensors and satellites are assimilated).
+:::
+
+*Content migrating from the report's "Data Grounds" (input side), "Demonstration Data", and the data
+provenance / assimilation-principle tables.*
+
+## Static high-resolution layers (the prior)
+
+## Ground sensors — dense in time, sparse in space
+
+## Satellite / gridded products — dense in space, sparse in time
+
+## The assimilation principle and provenance

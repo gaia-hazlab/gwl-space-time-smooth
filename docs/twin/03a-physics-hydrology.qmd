@@ -1,0 +1,21 @@
+---
+title: "3 · Physics — Part 1: Hydrology"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** The water physics the twin constrains: how groundwater level and soil moisture are modelled
+(physical / statistical / data-driven), and our ground — the closed pixel-wise **water budget**
+(recharge, capillary rise, ET, saturation-excess runoff, TOPMODEL lateral flow) with its governing
+equations.
+:::
+
+*Content migrating from "Hydrological modeling grounds", the water-budget equations, "PNW
+Hydroclimatic Signals", the GWL stage pipeline, and the soil-moisture envelope/bucket.*
+
+## How GWL and soil moisture are modelled (three paradigms)
+
+## The constrained water budget (governing equations)
+
+## The groundwater-level pipeline
+
+## The soil-moisture envelope and bucket

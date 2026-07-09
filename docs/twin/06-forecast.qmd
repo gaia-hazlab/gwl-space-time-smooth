@@ -1,0 +1,21 @@
+---
+title: "6 · Forecast of the soil state"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** Driving the twin forward: forcing the water budget with observed precipitation (PRISM
+preferred) for hindcasts and with AI weather forecasts (GraphCast / ACE2, precipitation downscaled
+to 90 m) for a forward antecedent-state ensemble. The output is the antecedent hydrologic state, not
+a flood hydrograph.
+:::
+
+*Content migrating from the report's Roadmap forecast path and the "Toward forecast forcing"
+section; tracked in issues #70–#73.*
+
+## Precipitation forcing (source-agnostic)
+
+## Hindcast from observed precipitation
+
+## Forward forcing from AI weather forecasts + downscaling
+
+## Antecedent state, not hydrograph — scope and caveats

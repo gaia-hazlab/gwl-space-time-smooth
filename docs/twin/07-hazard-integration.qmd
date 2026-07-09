@@ -1,0 +1,20 @@
+---
+title: "7 · Hazard integration"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** The downstream handoff: delivering the dynamic hydrological state to landslide (LandLab
+Factor-of-Safety), liquefaction (Sanger GLM, via Vs30 + NEHRP site-class probability), and flood
+antecedent-state models — on the shared grid, with per-cell uncertainty.
+:::
+
+*Content migrating from the "Digital-Twin MVP", the "Downstream: LandLab coupling", and the
+Vs30 site-class-probability sections.*
+
+## The digital-twin MVP
+
+## LandLab landslide coupling (dynamic export)
+
+## Liquefaction: Vs30 → NEHRP site-class probability
+
+## Flood antecedent state

@@ -1,0 +1,20 @@
+---
+title: "5 · Soil-state evaluation"
+---
+
+::: {.callout-note appearance="simple"}
+**Scope.** How the estimated soil state is scored: groundwater level (spatial block-CV, per-domain
+gates) and soil moisture (against MERRA-2, SMAP, in-situ SNOTEL/USCRN), plus dv/v recovery — with
+consistency checks kept distinct from independent validation.
+:::
+
+*Content migrating from the "Results: Real-Data Modeling and Validation" and "Validation Strategy"
+(results side) sections.*
+
+## Groundwater-level evaluation (block-CV, per-domain)
+
+## Soil-moisture evaluation (independent vs consistency)
+
+## dv/v recovery and depth support
+
+## Calibrated uncertainty (coverage / PIT / CRPS)
