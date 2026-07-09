@@ -343,20 +343,46 @@ delivered with provenance for geotechnical/geomorphological consumers.
 observations anchor it. Over the fine SOLUS→Saxton–Rawls storage envelope [@saxton2006soil], each
 cell steps a monthly balance whose terms are all explicit:
 
-- **Vertical infiltration / recharge** $R$ — the deep-percolation flux when the root-zone store
-  exceeds field capacity, feeding a linear-reservoir water table $h_{t} = h_{t-1} + R/S_y - h_{t-1}/\tau$
-  with specific yield $S_y$ and recession timescale $\tau$ [@brutsaert1977recession];
-- **Capillary rise** — an upward flux from a shallow water table back into the root zone across a
-  capillary fringe, the return term that couples GWL to soil moisture;
-- **Evapotranspiration** — the atmospheric demand removed from the store toward wilting;
+- **Vertical infiltration / recharge** — deep percolation of the root-zone store above field capacity;
+- **Capillary rise** — the upward return flux from a shallow water table into the root zone;
+- **Evapotranspiration** — atmospheric demand removed from the store toward wilting;
 - **Saturation-excess surface runoff** — generated where the store is at capacity;
-- **Subsurface lateral flow** — a TOPMODEL redistribution [@beven1979physically] setting each cell's
-  water-table deficit from its topographic wetness index, $d_i = \bar d - m\,(\mathrm{TWI}_i - \overline{\mathrm{TWI}})$.
+- **Subsurface lateral flow** — a TOPMODEL redistribution of the water table by topographic wetness.
 
-The scheme conserves mass by construction — the change in storage equals capillary rise plus liquid
-input minus runoff, ET, and recharge — so the vertical exchange between soil moisture and the water
-table, and the downhill routing of excess water, are represented rather than assumed away. This is the
-sense in which the two water states are *coupled* and not merely co-located.
+**The constrained equations.** The root-zone store $S=\theta\,z_r$ (mm over root depth $z_r$) is
+stepped each month against the Saxton–Rawls limits $S_x=\theta_x z_r$ ($x\in\{wp,fc,sat\}$), enforcing
+the closed balance ([`coupled_water_budget`](https://github.com/gaia-hazlab/gwl-space-time-smooth/blob/main/src/models/water_budget.py))
+
+$$
+S_t = S_{t-1} + C_t + I_t - Q_t - E_t - R_t, \qquad \theta_t = S_t/z_r,
+$$
+
+with the flux closures (mm month⁻¹; $[x]_+ \equiv \max(x,0)$ and $[x]_0^1 \equiv \min(\max(x,0),\,1)$ clamps to $[0,1]$)
+
+$$
+\begin{aligned}
+R_t &= \gamma\,[\,S-S_{fc}\,]_+ && \text{recharge (deep percolation)},\\
+Q_t &= [\,S+I_t-S_{sat}\,]_+ && \text{saturation-excess runoff},\\
+E_t &= \min\!\big(\mathrm{PET}_t,\ [\,S-S_{wp}\,]_+\big) && \text{evapotranspiration},\\
+C_t &= C_{\max}\,\Big[\tfrac{(z_r+z_f)-d_{t-1}}{z_r+z_f}\Big]_0^1\,\tfrac{S_{sat}-S}{S_{sat}-S_{wp}} && \text{capillary rise},
+\end{aligned}
+$$
+
+and the water table advanced as a recharge-fed, laterally-redistributed linear reservoir
+
+$$
+h_t = h_{t-1} + \frac{R_t}{S_y} - \frac{h_{t-1}}{\tau},\quad d_t = d_0 - h_t; \qquad
+d_i = \bar d - m\,(\mathrm{TWI}_i - \overline{\mathrm{TWI}}),
+$$
+
+with specific yield $S_y$, recession time $\tau$ [@brutsaert1977recession], capillary fringe $z_f$,
+and the TOPMODEL slope $m$ [@beven1979physically]. This is the *integrated, per-pixel* counterpart of
+the 3-D flow equation $S_s\,\partial h/\partial t=\nabla\!\cdot(K\nabla h)+R$ (@sec-hydro-grounds): we
+do not solve the PDE, we **enforce its mass balance at every cell** — $\Delta S = C + I - Q - E - R$,
+exact by construction — and let observations anchor the coefficients. The vertical exchange between
+soil moisture and the water table (recharge $\leftrightarrow$ capillary rise) and the downhill routing
+of excess water are therefore represented, not assumed away; this is the sense in which the two water
+states are *coupled* rather than merely co-located.
 
 ### Mechanical modeling grounds {#sec-mech-grounds}
 
@@ -379,34 +405,88 @@ the water table, to the LandLab landslide chain (@sec-landlab).
 
 ### Petrophysical linking models {#sec-petro-grounds}
 
-The two grounds meet in petrophysics: water changes stiffness, and the ambient-noise velocity change
-$\delta v/v$ measures it [@denolle2026unified]. Two regimes, split at the water table, carry two
-different hydrologic signals.
+The two grounds meet in petrophysics: **water changes stiffness, and $\delta v/v$ measures the change** —
+not as an empirical correlation but through an effective-medium relation with measurable material
+parameters [@denolle2026unified]. The observable is a depth-averaged, frequency-dependent surface-wave
+phase-velocity change,
 
-**Saturated zone — pore pressure.** Below the water table a change in head changes effective stress
-and thus velocity, the poroelastic response of Biot's theory of a fluid-saturated porous solid
-[@biot1941general]. To first order the module writes it as a linear relation $\delta v/v = k_{sat}\,\Delta h$,
-so a *relative* water-table change is recovered (a rising table — smaller depth-to-water — lowers
-effective stress and softens the medium). This is the mechanism by which the ambient field tracks
-groundwater: seasonal velocity variations follow the water table at volcanoes and aquifers alike
-[@senss2006passive], and @clements2018tracking recover GWL time series directly from $\delta v/v$.
-Consistent with that literature, $\delta v/v$ constrains a relative, not an absolute, level.
+$$
+\frac{\delta v}{v}(f,t) \approx \frac{\delta c}{c}(f,t)
+= \frac{1}{c(f)}\int_0^{\infty} \frac{\partial c}{\partial V_S}(z,f)\,\frac{\delta V_S}{V_S}(z,t)\,V_S\,dz,
+$$
 
-**Vadose zone — partial saturation and suction.** Above the water table stiffness is governed by
-grain-contact mechanics (Hertz–Mindlin) modulated by capillary **suction**: as the soil dries,
-matric suction pulls grains together and stiffens the frame, so wetting *softens* it. The module
-writes $\delta v/v = S_\theta\,\Delta\theta$ with $S_\theta < 0$. The material sensitivity is order
-$S_\theta \approx -1$ per unit $\theta$ (a $\sim$10 % velocity change per 0.1 m³ m⁻³ locally), but a
-raw seismic band averages this fine near-surface response over its whole depth kernel; only the top
-$\sim$1 m of the kernel is $\theta$-active, so a single band shows the depth-diluted
-$S_{\theta,\text{band}} \approx -0.08$ that reproduces the observed 0.1–1 % seasonal band $\delta v/v$.
-The depth inversion deconvolves this dilution and returns the material value, which is why the module
-applies $S_\theta = -1$ to the *inverted* profile and $S_{\theta,\text{band}}$ only to a raw band.
+so a band of frequencies reads a *profile* of $\delta V_S(z)$ (peak sensitivity near $L\approx V_S/3f$),
+recovered through the Rayleigh kernels. What changes $V_S=\sqrt{\mu_{\rm eff}/\rho}$ is, to leading order,
+the **effective shear modulus** $\mu_{\rm eff}$, not the density: a wetting-driven density change contributes
+$\delta V_S/V_S = -\tfrac12\,\delta\rho/\rho$, two to three orders of magnitude smaller than the modulus term
+for typical soils [@denolle2026unified]. The modulus is set by grain-contact mechanics — Hertz–Mindlin gives
+$\mu_{\rm eff}\propto P_e^{1/3}$, so the pressure derivative $\mu'=d\mu/dP\sim\mu/P$ is very large at the low
+confining pressures of the near surface; this is why seasonal $\delta v/v$ exceeds $0.1\%$ in soft sediments
+but is below $0.01\%$ in crystalline rock, and why the signal lives in the shallowest layers. The two
+hydrologic regimes, split at the water table, differ in *what sets the effective pressure* $P_e$.
 
-Splitting the depth-separated $\delta v/v$ profile at the water table therefore yields two hydrologic
-states from one seismic measurement — a shallow **soil-moisture** change (vadose, suction) and a deep
-**relative water-table** change (saturated, poroelastic) — each assimilated into the matching
-hydrological state above.
+**Saturated zone — pore pressure (poroelastic + acoustoelastic).** Below the water table the effective stress
+is overburden minus pore pressure (Terzaghi/Biot [@biot1941general]); a head change $\Delta h$ raises pore
+pressure by $\rho_w g\,\Delta h$, lowers effective stress, and softens the frame. In the poroelastic
+surface-wave form the pore-pressure term $u^0$ reduces velocity,
+$\left(\delta V_S/V_S\right)_{\rm Rayleigh} = -\tfrac{\mu'}{2\mu}u^0 + \tfrac{\mu'+1}{12\mu}T^0_{33}$,
+and the underlying acoustoelastic (third-order-elastic) sensitivity $\delta v/v = \beta\,\epsilon_{kk}$ is
+bridged to the seismological moduli by
+
+$$
+\beta = -\frac{\mu'\,\kappa}{2\mu}, \qquad \kappa_u = \frac{\kappa}{1-\alpha_B B},
+$$
+
+of order $\beta\approx-400$ for shallow sediments [@denolle2026unified; @clements2023seismic]. Whether the
+*drained* modulus $\kappa$ or the *undrained* $\kappa_u$ (Biot coefficient $\alpha_B$, Skempton $B$) applies is
+set by a Péclet number $\mathrm{Pe}=\omega L^2/c$ comparing the forcing rate to pore-pressure diffusion — so a
+*rapid* rainfall pulse and a *slow* seasonal water-table change of equal magnitude produce different
+$\delta v/v$ amplitudes. This is the mechanism by which the ambient field tracks groundwater
+[@senss2006passive; @clements2018tracking]; our operational $\delta v/v = k_{sat}\,\Delta h$ is its
+linearization, with $k_{sat}$ identified as $-\beta\,\rho_w g$ (a calibratable acoustoelastic coefficient), and
+only a *relative* level is recovered.
+
+**Vadose zone — partial saturation and dynamic capillarity.** Above the water table the effective confining
+pressure carries a **capillary stress**, and $V_S=\sqrt{\mu_{\rm eff}/\rho}$ with $\mu_{\rm eff}$ set by
+[@shi2026agroseismology; @denolle2026unified]
+
+$$
+P_e(z,t) = \sigma'_g(z,t) + P_c^{\rm eq}(S_w) + \tau(S_w)\,\frac{\partial S_w}{\partial t},
+$$
+
+the gravitational overburden $\sigma'_g$, the *equilibrium* capillary pressure $P_c^{\rm eq}(S_w)$ set by the
+soil's water-retention curve, and a *rate-dependent dynamic* capillary stress $\tau(S_w)\,\partial_t S_w$
+(Hassanizadeh–Gray non-equilibrium capillarity). Drying raises suction, raises $P_e$, and stiffens the frame;
+wetting softens it. Shi et al. (2026) show three things that matter here: dynamic capillarity is *essential*
+(a static-suction model underestimates the evaporation-driven velocity rise by ~50%); the dynamic coefficient
+$\tau(S_w)$ differs between wetting and drying, so the $\delta v/v$–saturation relation is **hysteretic**
+(path-dependent, not single-valued); and capillary suction can raise $|\beta|$ by factors of 2–5. Our
+operational $\delta v/v = S_\theta\,\Delta\theta$ is therefore the *local linearization* of a hysteretic,
+retention-curve-controlled relation: $S_\theta$ is a **material property** — set by porosity, the
+Hertz–Mindlin contact stiffness, and $P_c(S_w)$ — not a universal constant. Its material value
+($\approx-1$ per unit $\theta$; the depth-diluted single-band value is $\approx-0.08$, @sec-classification)
+applies to the *inverted* profile.
+
+**From velocity change to stress — the interface.** Because both regimes act through
+$V_S=\sqrt{\mu_{\rm eff}/\rho}$, the depth-separated $\delta V_S/V_S$ profile converts to a *physical stress*
+change through the stress meter
+
+$$
+\Delta\sigma_{ij}(z,t) = \beta_{ij}(z)\,\frac{\delta V_S}{V_S}(z,t),
+\qquad \mu(z)=\rho V_S^2,\quad \kappa(z)=\rho\!\left(V_P^2-\tfrac43 V_S^2\right),
+$$
+
+with $\beta_{ij}$ built from those layered moduli and $\mu'(z)$ [@denolle2026unified]. This is what separates
+the approach from a fitted correlation: the conversion of $\delta v/v$ to soil moisture and head is anchored to
+**measurable material properties** — density $\rho$, bulk and shear moduli $\kappa,\mu$, the acoustoelastic
+$\beta$, and the retention curve $P_c(S_w)$ — which become the borehole/lab **calibration targets** that carry
+the MVP's constant $S_\theta$ and $k_{sat}$ toward a material-property-based, hysteresis-aware conversion. The
+banded measurements are inverted through the Rayleigh kernels $\mathbf{G}$,
+$\ \mathbf{d}=\mathbf{G}\,\mathbf{m}+\boldsymbol{\epsilon}$, with $\mathrm{cov}(\boldsymbol{\epsilon})$
+marginalised over the processing ensemble ([`codameter`](https://github.com/Denolle-Lab/codameter)); splitting
+the profile at the water table yields two hydrologic states from one measurement — a shallow **soil-moisture**
+change (vadose, dynamic capillarity) and a deep **relative water-table** change (saturated, poroelastic) — each
+assimilated into the matching hydrological state above.
 
 ## Data Grounds {#sec-data-grounds}
 
@@ -2333,8 +2413,15 @@ borehole-calibrated poroelastic parameters to convert the relative water-table c
 metres, at which point it becomes a third, independent estimate of both state variables.
 Groundwater level
 gains a **forcing and method ensemble** to match the soil-moisture forcing-uncertainty term.
+On the downstream side, the **LandLab handoff is now live** (@sec-landlab): `landlab_export` writes the
+dynamic hydrological state (`water_table__depth`, `soil_moisture__saturation_fraction`, recharge) as
+canonical LandLab-ready fields on the shared grid, with the static soil-hydromechanical parameters
+reconciled through the modular $K_{sat}$ registry. The next major step is **forecast forcing**: driving
+the same water budget with observed rainfall (PRISM, the preferred source) for hindcasts and with
+AI weather forecasts (GraphCast / ACE2, precipitation downscaled to the analysis grid) for a forward
+antecedent-state ensemble, cross-validated against an independent gridded product (e.g. ERA5-Land).
 Together these carry the pilot from a demonstration to a calibrated, observation-anchored,
-uncertainty-aware coupled reanalysis.
+uncertainty-aware coupled reanalysis that feeds the liquefaction and landslide hazard chains.
 
 ## Discussion and Open Questions {#sec-discussion}
 
