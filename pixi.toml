@@ -1,7 +1,7 @@
 [workspace]
 name = "gaia-soil-reanalysis"
 version = "0.1.0"
-description = "GAIA Soil Reanalysis: coupled 90 m groundwater level, soil moisture, and near-surface stiffness (Vs30) with uncertainty and dv/v assimilation"
+description = "Digital Twin of Soils: a coupled 90 m soil reanalysis of groundwater level, soil moisture, and near-surface stiffness (Vs30) with uncertainty and dv/v assimilation"
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64"]
 

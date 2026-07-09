@@ -284,7 +284,7 @@ CSS = """
 """
 
 BODY = f"""---
-title: "GAIA Soil Reanalysis — Coupled Groundwater, Soil Moisture &amp; Vs30"
+title: "Digital Twin of Soils — Coupled Groundwater, Soil Moisture &amp; Vs30"
 subtitle: "A data-driven demo over the Puget Sound pilot (90 m)"
 date: today
 author: "GAIA HazLab · gaia-soil-hydromechanics"

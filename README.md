@@ -1,7 +1,8 @@
-# GAIA Soil Reanalysis — GAIA HazLab
+# Digital Twin of Soils — GAIA HazLab
 
-> Formerly **gwl-space-time-smooth**. The GitHub slug rename to `gaia-soil-reanalysis` is pending;
-> the badge/site URLs below still use the old slug until then.
+> The product is the **Digital Twin of Soils**; its end product is a coupled soil *reanalysis*.
+> Repo formerly **gwl-space-time-smooth** (the GitHub slug rename to `gaia-soil-reanalysis` is
+> pending; badge/site URLs below still use the old slug until then).
 
 [![Render & Publish Quarto Site](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml/badge.svg)](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml)
 
@@ -283,8 +284,9 @@ make anomalies-legacy  # Old ordinary kriging of anomalies
 
 #### Coupled subsurface-state modules
 
-The **GAIA Soil Reanalysis** is a coupled subsurface-state estimator (soil moisture + groundwater
-level + near-surface stiffness) for the liquefaction / landslide / flood digital twins. Each state
+The **Digital Twin of Soils** is a coupled subsurface-state estimator (soil moisture + groundwater
+level + near-surface stiffness) — a soil reanalysis end product — for the liquefaction / landslide /
+flood hazard chains. Each state
 variable is built the same way: a **fine 90 m static envelope** (what the ground can hold / where
 water sits / how stiff it can be) combined with a **coarse dynamic driver** (how it varies in time),
 statistically downscaled to 90 m with a tracked uncertainty budget.

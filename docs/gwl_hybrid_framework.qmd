@@ -1,6 +1,6 @@
 ---
 title: |
-  GAIA Soil Reanalysis: Observation-Anchored Groundwater Level, Soil Moisture,
+  The Digital Twin of Soils: Observation-Anchored Groundwater Level, Soil Moisture,
   and Near-Surface Stiffness for the Pacific Northwest
 subtitle: "GAIA HazLab Technical Report"
 author:
@@ -15,7 +15,8 @@ author:
 date: today
 date-format: long
 abstract: |
-  The GAIA Soil Reanalysis maintains a *living hydromechanical state of the subsurface* —
+  The Digital Twin of Soils — a coupled soil reanalysis as its end product — maintains a *living
+  hydromechanical state of the subsurface* —
   water table depth, soil moisture, and near-surface stiffness — at the space and time
   scales that downstream hazard models (flood, landslide, liquefaction) require. The state is
   constrained by high-resolution static layers, ground sensors, and satellite retrievals, tied
@@ -136,7 +137,7 @@ native resolution, update rate, and uncertainty.
 
 ```{python}
 #| label: fig-mission
-#| fig-cap: "**The GAIA Soil Reanalysis framework.** Three information streams constrain a
+#| fig-cap: "**The Digital Twin of Soils framework.** Three information streams constrain a
 #|   coupled subsurface state through a water budget and a hydromechanical rheology. Only ground
 #|   sensors and satellites are *assimilated*; static layers form the prior; validation is held out
 #|   and scored at native sensor resolution. The downstream hazard sets the target scale (90 m),
