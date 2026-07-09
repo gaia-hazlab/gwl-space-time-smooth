@@ -5,131 +5,119 @@ title: "0 · Structural model"
 ```{python}
 #| label: setup
 #| echo: false
+import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 import matplotlib.colors as mcolors
 import warnings
 warnings.filterwarnings("ignore")
-
-C_BLUE = "#2E86AB"; C_GREEN = "#3BB273"; C_ORANGE = "#E84855"
-C_PURPLE = "#7B2D8B"; C_GREY = "#6B7280"; C_GOLD = "#F6AE2D"; C_TEAL = "#00B4D8"
 plt.rcParams.update({"font.family": "sans-serif", "font.sans-serif": ["DejaVu Sans", "Arial"],
                      "figure.facecolor": "white"})
 ```
 
-## Mission and the hazard-driven scale
+The **structural model** is the fine, time-invariant description of *what the subsurface is* — its
+terrain, soils, geology, and mechanical stiffness. These are the **static layers**: the prior that sets
+what the ground *can* hold, where water sits, and how stiff it can be. The dynamic states (water table,
+soil moisture, velocity change) are built by modulating this fixed skeleton in time; this chapter is
+about how the skeleton itself is aggregated and delivered.
 
-**Mission.** Maintain a *living hydromechanical state of the subsurface* — water table depth, soil
-moisture, and near-surface stiffness — at the space and time scales that downstream hazard models
-need to anticipate **floods, landslides, and liquefaction**.
+Static layers are the only inputs that carry genuine **90 m spatial texture** — the coarse dynamic
+drivers (precipitation, satellites) cannot. So the whole product's spatial resolution is inherited from
+these layers, which is why building them correctly, and at the right resolution, comes first.
 
-The one constraint that governs every design choice: **the target spatial scale is set by the
-hazard, not by whatever data happen to be available.** Liquefaction in valley fill, shallow
-landslides on hillslopes, and compound flooding all resolve at ~100 m or finer, so the state lives
-on a **90 m grid from the start** and every input is placed onto that grid at its own native
-resolution, update rate, and uncertainty.
+## Building the static layers
 
-## The framework at a glance
+Each layer is fetched from its authoritative source, cleaned, reprojected to the analysis CRS
+(EPSG:5070), and resampled to the common 90 m grid. The build steps:
+
+- **Terrain** — the USGS **3DEP** DEM (10 m) is the parent. From it we derive **HAND** (Height Above
+  Nearest Drainage — 0 in valley floors, large on ridges), **TWI** (topographic wetness index,
+  $\ln(a/\tan\beta)$), and **slope**, using flow routing on the DEM before downsampling to 90 m.
+- **Soil** — **SOLUS100** (100 m, USDA-NRCS ML digital soil mapping) supplies the hydromechanical
+  texture set: clay / sand / silt fractions, pH, CEC, oven-dry bulk density, and depth-to-lithic (soil
+  thickness). Windowed cloud-optimised reads, averaged over the near-surface horizon.
+- **Near-surface stiffness** — **Vs30** from the Wald–Allen topographic-slope proxy applied to the
+  90 m 3DEP slope (USGS grid / Sanger–Maurer parametric are drop-in alternatives).
+- **Geology / lithology** — surficial-geology polygons rasterised to 90 m through a lithology crosswalk,
+  giving a categorical material class per cell.
+- **Subsurface geometry** — **depth-to-bedrock** and **distance-to-coast**, resampled to 90 m; combined
+  with HAND and lithology into a **hydrogeologic-domain** mask that stratifies the later models.
+
+Every step is provenance-tracked (source → operation → native resolution → target resolution), so a
+downstream consumer can see exactly how each 90 m layer was made.
+
+## Target resolution: 90 m
+
+The target is **90 m, EPSG:5070** — set by the hazard, not the data. Liquefaction in valley fill,
+shallow landslides on hillslopes, and compound flooding all resolve at ~100 m or finer, so a coarser
+grid would blur the valley-vs-ridge distinction that governs the hazard. Two consequences follow:
+
+- **Fine sources are downsampled, coarse sources are upsampled — honestly.** 3DEP (10 m) is aggregated
+  to 90 m (a genuine down-sample); SOLUS (100 m) is resampled to 90 m (near-identity); a coarse layer
+  reprojected up to 90 m gains *no* new information, and the provenance records that so a resampled
+  cell is never mistaken for a native observation.
+- **90 m is the resolution the dynamic states inherit.** Because the coarse precipitation/satellite
+  drivers carry the *time* signal but not the *space* texture, the 90 m static envelope is what gives
+  the final water-table, soil-moisture, and stiffness fields their spatial detail.
+
+## The static-layer catalog
+
+The static layers needed for the soil-hydromechanical state and the downstream hazards, each delivered
+at 90 m (illustrative — the panels are schematic, not the real rasters):
 
 ```{python}
-#| label: fig-mission
-#| fig-cap: "**The GAIA Digital Twin of Soil framework.** Three information streams constrain a
-#|   coupled subsurface state through a water budget and a hydromechanical rheology. Only ground
-#|   sensors and satellites are *assimilated*; static layers form the prior; validation is held out
-#|   and scored at native sensor resolution. The downstream hazard sets the target scale (90 m),
-#|   which governs the data structure from the start."
-INK = "#1a1a2e"; SUB = "#3a3a4e"
-fig, ax = plt.subplots(figsize=(11.5, 6.4))
-ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis("off")
+#| label: fig-static-layers
+#| fig-cap: "**The static-layer stack (illustrative).** The fine, time-invariant layers aggregated to
+#|   the 90 m grid: terrain derivatives from 3DEP (10 m), the SOLUS100 soil-hydromechanical set (100 m),
+#|   and the geologic/mechanical layers. These set the envelope of hydraulic and mechanical properties
+#|   that the dynamic states modulate. Panels are stylised schematics, not the real data."
+def field(n=70, seed=0, smooth=9.0):
+    rng = np.random.default_rng(seed)
+    F = np.fft.fftshift(np.fft.fft2(rng.standard_normal((n, n))))
+    yy, xx = np.mgrid[-n // 2:n - n // 2, -n // 2:n - n // 2]
+    F *= np.exp(-(xx ** 2 + yy ** 2) / (2 * smooth ** 2))
+    z = np.real(np.fft.ifft2(np.fft.ifftshift(F)))
+    return (z - z.min()) / (z.max() - z.min() + 1e-9)
 
-def _box(x, y, w, h, title, body, hue, fs_t=10.0, fs_b=8.0):
-    ax.add_patch(FancyBboxPatch((x - w / 2, y - h / 2), w, h,
-        boxstyle="round,pad=0.5,rounding_size=2.4",
-        linewidth=1.5, edgecolor=hue, facecolor=mcolors.to_rgba(hue, 0.13), zorder=2))
-    ax.text(x, y + h / 2 - 2.4, title, ha="center", va="top", fontsize=fs_t,
-            fontweight="bold", color=INK, zorder=3)
-    ax.text(x, y + h / 2 - 6.2, body, ha="center", va="top", fontsize=fs_b,
-            color=SUB, zorder=3, linespacing=1.4)
-
-def _arrow(x0, y0, x1, y1, label=None, color=C_GREY, ls="-", lw=1.7):
-    ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle="-|>",
-        mutation_scale=14, linewidth=lw, color=color, linestyle=ls, zorder=1, shrinkA=1, shrinkB=1))
-    if label:
-        ax.text((x0 + x1) / 2, (y0 + y1) / 2 + 1.6, label, ha="center", va="bottom",
-                fontsize=7, color=color, style="italic", zorder=3)
-
-ax.add_patch(FancyBboxPatch((3, 92.5), 94, 6.5, boxstyle="round,pad=0.3,rounding_size=2",
-    linewidth=0, facecolor=mcolors.to_rgba(INK, 0.9), zorder=2))
-ax.text(50, 95.8, "Target resolution set by the downstream hazard  —  built on a 90 m grid from the start",
-        ha="center", va="center", fontsize=10.5, fontweight="bold", color="white", zorder=3)
-
-_box(15, 76, 26, 15, "1  Static layers", "lithology · geology\nsoils · terrain\n(fine, time-invariant)", C_GREEN)
-_box(15, 51, 26, 15, "2  Ground sensors", "wells · seismic dv/v · met\nsparse space / dense time\ndirect or proxy", C_BLUE)
-_box(15, 26, 26, 15, "3  Satellite products", "SMAP · MERRA-2 · GRACE\ndense space / sparse time\nnative res caps output", C_TEAL)
-_box(46, 51, 22, 54, "Assimilation +\nphysical models",
-     "\n\nWater budget\nP in · ET, runoff out\ninfiltration + capillary\nrise <-> water table\n\nHydromechanical state\nrheology + petrophysics", C_GREY, fs_t=10.5)
-_box(74, 71, 22, 13, "Water table depth", "", C_PURPLE)
-_box(74, 51, 22, 13, "Soil moisture", "", C_PURPLE)
-_box(74, 31, 22, 13, "Near-surface Vs", "", C_PURPLE)
-_box(93, 51, 12, 44, "Hazards", "\nFloods\n\nLandslides\n\nLiquefaction", C_ORANGE)
-_box(46, 9, 34, 12, "Held-out validation", "scored at native sensor resolution, kept out of processing", C_GOLD, fs_t=9.5, fs_b=7.6)
-
-_arrow(28.2, 74, 34.8, 60, "prior / envelope", color=C_GREEN)
-_arrow(28.2, 51, 34.8, 51, "assimilated", color=C_BLUE)
-_arrow(28.2, 28, 34.8, 42, "assimilated", color=C_TEAL)
-for sy in (71, 51, 31):
-    _arrow(57.2, 51 + (sy - 51) * 0.45, 62.8, sy, color=C_GREY)
-    _arrow(85.2, sy, 86.8, 51 + (sy - 51) * 0.35, color=C_PURPLE, lw=1.5)
-_arrow(58, 11, 63, 26, "benchmark", color=C_GOLD, ls=(0, (4, 3)))
-fig.tight_layout()
+# (title, native-res tag, colormap, categorical?)
+LAYERS = [
+    ("HAND",            "3DEP 10 m",   "YlGnBu_r", False),
+    ("Slope",           "3DEP 10 m",   "magma",    False),
+    ("TWI",             "3DEP 10 m",   "GnBu",     False),
+    ("Clay %",          "SOLUS 100 m", "YlOrBr",   False),
+    ("Sand %",          "SOLUS 100 m", "YlOrBr",   False),
+    ("Bulk density",    "SOLUS 100 m", "copper",   False),
+    ("Lithology",       "geology map", "tab10",    True),
+    ("Vs30",            "slope proxy", "viridis",  False),
+    ("Depth to bedrock","subsurface",  "cividis",  False),
+]
+fig, axes = plt.subplots(3, 3, figsize=(9.6, 9.4), constrained_layout=True)
+for i, (ax, (title, res, cmap, cat)) in enumerate(zip(axes.ravel(), LAYERS)):
+    z = field(seed=i)
+    if cat:
+        z = np.digitize(z, [0.2, 0.4, 0.6, 0.8])          # 5 discrete material classes
+        ax.imshow(z, cmap=cmap, interpolation="nearest")
+    else:
+        ax.imshow(z, cmap=cmap)
+    ax.set_title(title, fontsize=11, fontweight="bold", pad=3)
+    ax.text(0.5, -0.06, f"{res}  →  90 m", transform=ax.transAxes, ha="center", va="top",
+            fontsize=8, color="#5a5a6e")
+    ax.set_xticks([]); ax.set_yticks([])
 plt.show()
 ```
 
-Five kinds of information constrain the state:
+| Layer | Measures | Source (native → 90 m) | Role in hydromechanics / hazards |
+|---|---|---|---|
+| HAND | height above nearest drainage | 3DEP DEM 10 m → 90 m | shallow water-table predictor; valley-fill = liquefaction, hillslope = landslide |
+| TWI | topographic wetness $\ln(a/\tan\beta)$ | 3DEP 10 m → 90 m | TOPMODEL lateral-flow redistribution of the water table |
+| Slope | surface gradient | 3DEP 10 m → 90 m | infinite-slope Factor of Safety; Vs30 proxy input |
+| Clay / sand / silt | soil texture fractions | SOLUS100 100 m → 90 m | Saxton–Rawls hydraulic envelope; friction / cohesion |
+| pH · CEC · bulk density | soil chemistry / density | SOLUS100 100 m → 90 m | K_sat pedotransfer; density in $V_S=\sqrt{\mu/\rho}$ |
+| Soil thickness | depth to lithic contact | SOLUS100 100 m → 90 m | storage capacity; transmissivity $T=K_{sat}h$ |
+| Lithology / geology | surficial material class | geology polygons → 90 m raster | hydrogeologic domain; stiffness control |
+| Vs30 | 30 m time-averaged $V_S$ | Wald–Allen slope proxy, 90 m | NEHRP site class; liquefaction stiffness |
+| Depth to bedrock | subsurface geometry | subsurface product → 90 m | aquifer bottom; domain stratification |
+| Distance to coast | coastal proximity | derived → 90 m | sea-level / tidal boundary conditioning |
 
-1. **Static layers** — lithology, geology, soils, and terrain-derived hydrology. High-resolution but
-   time-invariant; they set what the subsurface *can* do (the envelope of hydraulic and mechanical
-   properties) and form the model prior. → [Input data](01-input-data.qmd)
-2. **Ground-based sensors** — hydrologic (wells), geophysical (ambient-noise seismic), and
-   atmospheric networks. Sparse in space, dense in time; they sense the state directly or by proxy
-   (e.g. seismic dv/v as a moisture and pore-pressure proxy). → [Input data](01-input-data.qmd)
-3. **Satellite products** — reprocessed retrievals (soil moisture, terrain, total water storage).
-   Dense in space, sparse in time; their native resolution caps the resolution of anything derived
-   from them. → [Input data](01-input-data.qmd)
-4. **Evaluation data** — held out of processing and scored at the native resolution of the sensor,
-   never upsampled to flatter the model. → [Evaluation data](02-evaluation-data.qmd)
-5. **Physical models we constrain** — a closed **water budget** and a **hydromechanical state** that
-   links moisture and pore pressure to stiffness. → [Physics: hydrology](03a-physics-hydrology.qmd) ·
-   [hydromechanics](03b-physics-hydromechanics.qmd)
-
-## The three coupled states
-
-The twin carries three co-located subsurface state variables on the shared 90 m grid:
-
-- **Water table depth** — the saturated store; the boundary condition for shallow-landslide pore
-  pressure and liquefaction.
-- **Soil moisture** — the vadose store; the root-zone saturation that triggers hillslope failure.
-- **Near-surface stiffness (Vs)** — the mechanical state consumed by geotechnical hazard models.
-
-They are not independent: a closed water budget exchanges water between the vadose and saturated
-stores (recharge ↔ capillary rise) and routes excess downhill, and a petrophysical rheology ties the
-water states to the stiffness state — so a change in water produces a measurable change in velocity.
-
-## Static envelope × dynamic driver
-
-Every state variable is built the same way: a **fine 90 m static envelope** (what the ground *can*
-hold, where water sits, how stiff it can be — from lithology, soils, and terrain) combined with a
-**coarse dynamic driver** (how it varies in time — precipitation, observations), statistically
-downscaled to 90 m with a tracked static / dynamic / downscaling uncertainty budget. Fine static
-layers supply spatial structure; coarse observations supply the time signal; the two are reconciled
-at 90 m and anchored to observations.
-
-## The assimilation principle and operating loop
-
-Only the ground sensors (2) and satellites (3) are **assimilated** — everything else is prior
-knowledge or physical modelling. Data enter at their own rates, sensitivities, and uncertainties
-([Assimilation](04-assimilation.qmd)); the physical models are updated on a regular cadence; and the
-output states are validated against the held-out references (4), always at native sensor resolution
-([Soil-state evaluation](05-state-evaluation.qmd)). Driven forward from forecast precipitation
-([Forecast](06-forecast.qmd)), the same machinery produces the antecedent state that the downstream
-hazard models consume ([Hazard integration](07-hazard-integration.qmd)).
+Together these form the static envelope; the [Input data](01-input-data.qmd) chapter covers the
+dynamic ground-sensor and satellite streams that modulate it, and the [Physics](03a-physics-hydrology.qmd)
+chapters show how the envelope enters the water budget and the petrophysical rheology.
