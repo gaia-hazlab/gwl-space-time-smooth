@@ -718,7 +718,17 @@ gaia = dict(hand=hand, slope=slope, twi=twi, vs30=vs30, clay=clay, sand=sand,
             wells=dict(i=w_i, j=w_j, dtw=w_obs))
 ```
 
-## Framework Description {#sec-framework}
+## Framework Description: the groundwater-level pipeline {#sec-framework}
+
+This section details the pipeline for the **groundwater-level state** — the most mature of the three
+coupled states, and the operational instantiation of the hydrological ground (@sec-hydro-grounds). The
+stages below are the *statistical* backbone that anchors GWL to the well record: an observation-anchored
+random-forest baseline, per-site β-maps for the climate response, and kriging of the residuals. The
+closed pixel-wise **water budget** (@sec-hydro-grounds) then adds the *process* coupling — recharge,
+capillary rise, and lateral flow — that ties GWL to the soil-moisture state (@sec-soilmoisture) and,
+through the petrophysical bridge (@sec-petro-grounds), to the seismically-sensed stiffness state; the
+three are assembled and animated together in the digital-twin demonstration (@sec-twin). The stage
+figure below is therefore the GWL spine of a wider coupled system, not the whole framework.
 
 @fig-pipeline shows the three-stage pipeline. The key design principle is that each
 stage is **physically motivated**, operates at a different timescale (climatological →
