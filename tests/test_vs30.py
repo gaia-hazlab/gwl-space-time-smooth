@@ -39,7 +39,8 @@ def test_vs30_integrates_to_exactly_top_m_with_partial_layer():
     assert abs(float(vs30_from_vs_profile(np.full(4, 300.0), z_skip)) - 300.0) < 1e-6
     # partial layer that actually matters: nodes 0/15/45, Vs 200 then ramp to 800.
     # v(30) interpolates to 500; travel = 15/200 + 15/logmean(200,500), logmean=(500-200)/ln(2.5).
-    z = np.array([0.0, 15.0, 45.0]); vs = np.array([200.0, 200.0, 800.0])
+    z = np.array([0.0, 15.0, 45.0])
+    vs = np.array([200.0, 200.0, 800.0])
     v_lm = (500.0 - 200.0) / np.log(2.5)
     expected = 30.0 / (15.0 / 200.0 + 15.0 / v_lm)
     assert abs(float(vs30_from_vs_profile(vs, z)) - expected) < 1e-6
@@ -47,6 +48,17 @@ def test_vs30_integrates_to_exactly_top_m_with_partial_layer():
     assert float(vs30_from_vs_profile(vs, z)) > 200.0
     # a profile shallower than top_m flat-extrapolates the deepest velocity rather than erroring
     assert abs(float(vs30_from_vs_profile(np.array([250.0, 250.0]), np.array([0.0, 12.0]))) - 250.0) < 1e-6
+    # a node sitting just ABOVE 30 m (float grid, e.g. 30.0002) must be dropped and an exact-30 node
+    # inserted, not treated as "== 30" — otherwise the integral stops at 20 m but still divides by 30.
+    z_hi = np.array([0.0, 20.0, 30.0002, 45.0])
+    vs_hi = np.array([200.0, 200.0, 800.0, 800.0])
+    frac = (30.0 - 20.0) / (30.0002 - 20.0)
+    v30 = 200.0 + frac * (800.0 - 200.0)
+    lm2 = (v30 - 200.0) / np.log(v30 / 200.0)
+    expected_hi = 30.0 / (20.0 / 200.0 + 10.0 / lm2)
+    got_hi = float(vs30_from_vs_profile(vs_hi, z_hi))
+    assert abs(got_hi - expected_hi) < 1e-6
+    assert abs(got_hi - 300.0) > 1.0                         # the tolerance-mismatch bug returned ~300
 
 
 def test_svm_source_is_graceful_when_not_staged():

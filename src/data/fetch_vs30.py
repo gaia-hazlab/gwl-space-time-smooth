@@ -192,12 +192,14 @@ def vs30_from_vs_profile(vs, depth_m, top_m=30.0, axis=0):
         z = np.concatenate([z, [top_m]]); vs = np.concatenate([vs, vs[-1:]], axis=0)
     if z.shape[0] < 2:
         raise ValueError("need >=2 depth samples to integrate a travel time to top_m")
-    if not np.any(np.isclose(z, top_m)):              # insert an exact top_m node (interpolated velocity)
+    eps = 1e-6                                        # one tolerance for both the node test and the cut
+    if not np.any(np.abs(z - top_m) <= eps):          # insert an exact top_m node (interpolated velocity)
         k = int(np.searchsorted(z, top_m))
         frac = (top_m - z[k - 1]) / (z[k] - z[k - 1])
         v_top = vs[k - 1] + frac * (vs[k] - vs[k - 1])
-        z = np.insert(z, k, top_m); vs = np.insert(vs, k, v_top, axis=0)
-    keep = z <= top_m + 1e-9                          # layers spanning 0..top_m only
+        z = np.insert(z, k, top_m)
+        vs = np.insert(vs, k, v_top, axis=0)
+    keep = z <= top_m + eps                           # layers spanning 0..top_m only (matching tolerance)
     z = z[keep]; vs = vs[keep]
     dz = np.diff(z)[(...,) + (None,) * (vs.ndim - 1)]  # (nlayer, 1, …) broadcast over trailing dims
     v1, v2 = vs[:-1], vs[1:]
