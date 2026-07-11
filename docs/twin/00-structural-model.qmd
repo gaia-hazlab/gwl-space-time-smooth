@@ -72,7 +72,7 @@ domain stratification.
 | TWI | topographic wetness $\ln(a/\tan\beta)$ | 3DEP 10 m → 90 m | TOPMODEL lateral-flow redistribution of the water table |
 | Slope | surface gradient | 3DEP 10 m → 90 m | infinite-slope Factor of Safety; Vs30 proxy input |
 | Clay / sand / silt | soil texture fractions | SOLUS100 100 m → 90 m | Saxton–Rawls hydraulic envelope; friction / cohesion |
-| pH · CEC · bulk density | soil chemistry / density | SOLUS100 100 m → 90 m | K_sat pedotransfer; density in $V_S=\sqrt{\mu/\rho}$ |
+| pH · CEC · bulk density | soil chemistry / density | SOLUS100 100 m → 90 m | $K_{sat}$ pedotransfer; density in $V_S=\sqrt{\mu/\rho}$ |
 | Soil thickness | depth to lithic contact | SOLUS100 100 m → 90 m | storage capacity; transmissivity $T=K_{sat}h$ |
 | Lithology / geology | surficial material class | geology polygons → 90 m raster | hydrogeologic domain; stiffness control |
 | Vs30 | 30 m time-averaged $V_S$ | Soil Velocity Model (Grant, Wirth & Stone 2025); Wald–Allen fallback → 90 m | NEHRP site class; liquefaction stiffness |
