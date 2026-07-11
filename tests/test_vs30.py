@@ -31,6 +31,24 @@ def test_svm_vs30_from_profile_is_the_travel_time_average():
     assert vs30_from_vs_profile(cube, z).shape == (3, 2)
 
 
+def test_vs30_integrates_to_exactly_top_m_with_partial_layer():
+    # Real SVM depth grids need not land on 30 m. The integral must run to *exactly* top_m via a
+    # partial (interpolated) top layer, not stop at the deepest sample <= 30 m.
+    # uniform column, grid skipping 30 m (nodes 0/10/20/40): still exactly 300
+    z_skip = np.array([0.0, 10.0, 20.0, 40.0])
+    assert abs(float(vs30_from_vs_profile(np.full(4, 300.0), z_skip)) - 300.0) < 1e-6
+    # partial layer that actually matters: nodes 0/15/45, Vs 200 then ramp to 800.
+    # v(30) interpolates to 500; travel = 15/200 + 15/logmean(200,500), logmean=(500-200)/ln(2.5).
+    z = np.array([0.0, 15.0, 45.0]); vs = np.array([200.0, 200.0, 800.0])
+    v_lm = (500.0 - 200.0) / np.log(2.5)
+    expected = 30.0 / (15.0 / 200.0 + 15.0 / v_lm)
+    assert abs(float(vs30_from_vs_profile(vs, z)) - expected) < 1e-6
+    # and it is NOT the (wrong) average over just the top 15 m sample (=200)
+    assert float(vs30_from_vs_profile(vs, z)) > 200.0
+    # a profile shallower than top_m flat-extrapolates the deepest velocity rather than erroring
+    assert abs(float(vs30_from_vs_profile(np.array([250.0, 250.0]), np.array([0.0, 12.0]))) - 250.0) < 1e-6
+
+
 def test_svm_source_is_graceful_when_not_staged():
     # with no staged SVM raster/netCDF, the preferred SVM source returns None (caller falls back)
     assert fetch_svm_vs30(svm_vs30_tif="does/not/exist.tif", svm_nc=None) is None
@@ -122,6 +140,7 @@ def test_nehrp_rejects_negative_sigma_and_nonpositive_lognormal_mean():
 
 if __name__ == "__main__":
     test_svm_vs30_from_profile_is_the_travel_time_average()
+    test_vs30_integrates_to_exactly_top_m_with_partial_layer()
     test_svm_source_is_graceful_when_not_staged()
     test_monotone_and_nehrp_range()
     test_bins_map_to_expected_classes()
