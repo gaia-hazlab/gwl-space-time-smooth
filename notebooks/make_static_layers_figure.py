@@ -50,7 +50,13 @@ def main():
     # Clip to the HAND finite-data window and mask every layer to the common analysis footprint
     # (where terrain — the 90 m parent grid — is defined), so all panels share one coverage.
     fin = np.isfinite(hand.values)
-    ys = np.where(fin.any(axis=1))[0]; xs = np.where(fin.any(axis=0))[0]
+    if not fin.any():
+        raise ValueError(
+            "terrain_hand_90m.tif has no finite cells — cannot define the analysis footprint; "
+            "check the raster extent / nodata before regenerating the figure."
+        )
+    ys = np.where(fin.any(axis=1))[0]
+    xs = np.where(fin.any(axis=0))[0]
     sl = (slice(ys.min(), ys.max() + 1), slice(xs.min(), xs.max() + 1))
     footprint = fin[sl]
     def w(a):  # window to the HAND land box, blanked outside the terrain footprint

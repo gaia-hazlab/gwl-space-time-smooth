@@ -23,8 +23,9 @@ Each layer is fetched from its authoritative source, cleaned, reprojected to the
 - **Soil** — **SOLUS100** (100 m, USDA-NRCS ML digital soil mapping) supplies the hydromechanical
   texture set: clay / sand / silt fractions, pH, CEC, oven-dry bulk density, and depth-to-lithic (soil
   thickness). Windowed cloud-optimised reads, averaged over the near-surface horizon.
-- **Near-surface stiffness** — **Vs30** from the Wald–Allen topographic-slope proxy applied to the
-  90 m 3DEP slope (USGS grid / Sanger–Maurer parametric are drop-in alternatives).
+- **Near-surface stiffness** — **Vs30**, preferred from the measurement-based **Soil Velocity Model**
+  (Grant, Wirth & Stone 2025) where staged, otherwise the Wald–Allen topographic-slope proxy on the
+  90 m 3DEP slope (USGS grid / Sanger–Maurer parametric are further fallbacks).
 - **Geology / lithology** — surficial-geology polygons rasterised to 90 m through a lithology crosswalk,
   giving a categorical material class per cell.
 - **Subsurface geometry** — **depth-to-bedrock** and **distance-to-coast**, resampled to 90 m; combined
@@ -56,8 +57,9 @@ pilot):
 ![**The static-layer catalog — real 90 m data.** Nine of the static layers over the Puget Sound /
 Cascades analysis footprint, all on the 90 m EPSG:5070 grid: terrain derivatives HAND / slope / TWI
 (from the 3DEP DEM), the SOLUS100 soil texture (clay / sand), the Saxton–Rawls hydraulic envelope
-(saturated conductivity Ksat, field-capacity θ, available water capacity AWC), and the Wald–Allen
-Vs30. Water bodies and cells outside the terrain footprint are masked. Regenerate with
+(saturated conductivity Ksat, field-capacity θ, available water capacity AWC), and the Vs30 (here the
+Wald–Allen fallback; the measurement-based Soil Velocity Model is preferred where staged). Water bodies
+and cells outside the terrain footprint are masked. Regenerate with
 `pixi run static-layers` (reads `data/processed/`).](assets/static_layers.png){#fig-static-layers}
 
 Additional static layers used by the pipeline but not shown above (lithology / geology, depth-to-bedrock,
@@ -70,10 +72,10 @@ domain stratification.
 | TWI | topographic wetness $\ln(a/\tan\beta)$ | 3DEP 10 m → 90 m | TOPMODEL lateral-flow redistribution of the water table |
 | Slope | surface gradient | 3DEP 10 m → 90 m | infinite-slope Factor of Safety; Vs30 proxy input |
 | Clay / sand / silt | soil texture fractions | SOLUS100 100 m → 90 m | Saxton–Rawls hydraulic envelope; friction / cohesion |
-| pH · CEC · bulk density | soil chemistry / density | SOLUS100 100 m → 90 m | K_sat pedotransfer; density in $V_S=\sqrt{\mu/\rho}$ |
+| pH · CEC · bulk density | soil chemistry / density | SOLUS100 100 m → 90 m | $K_{sat}$ pedotransfer; density in $V_S=\sqrt{\mu/\rho}$ |
 | Soil thickness | depth to lithic contact | SOLUS100 100 m → 90 m | storage capacity; transmissivity $T=K_{sat}h$ |
 | Lithology / geology | surficial material class | geology polygons → 90 m raster | hydrogeologic domain; stiffness control |
-| Vs30 | 30 m time-averaged $V_S$ | Wald–Allen slope proxy, 90 m | NEHRP site class; liquefaction stiffness |
+| Vs30 | 30 m time-averaged $V_S$ | Soil Velocity Model (Grant, Wirth & Stone 2025); Wald–Allen fallback → 90 m | NEHRP site class; liquefaction stiffness |
 | Depth to bedrock | subsurface geometry | subsurface product → 90 m | aquifer bottom; domain stratification |
 | Distance to coast | coastal proximity | derived → 90 m | sea-level / tidal boundary conditioning |
 

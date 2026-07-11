@@ -9,10 +9,31 @@ import numpy as np
 
 from src.data.fetch_vs30 import (
     NEHRP_CLASSES,
+    fetch_svm_vs30,
     most_likely_nehrp_class,
     nehrp_class_probabilities,
+    vs30_from_vs_profile,
     wald_allen_vs30,
 )
+
+
+def test_svm_vs30_from_profile_is_the_travel_time_average():
+    z = np.array([0.0, 10.0, 20.0, 30.0, 50.0])
+    # a uniform 300 m/s column to 30 m must give Vs30 = 300 exactly
+    uniform = np.array([300.0, 300.0, 300.0, 300.0, 600.0])
+    assert abs(float(vs30_from_vs_profile(uniform, z)) - 300.0) < 1e-6
+    # a slower cap (soft soil over stiff) must lower Vs30 below the deep value
+    soft = np.array([180.0, 180.0, 600.0, 600.0, 900.0])
+    v = float(vs30_from_vs_profile(soft, z))
+    assert 180.0 < v < 600.0                                 # travel-time average, not arithmetic mean
+    # broadcasts over a (depth, y, x) cube
+    cube = np.tile(uniform[:, None, None], (1, 3, 2))
+    assert vs30_from_vs_profile(cube, z).shape == (3, 2)
+
+
+def test_svm_source_is_graceful_when_not_staged():
+    # with no staged SVM raster/netCDF, the preferred SVM source returns None (caller falls back)
+    assert fetch_svm_vs30(svm_vs30_tif="does/not/exist.tif", svm_nc=None) is None
 
 
 def test_monotone_and_nehrp_range():
@@ -100,6 +121,8 @@ def test_nehrp_rejects_negative_sigma_and_nonpositive_lognormal_mean():
 
 
 if __name__ == "__main__":
+    test_svm_vs30_from_profile_is_the_travel_time_average()
+    test_svm_source_is_graceful_when_not_staged()
     test_monotone_and_nehrp_range()
     test_bins_map_to_expected_classes()
     test_nan_slope_gives_nan()
