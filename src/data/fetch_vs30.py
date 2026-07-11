@@ -172,20 +172,40 @@ SVM_DATA_RELEASE_DOI = "10.5066/P14HJ3IC"             # USGS: 3-D Cascadia veloc
 def vs30_from_vs_profile(vs, depth_m, top_m=30.0, axis=0):
     """Time-averaged shear-wave velocity over the top ``top_m`` metres: the definition of Vs30.
 
-    ``Vs30 = top_m / Σ (Δz_i / Vs_i)`` over the layers spanning 0–``top_m`` m. ``vs`` is Vs(z, …) with
-    the increasing depth coordinate ``depth_m`` (m) along ``axis``. Returns Vs30 over the trailing dims.
+    ``Vs30 = top_m / T`` with the vertical travel time ``T = \\int_0^{top_m} dz / Vs(z)`` integrated to
+    *exactly* ``top_m`` — when the depth grid does not land on ``top_m`` a partial top layer is added by
+    linear interpolation, so the result is never silently the average over a shallower sample. ``vs`` is
+    ``Vs(z, …)`` with the increasing depth coordinate ``depth_m`` (m) along ``axis``. Velocity is taken
+    piecewise-linear between samples, for which a layer's travel time has the closed form
+    ``Δz · ln(V2/V1) / (V2 − V1)`` (→ ``Δz / V`` as ``V2 → V1``). Returns Vs30 over the trailing dims.
     """
     vs = np.asarray(vs, dtype="float64")
     z = np.asarray(depth_m, dtype="float64")
     vs = np.moveaxis(vs, axis, 0)
-    keep = z <= top_m
-    if keep.sum() < 2:
-        raise ValueError("need >=2 depth samples within top_m to integrate a travel time")
+    if z.ndim != 1 or z.shape[0] != vs.shape[0]:
+        raise ValueError("depth_m must be 1-D and match vs along the depth axis")
+    order = np.argsort(z)
+    z = z[order]; vs = vs[order]
+    if z[0] > 0.0:                                    # assume a surface layer at the shallowest velocity
+        z = np.concatenate([[0.0], z]); vs = np.concatenate([vs[:1], vs], axis=0)
+    if z[-1] < top_m:                                 # profile shallower than top_m: flat-extrapolate
+        z = np.concatenate([z, [top_m]]); vs = np.concatenate([vs, vs[-1:]], axis=0)
+    if z.shape[0] < 2:
+        raise ValueError("need >=2 depth samples to integrate a travel time to top_m")
+    if not np.any(np.isclose(z, top_m)):              # insert an exact top_m node (interpolated velocity)
+        k = int(np.searchsorted(z, top_m))
+        frac = (top_m - z[k - 1]) / (z[k] - z[k - 1])
+        v_top = vs[k - 1] + frac * (vs[k] - vs[k - 1])
+        z = np.insert(z, k, top_m); vs = np.insert(vs, k, v_top, axis=0)
+    keep = z <= top_m + 1e-9                          # layers spanning 0..top_m only
     z = z[keep]; vs = vs[keep]
-    dz = np.diff(z)                                   # layer thicknesses (m)
-    vmid = 0.5 * (vs[:-1] + vs[1:])                   # mid-layer velocity
-    travel = np.sum(dz[(...,) + (None,) * (vs.ndim - 1)] / vmid, axis=0)   # Σ Δz/Vs
-    return z[-1] / np.clip(travel, 1e-9, None)
+    dz = np.diff(z)[(...,) + (None,) * (vs.ndim - 1)]  # (nlayer, 1, …) broadcast over trailing dims
+    v1, v2 = vs[:-1], vs[1:]
+    close = np.abs(v2 - v1) < 1e-9                    # exact piecewise-linear slowness (log-mean velocity)
+    ratio = np.where(close, 2.0, v2 / np.clip(v1, 1e-9, None))   # dummy 2.0 avoids log(1)=0 where close
+    v_lm = np.where(close, 0.5 * (v1 + v2), (v2 - v1) / np.log(ratio))
+    travel = np.sum(dz / np.clip(v_lm, 1e-9, None), axis=0)      # Σ Δz / V_logmean = ∫ dz/Vs
+    return top_m / np.clip(travel, 1e-9, None)
 
 
 def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
@@ -211,10 +231,11 @@ def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
     if svm_nc and Path(svm_nc).exists():
         try:
             import xarray as xr
-            ds = xr.open_dataset(svm_nc)
-            vs30 = vs30_from_vs_profile(ds[vs_var], ds[depth_name].values,
-                                        axis=ds[vs_var].dims.index(depth_name))
-            da = ds[vs_var].isel({depth_name: 0}).copy(data=vs30)          # borrow the (y, x) coords
+            with xr.open_dataset(svm_nc) as ds:                           # close the file handle promptly
+                vs30 = vs30_from_vs_profile(ds[vs_var], ds[depth_name].values,
+                                            axis=ds[vs_var].dims.index(depth_name))
+                da = ds[vs_var].isel({depth_name: 0}).copy(data=vs30)     # borrow + materialise (y, x) coords
+                da.load()                                                 # detach from ds before it closes
             if da.rio.crs is None:
                 da = da.rio.write_crs("EPSG:32610")                       # UTM Zone 10T
             da = da.rio.clip_box(*bbox, crs="EPSG:4326")
