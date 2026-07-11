@@ -105,7 +105,7 @@ seismic = "python -m src.data.fetch_seismic --output data/processed/seismic_stat
 # dv/v module figure: stations -> freq/depth kernels -> banded dv/v (UQ, codameter) -> SM & WTD.
 dvv-demo = "python notebooks/make_dvv_figures.py"
 # Vs30 near-surface stiffness: Wald-Allen slope proxy (default) / USGS grid / Sanger-Maurer (GAIA).
-vs30 = "python -m src.data.fetch_vs30 --source wald_allen --output data/processed/vs30_90m.tif"
+vs30 = "python -m src.data.fetch_vs30 --source svm --output data/processed/vs30_90m.tif"
 # Digital-twin MVP: 2x3 animated GIF (GWL, soil moisture, Vs30 + uncertainty) with dv/v assimilation.
 digital-twin = "python notebooks/make_digital_twin.py"
 # Coupled water budget: recharge + capillary rise (#43), saturation-excess runoff + TOPMODEL (#44).

@@ -1,15 +1,20 @@
 """Vs30 (time-averaged shear-wave velocity, top 30 m) for the near-surface stiffness product.
 
-Replaces the earlier synthetic HAND ramp (issue #54) with defensible Vs30 from three sources:
+Replaces the earlier synthetic HAND ramp (issue #54) with defensible Vs30 from four sources, best first:
 
-  1. **Wald-Allen slope proxy (default, always available).** Wald & Allen (2007) / Allen & Wald
-     (2009) map topographic slope to Vs30 -- steeper terrain (bedrock outcrop, thin soil) is stiffer,
-     flat valley fill is soft. This is the standard terrain proxy behind the USGS global Vs30 model,
-     applied here to the native 90 m 3DEP slope. The Pacific Northwest (Cascadia) is active-tectonic,
-     so the active-tectonic bins are used by default.
-  2. **USGS global Vs30 grid** (the official product; a large ~30 arc-second GMT grid). Fetched and
+  1. **Soil Velocity Model, SVM (preferred).** Grant, Wirth & Stone (2025, Seismica; doi
+     10.26443/seismica.v4i2.1672) build measurement-based Vs(z) profiles for four Holocene PNW soil
+     provinces (Puget Lowlands, Willamette Valley, fill-and-alluvium, other) from 649 measured
+     profiles, embedded in the USGS Cascadia velocity-model data release (doi 10.5066/P14HJ3IC). Vs30
+     is the top-30 m travel-time average of the SVM shallow Vs. This is the best regional near-surface
+     Vs constraint for the Pacific Northwest; used when staged, else it falls back to the slope proxy.
+  2. **Wald-Allen slope proxy (always available).** Wald & Allen (2007) / Allen & Wald (2009) map
+     topographic slope to Vs30 -- steeper terrain is stiffer, flat valley fill is soft. The standard
+     terrain proxy behind the USGS global Vs30 model, applied to the native 90 m 3DEP slope
+     (active-tectonic bins for Cascadia).
+  3. **USGS global Vs30 grid** (the official product; a large ~30 arc-second GMT grid). Fetched and
      clipped where reachable; falls back to the slope proxy.
-  3. **Sanger-Maurer parametric Vs30** (GAIA vs-STAC) -- a geology + geomorphon model. Placeholder
+  4. **Sanger-Maurer parametric Vs30** (GAIA vs-STAC) -- a geology + geomorphon model. Placeholder
      that delegates to :func:`src.data.fetch_gaia.fetch_vs30`; the STAC is not always reachable.
 
 Output: ``data/processed/vs30_90m.tif`` (EPSG:5070, 90 m). Unlike the HAND ramp, this is a real
@@ -156,10 +161,86 @@ def fetch_sanger_maurer_vs30(bbox=PUGET_CASCADES_BBOX, output_dir=Path("data/pro
         return None
 
 
-def get_vs30(bbox=PUGET_CASCADES_BBOX, source="wald_allen",
-             slope_tif=Path("data/processed/terrain_slope_90m.tif"), like=None, region="active"):
-    """Unified Vs30 accessor. ``source`` in {wald_allen, usgs, sanger_maurer}; falls back to the
-    always-available slope proxy. Returns a Vs30 DataArray (m/s)."""
+# Grant, Wirth & Stone (2025) Soil Velocity Model (SVM) — the preferred, measurement-based PNW
+# near-surface Vs product. It gives Vs(z) profiles for four Holocene soil provinces (Puget Lowlands,
+# Willamette Valley, fill-and-alluvium, other), from 649 measured profiles, embedded in the USGS
+# Cascadia velocity-model data release (netCDF4 Vs grids, UTM Zone 10T).
+SVM_ARTICLE_DOI = "10.26443/seismica.v4i2.1672"       # Grant, Wirth & Stone (2025), Seismica 4
+SVM_DATA_RELEASE_DOI = "10.5066/P14HJ3IC"             # USGS: 3-D Cascadia velocity model w/ shallow soils v1.7
+
+
+def vs30_from_vs_profile(vs, depth_m, top_m=30.0, axis=0):
+    """Time-averaged shear-wave velocity over the top ``top_m`` metres: the definition of Vs30.
+
+    ``Vs30 = top_m / Σ (Δz_i / Vs_i)`` over the layers spanning 0–``top_m`` m. ``vs`` is Vs(z, …) with
+    the increasing depth coordinate ``depth_m`` (m) along ``axis``. Returns Vs30 over the trailing dims.
+    """
+    vs = np.asarray(vs, dtype="float64")
+    z = np.asarray(depth_m, dtype="float64")
+    vs = np.moveaxis(vs, axis, 0)
+    keep = z <= top_m
+    if keep.sum() < 2:
+        raise ValueError("need >=2 depth samples within top_m to integrate a travel time")
+    z = z[keep]; vs = vs[keep]
+    dz = np.diff(z)                                   # layer thicknesses (m)
+    vmid = 0.5 * (vs[:-1] + vs[1:])                   # mid-layer velocity
+    travel = np.sum(dz[(...,) + (None,) * (vs.ndim - 1)] / vmid, axis=0)   # Σ Δz/Vs
+    return z[-1] / np.clip(travel, 1e-9, None)
+
+
+def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
+                   svm_vs30_tif=Path("data/processed/svm_vs30.tif"), svm_nc=None,
+                   vs_var="vs", depth_name="depth", like=None):
+    """Vs30 from the **Soil Velocity Model** (Grant, Wirth & Stone 2025; USGS data release) — the
+    preferred PNW Vs source. Returns a Vs30 DataArray (m/s) or None if the model is not staged.
+
+    Two staging paths, tried in order:
+      1. a **pre-extracted Vs30 raster** (``svm_vs30_tif``) — the recommended workflow: derive Vs30
+         once from the SVM shallow-Vs grid and stage it as a GeoTIFF;
+      2. an **SVM/CVM Vs netCDF** (``svm_nc``) from the data release (doi:%s) — the top-30 m Vs is
+         travel-time-averaged (:func:`vs30_from_vs_profile`) and reprojected to ``like``.
+    If neither is present the function logs the data-release DOI and returns None so the caller can
+    fall back to the Wald-Allen slope proxy. No values are synthesised.
+    """ % SVM_DATA_RELEASE_DOI
+    import rioxarray as rxr
+
+    if svm_vs30_tif and Path(svm_vs30_tif).exists():
+        vs = rxr.open_rasterio(svm_vs30_tif, masked=True).squeeze("band", drop=True)
+        return vs.rio.reproject_match(like) if like is not None else vs
+
+    if svm_nc and Path(svm_nc).exists():
+        try:
+            import xarray as xr
+            ds = xr.open_dataset(svm_nc)
+            vs30 = vs30_from_vs_profile(ds[vs_var], ds[depth_name].values,
+                                        axis=ds[vs_var].dims.index(depth_name))
+            da = ds[vs_var].isel({depth_name: 0}).copy(data=vs30)          # borrow the (y, x) coords
+            if da.rio.crs is None:
+                da = da.rio.write_crs("EPSG:32610")                       # UTM Zone 10T
+            da = da.rio.clip_box(*bbox, crs="EPSG:4326")
+            return da.rio.reproject_match(like) if like is not None else da
+        except Exception as exc:                                          # pragma: no cover
+            logger.warning("SVM netCDF extraction failed (%s); falling back.", exc)
+            return None
+
+    logger.warning("SVM Vs grid not staged (article doi:%s / data doi:%s); stage it as %s or pass "
+                   "--svm-nc, else the Wald-Allen proxy is used.",
+                   SVM_ARTICLE_DOI, SVM_DATA_RELEASE_DOI, svm_vs30_tif)
+    return None
+
+
+def get_vs30(bbox=PUGET_CASCADES_BBOX, source="svm",
+             slope_tif=Path("data/processed/terrain_slope_90m.tif"), like=None, region="active",
+             svm_vs30_tif=Path("data/processed/svm_vs30.tif"), svm_nc=None):
+    """Unified Vs30 accessor. ``source`` in {svm, wald_allen, usgs, sanger_maurer}; the default
+    **svm** (Grant, Wirth & Stone 2025) is the preferred measurement-based PNW model. Every non-proxy
+    source falls back to the always-available Wald-Allen slope proxy. Returns a Vs30 DataArray (m/s)."""
+    if source == "svm":
+        vs = fetch_svm_vs30(bbox, svm_vs30_tif=svm_vs30_tif, svm_nc=svm_nc, like=like)
+        if vs is not None:
+            return vs
+        logger.info("Falling back to the Wald-Allen slope proxy for Vs30.")
+        return vs30_from_slope(slope_tif, region=region)
     if source == "wald_allen":
         return vs30_from_slope(slope_tif, region=region)
     if source == "usgs":
@@ -177,16 +258,22 @@ def get_vs30(bbox=PUGET_CASCADES_BBOX, source="wald_allen",
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    p = argparse.ArgumentParser(description="Produce a 90 m Vs30 raster (Wald-Allen slope proxy by default).")
+    p = argparse.ArgumentParser(description="Produce a 90 m Vs30 raster (Soil Velocity Model preferred; "
+                                            "Wald-Allen slope proxy fallback).")
     p.add_argument("--bbox", type=float, nargs=4, metavar=("W", "S", "E", "N"),
                    default=PUGET_CASCADES_BBOX)
-    p.add_argument("--source", choices=["wald_allen", "usgs", "sanger_maurer"], default="wald_allen")
+    p.add_argument("--source", choices=["svm", "wald_allen", "usgs", "sanger_maurer"], default="svm")
     p.add_argument("--slope", type=Path, default=Path("data/processed/terrain_slope_90m.tif"))
     p.add_argument("--region", choices=["active", "stable"], default="active")
+    p.add_argument("--svm-vs30", type=Path, default=Path("data/processed/svm_vs30.tif"),
+                   help="Pre-extracted SVM Vs30 raster (Grant, Wirth & Stone 2025).")
+    p.add_argument("--svm-nc", type=Path, default=None,
+                   help="SVM/CVM Vs netCDF from the USGS data release (doi:10.5066/P14HJ3IC).")
     p.add_argument("--output", type=Path, default=Path("data/processed/vs30_90m.tif"))
     args = p.parse_args()
 
-    vs = get_vs30(tuple(args.bbox), source=args.source, slope_tif=args.slope, region=args.region)
+    vs = get_vs30(tuple(args.bbox), source=args.source, slope_tif=args.slope, region=args.region,
+                  svm_vs30_tif=args.svm_vs30, svm_nc=args.svm_nc)
     if vs.rio.crs is None:
         vs = vs.rio.write_crs("EPSG:5070")
     args.output.parent.mkdir(parents=True, exist_ok=True)

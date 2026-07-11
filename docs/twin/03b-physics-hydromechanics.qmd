@@ -13,8 +13,13 @@ small-strain stiffness that geotechnical hazard models consume. It is constraine
 decreasing data cost. *Seismic tomography* from ambient noise inverts inter-station surface-wave
 dispersion for $V_S(z)$ [@shapiro2005high] — the highest-fidelity but sparsest constraint. *Vs30
 proxies* — the 30 m time-averaged velocity, $V_{S30} = 30 / \int_0^{30} dz/V_S(z)$ — trade fidelity
-for coverage: the Wald–Allen topographic-slope model [@waldallen2007], which we adopt at native 90 m,
-and geology- and geomorphon-based parametric models [@sanger2025parametric]. Vs30 maps to the
+for coverage. For the Pacific Northwest the **preferred** constraint is the measurement-based **Soil
+Velocity Model (SVM)** [@grant2025svm], which conditions $V_S(z)$ profiles on four Holocene soil
+provinces (Puget Lowlands, Willamette Valley, fill-and-alluvium, other) from 649 measured profiles
+in the USGS Cascadia velocity-model release [@wirth2025svmdata]; Vs30 is the top-30 m travel-time
+average of its shallow $V_S$. The **Wald–Allen** topographic-slope model [@waldallen2007], adopted at
+native 90 m, and geology- and geomorphon-based parametric models [@sanger2025parametric] are the
+always-available fallbacks. Vs30 maps to the
 NEHRP/ASCE-7 site class, and because the proxy carries large residual scatter we propagate that as a
 **site-class probability** rather than a point value (see [Hazard integration](07-hazard-integration.qmd)).
 Frequency sets depth: a Rayleigh wave of frequency $f$ is most sensitive near $L \approx V_S/3f$, so a
