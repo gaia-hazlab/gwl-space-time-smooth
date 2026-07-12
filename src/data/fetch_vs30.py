@@ -259,12 +259,16 @@ def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
 
 def get_vs30(bbox=PUGET_CASCADES_BBOX, source="svm",
              slope_tif=Path("data/processed/terrain_slope_90m.tif"), like=None, region="active",
-             svm_vs30_tif=Path("data/processed/svm_vs30.tif"), svm_nc=None):
+             svm_vs30_tif=Path("data/processed/svm_vs30.tif"), svm_nc=None,
+             vs_var="vs", depth_name="depth"):
     """Unified Vs30 accessor. ``source`` in {svm, wald_allen, usgs, sanger_maurer}; the default
     **svm** (Grant, Wirth & Stone 2025) is the preferred measurement-based PNW model. Every non-proxy
-    source falls back to the always-available Wald-Allen slope proxy. Returns a Vs30 DataArray (m/s)."""
+    source falls back to the always-available Wald-Allen slope proxy. ``like`` reprojects the result
+    onto the analysis grid (pass the 90 m terrain grid so the output co-registers with the other static
+    layers). Returns a Vs30 DataArray (m/s)."""
     if source == "svm":
-        vs = fetch_svm_vs30(bbox, svm_vs30_tif=svm_vs30_tif, svm_nc=svm_nc, like=like)
+        vs = fetch_svm_vs30(bbox, svm_vs30_tif=svm_vs30_tif, svm_nc=svm_nc,
+                            vs_var=vs_var, depth_name=depth_name, like=like)
         if vs is not None:
             return vs
         logger.info("Falling back to the Wald-Allen slope proxy for Vs30.")
@@ -297,11 +301,22 @@ def main():
                    help="Pre-extracted SVM Vs30 raster (Grant, Wirth & Stone 2025).")
     p.add_argument("--svm-nc", type=Path, default=None,
                    help="SVM/CVM Vs netCDF from the USGS data release (doi:10.5066/P14HJ3IC).")
+    p.add_argument("--vs-var", default="vs", help="Vs variable name inside --svm-nc.")
+    p.add_argument("--depth-name", default="depth", help="Depth coordinate name inside --svm-nc.")
+    p.add_argument("--like", type=Path, default=Path("data/processed/terrain_slope_90m.tif"),
+                   help="Reproject the Vs30 output onto this grid (the 90 m analysis grid), so it "
+                        "co-registers with the other static layers. Ignored if it does not exist.")
     p.add_argument("--output", type=Path, default=Path("data/processed/vs30_90m.tif"))
     args = p.parse_args()
 
+    like = None
+    if args.like and args.like.exists():
+        import rioxarray as rxr
+        like = rxr.open_rasterio(args.like, masked=True).squeeze("band", drop=True)
+
     vs = get_vs30(tuple(args.bbox), source=args.source, slope_tif=args.slope, region=args.region,
-                  svm_vs30_tif=args.svm_vs30, svm_nc=args.svm_nc)
+                  svm_vs30_tif=args.svm_vs30, svm_nc=args.svm_nc, vs_var=args.vs_var,
+                  depth_name=args.depth_name, like=like)
     if vs.rio.crs is None:
         vs = vs.rio.write_crs("EPSG:5070")
     args.output.parent.mkdir(parents=True, exist_ok=True)
