@@ -59,6 +59,12 @@ def test_vs30_integrates_to_exactly_top_m_with_partial_layer():
     got_hi = float(vs30_from_vs_profile(vs_hi, z_hi))
     assert abs(got_hi - expected_hi) < 1e-6
     assert abs(got_hi - 300.0) > 1.0                         # the tolerance-mismatch bug returned ~300
+    # a node WITHIN eps of 30 m is snapped exactly onto 30 m, so it matches the exact-30 grid to full
+    # precision — no sub-eps bias from integrating to the node while dividing by top_m.
+    ramp = np.array([200.0, 200.0, 800.0, 800.0])
+    base = float(vs30_from_vs_profile(ramp, np.array([0.0, 20.0, 30.0, 45.0])))
+    near = float(vs30_from_vs_profile(ramp, np.array([0.0, 20.0, 30.0 + 5e-7, 45.0])))
+    assert abs(near - base) < 1e-9                           # snapped endpoint, not a biased integral
 
 
 def test_svm_source_is_graceful_when_not_staged():

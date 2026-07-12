@@ -200,7 +200,10 @@ def vs30_from_vs_profile(vs, depth_m, top_m=30.0, axis=0):
         z = np.insert(z, k, top_m)
         vs = np.insert(vs, k, v_top, axis=0)
     keep = z <= top_m + eps                           # layers spanning 0..top_m only (matching tolerance)
-    z = z[keep]; vs = vs[keep]
+    z = z[keep]
+    vs = vs[keep]
+    z[-1] = top_m                                     # snap endpoint exactly onto top_m (within eps): the
+    #                                                   integral ends at top_m, matching the divisor
     dz = np.diff(z)[(...,) + (None,) * (vs.ndim - 1)]  # (nlayer, 1, …) broadcast over trailing dims
     v1, v2 = vs[:-1], vs[1:]
     close = np.abs(v2 - v1) < 1e-9                    # exact piecewise-linear slowness (log-mean velocity)
