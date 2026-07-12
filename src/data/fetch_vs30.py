@@ -34,6 +34,7 @@ logger = logging.getLogger("fetch_vs30")
 
 PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
 USGS_GLOBAL_VS30_GRD = "https://apps.usgs.gov/shakemap_geodata/vs30/global_vs30.grd"
+SVM_CRS = "EPSG:32610"   # CVM17 grid: UTM Zone 10N (utme / utmn coordinates)
 
 # Wald & Allen (2007) topographic-slope -> Vs30. Slope as gradient (m/m); Vs30 in m/s. Bins map to
 # NEHRP classes E(180) / D(240-360) / C(490-620) / B(760). ACTIVE-TECTONIC table (Cascadia). Lower
@@ -302,23 +303,43 @@ def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
         return vs.rio.reproject_match(like) if like is not None else vs
 
     if svm_nc and Path(svm_nc).exists():
-        try:
-            import xarray as xr
-            with xr.open_dataset(svm_nc) as ds:                           # close the file handle promptly
-                # SURFACE-referenced: the CVM depth axis is referenced to sea level and the model
-                # carries topography, so Vs30 must be integrated 30 m below each column's own ground
-                # surface. (Reduces to the plain top-30 m average if z is already surface-referenced.)
-                vs30 = vs30_surface_referenced(ds[vs_var], ds[depth_name].values,
-                                               axis=ds[vs_var].dims.index(depth_name), min_vs=min_vs)
-                da = ds[vs_var].isel({depth_name: 0}).copy(data=vs30)     # borrow + materialise (y, x) coords
-                da.load()                                                 # detach from ds before it closes
-            if da.rio.crs is None:
-                da = da.rio.write_crs("EPSG:32610")                       # UTM Zone 10T
-            da = da.rio.clip_box(*bbox, crs="EPSG:4326")
-            return da.rio.reproject_match(like) if like is not None else da
-        except Exception as exc:                                          # pragma: no cover
-            logger.warning("SVM netCDF extraction failed (%s); falling back.", exc)
-            return None
+        # A staged-but-broken netCDF must FAIL LOUDLY: silently falling back here once shipped a
+        # Wald-Allen map that looked like an SVM one. Not-staged still falls back gracefully (below).
+        import xarray as xr
+        from pyproj import Transformer
+
+        with xr.open_dataset(svm_nc) as ds:                               # closes the handle promptly
+            v = ds[vs_var]
+            xdim = next(d for d in v.dims if d in ("utme", "x", "easting"))
+            ydim = next(d for d in v.dims if d in ("utmn", "y", "northing"))
+            # Clip to the bbox IN UTM *before* loading: the full Cascadia grid is ~386M cells (~1.5 GB
+            # as float32, several times that once promoted), far more than we need for the pilot.
+            w, s, e, n = bbox
+            tf = Transformer.from_crs("EPSG:4326", SVM_CRS, always_xy=True)
+            ex, ey = tf.transform([w, e, w, e], [s, s, n, n])
+            xc, yc = ds[xdim].values, ds[ydim].values
+            xsl = slice(min(ex), max(ex)) if xc[0] < xc[-1] else slice(max(ex), min(ex))
+            ysl = slice(min(ey), max(ey)) if yc[0] < yc[-1] else slice(max(ey), min(ey))
+            sub = v.sel({xdim: xsl, ydim: ysl})
+            if any(sz == 0 for sz in sub.shape):
+                raise ValueError(f"bbox {bbox} does not intersect the SVM grid")
+            # SURFACE-referenced: the model carries topography, so Vs30 is the travel-time average of
+            # the 30 m below each column's own ground surface (the shallowest valid sample), not of a
+            # fixed depth window. Verified on CVM17: z=0 is the surface (median Vs ~206 m/s = soil).
+            vs30 = vs30_surface_referenced(sub.values, ds[depth_name].values,
+                                           axis=sub.dims.index(depth_name), min_vs=min_vs)
+            rest = [d for d in sub.dims if d != depth_name]                # (xdim, ydim) order preserved
+            da = xr.DataArray(vs30, dims=rest, coords={d: sub[d].values for d in rest}, name="vs30")
+
+        da = da.rename({xdim: "x", ydim: "y"}).transpose("y", "x")        # rasters are (y, x)
+        if float(da.y[0]) < float(da.y[-1]):
+            da = da.isel(y=slice(None, None, -1))                         # north-up for a GeoTIFF
+        da = da.rio.write_crs(SVM_CRS).rio.set_spatial_dims(x_dim="x", y_dim="y")
+        da = da.rio.clip_box(*bbox, crs="EPSG:4326")
+        logger.info("SVM Vs30 extracted from %s: %d x %d cells, %.0f%% valid",
+                    Path(svm_nc).name, da.sizes["y"], da.sizes["x"],
+                    100.0 * float(np.isfinite(da.values).mean()))
+        return da.rio.reproject_match(like) if like is not None else da
 
     logger.warning("SVM Vs grid not staged (article doi:%s / data doi:%s); stage it as %s or pass "
                    "--svm-nc, else the Wald-Allen proxy is used.",

@@ -49,7 +49,9 @@ def main():
 
     # Clip to the HAND finite-data window and mask every layer to the common analysis footprint
     # (where terrain — the 90 m parent grid — is defined), so all panels share one coverage.
-    fin = np.isfinite(hand.values)
+    # Common land footprint: terrain AND soil. The SVM returns a (valid) seafloor Vs30 over open
+    # water, which is not a surface site condition, so water is masked out of every panel alike.
+    fin = np.isfinite(hand.values) & np.isfinite(clay.values)
     if not fin.any():
         raise ValueError(
             "terrain_hand_90m.tif has no finite cells — cannot define the analysis footprint; "
@@ -74,7 +76,7 @@ def main():
         (w(env["ksat"].values),   "Ksat",          "viridis",  "mm hr⁻¹"),
         (w(env["theta_fc"].values), "θ field cap.", "Blues",   "m³ m⁻³"),
         (w(env["awc_mm"].values), "AWC",           "cividis",  "mm"),
-        (w(vs30.values),          "Vs30",          "turbo",    "m s⁻¹"),
+        (w(vs30.values),          "Vs30",          "plasma",   "m s⁻¹"),
     ]
 
     fig, axes = plt.subplots(3, 3, figsize=(11.0, 10.4), constrained_layout=True)

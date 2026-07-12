@@ -23,9 +23,12 @@ Each layer is fetched from its authoritative source, cleaned, reprojected to the
 - **Soil** — **SOLUS100** (100 m, USDA-NRCS ML digital soil mapping) supplies the hydromechanical
   texture set: clay / sand / silt fractions, pH, CEC, oven-dry bulk density, and depth-to-lithic (soil
   thickness). Windowed cloud-optimised reads, averaged over the near-surface horizon.
-- **Near-surface stiffness** — **Vs30**, preferred from the measurement-based **Soil Velocity Model**
-  (Grant, Wirth & Stone 2025) where staged, otherwise the Wald–Allen topographic-slope proxy on the
-  90 m 3DEP slope (USGS grid / Sanger–Maurer parametric are further fallbacks).
+- **Near-surface stiffness** — **Vs30** from the measurement-based **Soil Velocity Model** (SVM;
+  Grant, Wirth & Stone 2025), the shallow-soil layer of the USGS Cascadia velocity model. Its Vs(z)
+  grid is sampled every 10 m over the top 100 m, and Vs30 is the *travel-time* average
+  $30/\int_0^{30}\!dz/V_S$ of the 30 m **below each column's own ground surface** — the model carries
+  topography, so a fixed depth window would sample air on a ridge and deep rock in a valley. The
+  Wald–Allen topographic-slope proxy remains the always-available fallback where the SVM is not staged.
 - **Geology / lithology** — surficial-geology polygons rasterised to 90 m through a lithology crosswalk,
   giving a categorical material class per cell.
 - **Subsurface geometry** — **depth-to-bedrock** and **distance-to-coast**, resampled to 90 m; combined
@@ -41,9 +44,9 @@ shallow landslides on hillslopes, and compound flooding all resolve at ~100 m or
 grid would blur the valley-vs-ridge distinction that governs the hazard. Two consequences follow:
 
 - **Fine sources are downsampled, coarse sources are upsampled — honestly.** 3DEP (10 m) is aggregated
-  to 90 m (a genuine down-sample); SOLUS (100 m) is resampled to 90 m (near-identity); a coarse layer
-  reprojected up to 90 m gains *no* new information, and the provenance records that so a resampled
-  cell is never mistaken for a native observation.
+  to 90 m (a genuine down-sample); SOLUS (100 m) is resampled to 90 m (near-identity); the SVM Vs grid
+  (200 m) is *up*-sampled to 90 m and so gains **no** new information. The provenance records each
+  case, so a resampled cell is never mistaken for a native observation.
 - **90 m is the resolution the dynamic states inherit.** Because the coarse precipitation/satellite
   drivers carry the *time* signal but not the *space* texture, the 90 m static envelope is what gives
   the final water-table, soil-moisture, and stiffness fields their spatial detail.
@@ -57,10 +60,33 @@ pilot):
 ![**The static-layer catalog — real 90 m data.** Nine of the static layers over the Puget Sound /
 Cascades analysis footprint, all on the 90 m EPSG:5070 grid: terrain derivatives HAND / slope / TWI
 (from the 3DEP DEM), the SOLUS100 soil texture (clay / sand), the Saxton–Rawls hydraulic envelope
-(saturated conductivity Ksat, field-capacity θ, available water capacity AWC), and the Vs30 (here the
-Wald–Allen fallback; the measurement-based Soil Velocity Model is preferred where staged). Water bodies
-and cells outside the terrain footprint are masked. Regenerate with
+(saturated conductivity Ksat, field-capacity θ, available water capacity AWC), and **Vs30 from the Soil
+Velocity Model** [@grant2025svm]. The Vs30 panel is the real SVM field: soft ground (~180–300 m s⁻¹)
+tracks the valley floors and river corridors where the Holocene soils and fill sit, stiff ground
+(>500 m s⁻¹) the uplands — the same corridors that show HAND ≈ 0 and high clay. All panels share one
+land footprint; water is masked (the SVM does return a *seafloor* Vs30 over open water, which is not a
+surface site condition). Regenerate with
 `pixi run static-layers` (reads `data/processed/`).](assets/static_layers.png){#fig-static-layers}
+
+::: {.callout-important}
+## Vs30 is 200 m information on a 90 m grid
+The SVM shallow-Vs grid is **200 m** horizontally, so placing it on the 90 m analysis grid is an
+*upsample*: it adds no new spatial information, and the apparent 90 m texture in the Vs30 panel is
+really 200 m texture. The provenance records this, and the honest reading is that Vs30 carries the
+**coarsest native resolution of any static layer** in the catalog — a real limit on how finely
+liquefaction stiffness can be resolved, and a reason the site condition is delivered as a *site-class
+probability* rather than a point value (see [Hazard integration](07-hazard-integration.qmd)).
+
+Two further properties of the extraction are worth stating plainly. The depth axis is **terrain
+following** — verified against the file, where the shallowest sample has a median $V_S$ of ~206 m s⁻¹
+(soil, not rock), so $z=0$ is the ground surface and the 30 m average is genuinely near-surface.
+And cells with no ground, a data gap inside the top 30 m, or less than 30 m of grid below the surface
+are returned as **NaN**, never as a filled-in value.
+:::
+
+Over the pilot footprint the resulting field is **NEHRP C for 75% of cells, D for 23%, and E for 2%**
+(median Vs30 416 m s⁻¹, 1st–99th percentile 179–593 m s⁻¹) — the soft D/E tail being exactly the valley
+fill that carries the liquefaction hazard.
 
 Additional static layers used by the pipeline but not shown above (lithology / geology, depth-to-bedrock,
 distance-to-coast, and the derived hydrogeologic-domain mask) are built the same way and enter the
@@ -75,7 +101,7 @@ domain stratification.
 | pH · CEC · bulk density | soil chemistry / density | SOLUS100 100 m → 90 m | $K_{sat}$ pedotransfer; density in $V_S=\sqrt{\mu/\rho}$ |
 | Soil thickness | depth to lithic contact | SOLUS100 100 m → 90 m | storage capacity; transmissivity $T=K_{sat}h$ |
 | Lithology / geology | surficial material class | geology polygons → 90 m raster | hydrogeologic domain; stiffness control |
-| Vs30 | 30 m time-averaged $V_S$ | Soil Velocity Model (Grant, Wirth & Stone 2025); Wald–Allen fallback → 90 m | NEHRP site class; liquefaction stiffness |
+| Vs30 | 30 m time-averaged $V_S$ | SVM shallow-Vs grid, 200 m → 90 m (Wald–Allen fallback) | NEHRP site class; liquefaction stiffness |
 | Depth to bedrock | subsurface geometry | subsurface product → 90 m | aquifer bottom; domain stratification |
 | Distance to coast | coastal proximity | derived → 90 m | sea-level / tidal boundary conditioning |
 
