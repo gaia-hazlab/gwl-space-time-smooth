@@ -215,9 +215,75 @@ def vs30_from_vs_profile(vs, depth_m, top_m=30.0, axis=0):
     return top_m / np.clip(travel, 1e-9, None)
 
 
+def vs30_surface_referenced(vs, depth_m, top_m=30.0, axis=0, min_vs=1.0):
+    """Vs30 measured from each column's **ground surface**, not from the depth datum.
+
+    The SVM/CVM grid carries topography on a depth axis referenced to sea level, so "the top 30 m" is
+    *not* ``z in [0, top_m]``: every column's ground surface sits at its own ``z``, with void cells
+    (air, water, nodata) above it. Averaging a fixed ``z`` window would therefore sample air on a ridge
+    and deep rock in a valley. For each column this finds the shallowest valid sample (finite and
+    ``Vs >= min_vs``, which also skips the ``Vs≈0`` water column) and integrates the travel time
+    ``top_m`` *below that surface*, with the same exact piecewise-linear slowness as
+    :func:`vs30_from_vs_profile`.
+
+    Correct under either convention: when ``z`` is already surface-referenced (the first valid sample
+    lands at ``z[0]`` in every column) this reduces exactly to the plain top-``top_m`` average.
+    Columns with no ground, with a data gap inside the top ``top_m``, or with less than ``top_m`` of
+    grid below their surface return **NaN** rather than a fabricated value.
+    """
+    vs = np.asarray(vs, dtype="float64")
+    z = np.asarray(depth_m, dtype="float64")
+    vs = np.moveaxis(vs, axis, 0)
+    if z.ndim != 1 or z.shape[0] != vs.shape[0]:
+        raise ValueError("depth_m must be 1-D and match vs along the depth axis")
+    order = np.argsort(z)
+    z = z[order]
+    vs = vs[order]
+    nz = z.shape[0]
+    if nz < 2:
+        raise ValueError("need >=2 depth samples to integrate a travel time")
+    shape = vs.shape[1:]
+
+    valid = np.isfinite(vs) & (vs >= min_vs)          # air / water / nodata are not ground
+    has_ground = valid.any(axis=0)
+    k0 = np.argmax(valid, axis=0)                     # shallowest valid sample = the ground surface
+
+    # exact piecewise-linear per-layer travel time; a layer touching a void cell contributes nothing,
+    # so the cumulative integral effectively starts at the ground surface
+    v1, v2 = vs[:-1], vs[1:]
+    good = valid[:-1] & valid[1:]
+    a = np.where(good, v1, 1.0)                       # dummies keep the log finite; masked out below
+    b = np.where(good, v2, 1.0)
+    close = np.abs(b - a) < 1e-9
+    ratio = np.where(close, 2.0, b / np.clip(a, 1e-9, None))
+    v_lm = np.where(close, 0.5 * (a + b), (b - a) / np.log(ratio))
+    dz = np.diff(z)[(...,) + (None,) * len(shape)]
+    dt = np.where(good, dz / np.clip(v_lm, 1e-9, None), 0.0)
+    cum = np.concatenate([np.zeros((1,) + shape), np.cumsum(dt, axis=0)], axis=0)      # (nz, …)
+
+    z_surf = z[k0]
+    z_targ = z_surf + top_m                           # 30 m BELOW this column's own surface
+    j = np.clip(np.searchsorted(z, z_targ), 1, nz - 1)
+    z_lo, z_hi = z[j - 1], z[j]
+    frac = (z_targ - z_lo) / np.where(z_hi - z_lo == 0.0, 1.0, z_hi - z_lo)
+    t_lo = np.take_along_axis(cum, (j - 1)[None, ...], axis=0)[0]
+    t_hi = np.take_along_axis(cum, j[None, ...], axis=0)[0]
+    travel = (t_lo + frac * (t_hi - t_lo)) - np.take_along_axis(cum, k0[None, ...], axis=0)[0]
+
+    # the samples spanning [surface, surface+top_m] must be an unbroken run of valid ground
+    cv = np.cumsum(valid.astype(np.int64), axis=0)
+    n_valid = np.take_along_axis(cv, j[None, ...], axis=0)[0] - \
+        np.take_along_axis(cv, k0[None, ...], axis=0)[0] + 1
+    unbroken = n_valid == (j - k0 + 1)
+    covered = (z[-1] - z_surf) >= top_m - 1e-9        # enough grid below the surface to reach top_m
+
+    out = top_m / np.clip(travel, 1e-12, None)
+    return np.where(has_ground & covered & unbroken & (travel > 0.0), out, np.nan)
+
+
 def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
                    svm_vs30_tif=Path("data/processed/svm_vs30.tif"), svm_nc=None,
-                   vs_var="vs", depth_name="depth", like=None):
+                   vs_var="vs", depth_name="depth", like=None, min_vs=1.0):
     """Vs30 from the **Soil Velocity Model** (Grant, Wirth & Stone 2025; USGS data release) — the
     preferred PNW Vs source. Returns a Vs30 DataArray (m/s) or None if the model is not staged.
 
@@ -239,8 +305,11 @@ def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
         try:
             import xarray as xr
             with xr.open_dataset(svm_nc) as ds:                           # close the file handle promptly
-                vs30 = vs30_from_vs_profile(ds[vs_var], ds[depth_name].values,
-                                            axis=ds[vs_var].dims.index(depth_name))
+                # SURFACE-referenced: the CVM depth axis is referenced to sea level and the model
+                # carries topography, so Vs30 must be integrated 30 m below each column's own ground
+                # surface. (Reduces to the plain top-30 m average if z is already surface-referenced.)
+                vs30 = vs30_surface_referenced(ds[vs_var], ds[depth_name].values,
+                                               axis=ds[vs_var].dims.index(depth_name), min_vs=min_vs)
                 da = ds[vs_var].isel({depth_name: 0}).copy(data=vs30)     # borrow + materialise (y, x) coords
                 da.load()                                                 # detach from ds before it closes
             if da.rio.crs is None:
@@ -260,7 +329,7 @@ def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
 def get_vs30(bbox=PUGET_CASCADES_BBOX, source="svm",
              slope_tif=Path("data/processed/terrain_slope_90m.tif"), like=None, region="active",
              svm_vs30_tif=Path("data/processed/svm_vs30.tif"), svm_nc=None,
-             vs_var="vs", depth_name="depth"):
+             vs_var="vs", depth_name="depth", min_vs=1.0):
     """Unified Vs30 accessor. ``source`` in {svm, wald_allen, usgs, sanger_maurer}; the default
     **svm** (Grant, Wirth & Stone 2025) is the preferred measurement-based PNW model. Every non-proxy
     source falls back to the always-available Wald-Allen slope proxy. ``like`` reprojects the result
@@ -268,7 +337,7 @@ def get_vs30(bbox=PUGET_CASCADES_BBOX, source="svm",
     layers). Returns a Vs30 DataArray (m/s)."""
     if source == "svm":
         vs = fetch_svm_vs30(bbox, svm_vs30_tif=svm_vs30_tif, svm_nc=svm_nc,
-                            vs_var=vs_var, depth_name=depth_name, like=like)
+                            vs_var=vs_var, depth_name=depth_name, like=like, min_vs=min_vs)
         if vs is not None:
             return vs
         logger.info("Falling back to the Wald-Allen slope proxy for Vs30.")
@@ -303,6 +372,9 @@ def main():
                    help="SVM/CVM Vs netCDF from the USGS data release (doi:10.5066/P14HJ3IC).")
     p.add_argument("--vs-var", default="vs", help="Vs variable name inside --svm-nc.")
     p.add_argument("--depth-name", default="depth", help="Depth coordinate name inside --svm-nc.")
+    p.add_argument("--min-vs", type=float, default=1.0,
+                   help="Vs below this (m/s) is void — air/water/nodata — when locating each column's "
+                        "ground surface. The water column is Vs~0, so it is skipped.")
     p.add_argument("--like", type=Path, default=Path("data/processed/terrain_slope_90m.tif"),
                    help="Reproject the Vs30 output onto this grid (the 90 m analysis grid), so it "
                         "co-registers with the other static layers. Ignored if it does not exist.")
@@ -316,7 +388,7 @@ def main():
 
     vs = get_vs30(tuple(args.bbox), source=args.source, slope_tif=args.slope, region=args.region,
                   svm_vs30_tif=args.svm_vs30, svm_nc=args.svm_nc, vs_var=args.vs_var,
-                  depth_name=args.depth_name, like=like)
+                  depth_name=args.depth_name, like=like, min_vs=args.min_vs)
     if vs.rio.crs is None:
         vs = vs.rio.write_crs("EPSG:5070")
     args.output.parent.mkdir(parents=True, exist_ok=True)

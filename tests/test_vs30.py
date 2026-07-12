@@ -13,6 +13,7 @@ from src.data.fetch_vs30 import (
     most_likely_nehrp_class,
     nehrp_class_probabilities,
     vs30_from_vs_profile,
+    vs30_surface_referenced,
     wald_allen_vs30,
 )
 
@@ -70,6 +71,38 @@ def test_vs30_integrates_to_exactly_top_m_with_partial_layer():
     multi = float(vs30_from_vs_profile(np.array([200.0, 200.0, 800.0, 800.0, 800.0]),
                                        np.array([0.0, 20.0, 30.0 + 3e-7, 30.0 + 7e-7, 45.0])))
     assert abs(multi - base) < 1e-9
+
+
+def test_vs30_surface_referenced_handles_topography():
+    # The CVM depth axis is referenced to sea level while the model carries topography, so each
+    # column's ground surface sits at its own z with void cells (air/water/nodata) above it.
+    z = np.arange(0.0, 101.0, 10.0)                          # 0,10,...,100 (11 nodes)
+    nan = np.nan
+
+    col_a = np.full(11, 300.0)                               # ground at z=0, uniform -> 300
+    col_b = np.array([nan] * 4 + [300.0] * 7)                # ground at z=40, uniform -> still 300
+    col_c = np.array([nan] * 4 + [180.0, 180.0, 180.0] + [600.0] * 4)   # soft cap under a deep surface
+    col_d = np.array([0.0, 0.0] + [250.0] * 9)               # Vs~0 water column -> ground at z=20
+    col_e = np.full(11, nan)                                 # no ground at all
+    col_f = np.array([nan] * 9 + [400.0, 400.0])             # ground at z=90: <30 m of grid below it
+    cube = np.stack([col_a, col_b, col_c, col_d, col_e, col_f], axis=1)   # (11, 6)
+
+    v = vs30_surface_referenced(cube, z, min_vs=1.0)
+    assert v.shape == (6,)
+    assert abs(v[0] - 300.0) < 1e-6                          # surface at z=0
+    assert abs(v[1] - 300.0) < 1e-6                          # surface at z=40 -> integrates 40..70
+    assert 180.0 < v[2] < 600.0                              # travel-time average below its own surface
+    assert abs(v[3] - 250.0) < 1e-6                          # water skipped, surface at z=20
+    assert np.isnan(v[4])                                    # no ground -> NaN, never fabricated
+    assert np.isnan(v[5])                                    # <30 m of grid below the surface -> NaN
+    # a data gap inside the top 30 m must not be silently bridged (it would inflate Vs30)
+    gap = np.array([300.0, nan, 300.0] + [300.0] * 8)
+    assert np.isnan(vs30_surface_referenced(gap[:, None], z)[0])
+    # and when z IS already surface-referenced (every column valid from z[0]) it must reduce exactly
+    # to the plain top-30 m travel-time average
+    plain = np.stack([col_a, np.array([180.0] * 3 + [600.0] * 8)], axis=1)
+    ref = vs30_from_vs_profile(plain, z)
+    assert np.allclose(vs30_surface_referenced(plain, z), ref, rtol=1e-9)
 
 
 def test_svm_source_is_graceful_when_not_staged():
@@ -164,6 +197,7 @@ def test_nehrp_rejects_negative_sigma_and_nonpositive_lognormal_mean():
 if __name__ == "__main__":
     test_svm_vs30_from_profile_is_the_travel_time_average()
     test_vs30_integrates_to_exactly_top_m_with_partial_layer()
+    test_vs30_surface_referenced_handles_topography()
     test_svm_source_is_graceful_when_not_staged()
     test_monotone_and_nehrp_range()
     test_bins_map_to_expected_classes()
