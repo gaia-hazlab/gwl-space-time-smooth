@@ -65,6 +65,11 @@ def test_vs30_integrates_to_exactly_top_m_with_partial_layer():
     base = float(vs30_from_vs_profile(ramp, np.array([0.0, 20.0, 30.0, 45.0])))
     near = float(vs30_from_vs_profile(ramp, np.array([0.0, 20.0, 30.0 + 5e-7, 45.0])))
     assert abs(near - base) < 1e-9                           # snapped endpoint, not a biased integral
+    # SEVERAL nodes in (30, 30+eps] must all snap to 30 and keep z non-decreasing (no negative dz),
+    # not just the last one — otherwise np.diff goes negative and corrupts the travel-time integral.
+    multi = float(vs30_from_vs_profile(np.array([200.0, 200.0, 800.0, 800.0, 800.0]),
+                                       np.array([0.0, 20.0, 30.0 + 3e-7, 30.0 + 7e-7, 45.0])))
+    assert abs(multi - base) < 1e-9
 
 
 def test_svm_source_is_graceful_when_not_staged():
