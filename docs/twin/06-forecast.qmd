@@ -2,38 +2,259 @@
 title: "6 · Forecast of the soil state"
 ---
 
-The same closed water budget that produces the hindcast state ([Physics — hydrology](03a-physics-hydrology.qmd))
-can be driven **forward** to produce the *antecedent* hydrologic state a hazard is about to encounter.
-The forecast product is the antecedent state — water table, soil moisture, saturation — not the flood
-hydrograph itself. This work is tracked as epic #73 (issues #70–#72).
+Driving the twin forward from a rainfall forecast to give the **antecedent hydromechanical state** —
+soil moisture, water table, near-surface stiffness — that the hazard models consume. The forecast
+product is the antecedent state, **not** the flood hydrograph (issue #55).
 
-## Precipitation forcing (source-agnostic)
+This chapter is a running record of what was built, what was verified, and what is still wrong.
+Several entries below are negative results; they are kept because they are the load-bearing ones.
 
-The water budget's precipitation input is deliberately not tied to any one product. It accepts observed
-precipitation for hindcasts and forecast precipitation for the forward run, each downscaled to the
-90 m grid and bias-aware. Every downscaled field records its native versus delivered resolution, so a
-coarse forecast pixel is never read as a native observation.
+## The architecture: rainfall is a file, not an import
 
-## Hindcast from observed precipitation (PRISM preferred)
+The AI weather model needs a GPU; the soil physics is pure numpy and costs nothing. So the two are
+separated by a **file boundary**, not a function call:
 
-For hindcasts, the preferred rainfall source is **PRISM** — gauge-anchored and best-resolved for the
-PNW — driving the budget over a documented event to produce the GWL/θ/saturation/recharge history
-(#70). A reanalysis such as TerraClimate can be substituted; **ERA5-Land** is reserved as an
-*independent evaluation* dataset, not a forcing (#72).
+```
+Tillicum (H200)   FuXi  ──►  s3://gaia/soil-twin/forecast/fuxi/<init>.zarr
+                                        │
+anywhere (no GPU) ──────────────────────┴──►  water budget ──► θ, water table ──► Vs
+```
 
-## Forward forcing from AI weather forecasts + downscaling
+`src/data/fetch_earth2studio.py` is the *only* module that imports earth2studio. Everything downstream
+consumes a `ForecastForcing` (`src/models/forecast.py`) and neither knows nor cares whether the rain
+came from an AI model, a reanalysis, or a scenario. Swapping the source changes one flag.
 
-For the forward ensemble, quantitative precipitation forecasts from **GraphCast** and/or **ACE2** are
-ingested via [earth2studio](https://github.com/NVIDIA/earth2studio) (#71). The ~25 km forecast
-precipitation is **downscaled to 90 m** with orographic physics — bilinear resampling loses the
-Cascade atmospheric-river enhancement — and bias-corrected against the PRISM climatology. Running the
-budget forward over the ensemble yields a forecast antecedent state with spread, handed off through the
-dynamic export ([Hazard integration](07-hazard-integration.qmd)).
+## Physics: what had to change
 
-## Antecedent state, not hydrograph — scope and caveats
+### The engine was monthly, and monthly was *biased* — not merely coarse
 
-The forecast forces the *subsurface antecedent state*, not the surface flood response: converting
-recharge and runoff into a flood hydrograph requires a separate surface-routing model (#55). The value
-here is that a saturated antecedent state — a water table already raised by a winter AR sequence — is
-what turns the next storm into a landslide or a liquefaction-susceptible condition, and that is exactly
-the state the twin forecasts.
+The original budget hard-coded `dt = 1 month`. Aggregating a 10-day forecast to a monthly mean destroys
+the event signal the forecast exists to provide — but the failure is worse than blurring. Driving the
+monthly step with a month of rain **as one lump** instantly oversaturates the column:
+
+| 400 mm over one month | runoff | recharge |
+|---|---|---|
+| monthly (one lump) | **200 mm** (spurious) | 84 mm (starved) |
+| daily, uniform | 0 mm | 322 mm |
+| daily, 3-day atmospheric river | 54 mm (real) | 305 mm |
+
+`coupled_water_budget` now takes `dt_days`. The monthly default is bit-for-bit unchanged.
+
+### Three parameters were secretly per-month *rates*
+
+Driving a model whose rates are per-month with mm/day drains the column ~30× too fast. Recession,
+capillary rise, and gravity drainage are each now converted to the step. The subtle one:
+
+::: {.callout-warning}
+## The legacy drainage constant is unphysical at daily resolution
+`drain_frac = 0.6/month` implies an e-folding drainage timescale of $30.44/\ln(2.5) \approx 33$ days.
+Gravity drainage above field capacity is a **1–3 day** process. The "consistent" conversion of the
+monthly fraction would therefore make a daily column drain ~15× too *slowly*. Sub-monthly runs use a
+physical timescale (`DRAIN_TAU_DAYS = 2.0`) instead. The monthly fraction is a lumped calibration with
+no meaning at daily resolution.
+:::
+
+### Snow defers the response
+
+A Cascade December is snow-dominated. Treating snowfall as rain would fabricate an immediate θ and Vs
+response that physically waits for melt, so a degree-day partition holds the water as SWE until melt.
+
+### Saturated-area runoff — and the division of labour with LandLab
+
+Runoff **generation** is ours: it is a *sink* in our own budget, so omitting it biases θ and the water
+table high. Runoff **routing** to a hydrograph is LandLab's (issue #55); we hand over the source term.
+
+The dominant humid-temperate mechanism is variable source area — rain cannot infiltrate where there is
+no space between the water table and the surface:
+
+$$\text{runoff} = \left[\;\text{liquid} - S_y \cdot d_{wt}\cdot 1000\;\right]_+$$
+
+It is continuous, not a switch (at a 1 m table, 224 mm of 400 runs off while 167 mm still recharges),
+and it fires exactly where it should: on shallow-table cells (median HAND 2.1 m — valley floors)
+**404 of 455 mm** of December's rain runs off.
+
+**Infiltration-excess (Hortonian) runoff is still absent** (issue #57), and correctly so at daily
+resolution: 68 mm/day is only 2.8 mm/hr, far below these soils' Ksat (15–55 mm/hr). Real storms burst
+well above their daily mean — an argument for keeping FuXi's native **6-hourly** steps rather than
+aggregating to daily.
+
+### Water state → stiffness
+
+θ and the water table map to velocity through the petrophysical coupling (Hertz–Mindlin + van Genuchten
+suction, `src/models/dvv_coupling.py`) — **not** a fitted correlation. The Vs30 response is first-order
+travel-time weighted: a velocity change confined to a vadose root zone of depth $d$ contributes $d/30$
+of itself to the Vs30 change.
+
+## What the forecast actually predicts
+
+Three states, three different roles. This is the most useful result so far, and it fell out of the
+hindcast (@fig-hindcast):
+
+::: {.callout-important}
+## θ and dv/v are event detectors; the water table is the integrator
+December 2025 delivered **two** storms. θ and the shallow dv/v band produced **two distinct peaks**
+(θ 0.277 / 0.253; dv/v_shallow −3.6% / −2.4%), each decaying within days. The water table produced a
+**single monotone rise** that plateaued and never receded — carrying the memory of both storms
+combined, with no trace of their separateness. **Vs30 moved only −0.2%**, the root zone being 1/30 of
+the averaging depth.
+
+**dv/v sees the storm; Vs30 mostly does not.** The observables answer different questions and must be
+scored against different data: dv/v against event *timing*, wells against the cumulative *antecedent
+state*.
+:::
+
+![**Hindcast, December 2025**, forced by *observed* PRISM daily rainfall on the 90 m Puget/Cascades grid
+(440k land cells). Two storms (days 8–12, 15–19) give two θ / dv/v peaks but a single cumulative
+water-table rise. The **runoff panel and the water-table rise should not be believed** — see the
+validation below.](assets/hindcast_dec2025.png){#fig-hindcast}
+
+## Validation against the wells — and a failure
+
+The hindcast is forced by *observed* rain, so it isolates the physics from weather-forecast error. That
+makes it a fair test, and the physics failed it.
+
+| Nov→Dec water-table rise | |
+|---|---|
+| observed — 1205 paired shallow NWIS wells, 16 yr — median | **+0.12 m** |
+| observed — mean / p90 | +0.21 m / +0.84 m |
+| **modelled (Dec 2025)** | **+3.24 m** |
+
+**Over-predicted by roughly 8–26×.** The cause is quantified: domain-wide the budget turns **94% of
+December's rain into groundwater recharge** (425.8 of 455 mm; real PNW recharge is ~20–40%), and
+426 mm / $S_y$ 0.12 = 3.55 m fully accounts for the modelled rise.
+
+::: {.callout-caution}
+## The vadose column has no lateral outlet (issue #88)
+This is **not** missing runoff. Saturated-area runoff works — but only 0.57% of cells have a table
+shallow enough (<1 m) to trigger it, the baseline table being deep (median 23.4 m).
+
+Everything above field capacity is forced **vertically** into the water table. In forested PNW
+hillslopes most of that water instead travels **downslope as interflow / subsurface stormflow** and
+reaches streams within days. This is issue #44's "subsurface lateral flow" — described in the module
+docstring, never implemented as a flux. Until it exists, **the water-table forecast is not usable**.
+:::
+
+A second, separate gap: recharge reaches the water table **instantaneously** — no unsaturated
+travel-time lag (issue #87). Harmless monthly; first-order on a 10-day horizon, where it times
+storm-driven water-table rise too early.
+
+## The AI weather forcing: earth2studio
+
+### The model that does not predict rain
+
+::: {.callout-important}
+## `GraphCastOperational` emits `tp06` as a zero-filled placeholder
+It is HRES-fine-tuned and does not predict precipitation at all; the `tp06` slot is filled with
+`np.zeros` purely to keep the variable list consistent. It is also the *obvious* choice, being the
+0.25° "operational" model. Selecting it yields a rainfall forecast that is **identically zero**, and
+the water budget will cheerfully forecast a drought with **no error raised**.
+
+`assert_precipitation_is_real()` refuses it by name and refuses any all-zero field, pinned by a test.
+Confirmed from the installed package, not merely from reading the source.
+:::
+
+Surveying every earth2studio prognostic **from source, not documentation**: FuXi is the only *other*
+model that natively emits `tp06`. Pangu, FengWu, Aurora, SFNO, FCN3 and ACE2 emit **no precipitation at
+all**, and would need the `PrecipitationAFNO` diagnostic chained on.
+
+| | GraphCastSmall | **FuXi** (chosen) |
+|---|---|---|
+| precipitation | `tp06` | `tp06` |
+| grid | 1° (~110×75 km) | **0.25°** (~28×19 km) |
+| horizon | ~10 d | **cascade trained for 5 / 10 / 15 d** |
+| runtime dep | `jax[cuda13]` → **GPU-only** | **onnxruntime** |
+
+FuXi covers the +1…+15 day horizon *by design*, at 4× the resolution, and is not CUDA-JAX-locked.
+
+### GPU requirements, and the proposed solution
+
+- **GraphCast cannot run on macOS/arm64 at all** — its earth2studio extra requires `jax[cuda13]`.
+- FuXi is onnxruntime-based and **imports fine on CPU/arm64** (verified: earth2studio 0.16.0,
+  torch 2.13, `CoreMLExecutionProvider` present). But its weights are **9.43 GB** (three 3.13 GB
+  cascade models) and CPU inference over 60 six-hourly steps is impractical. A local run was attempted
+  and **abandoned**: this is a cluster job, not a laptop one.
+- **Solution — SkyPilot → Hyak Tillicum (H200)**, following `gaia-hazlab/skypilot-hyak` conventions
+  (`infra: slurm/tillicum`, `accelerators: H200:1`, `sbatch_options: {account: gaia}`). Config:
+  `deploy/tillicum-fuxi.yaml`.
+
+  ```bash
+  sky launch --infra slurm/tillicum -c fuxi deploy/tillicum-fuxi.yaml
+  ```
+
+  Slurm nodes **do not autostop** — `time` is a hard kill. The GPU job writes only the forcing Zarr;
+  the physics runs anywhere afterwards.
+
+### Known unknowns in the adapter
+
+Not yet validated against a live GPU run. The `tp06` **unit ambiguity** (accumulated metres vs mm,
+which differs between checkpoints) is guarded by a magnitude check that **fails loudly** rather than
+guessing. The 0.25° grid still **under-resolves the Cascade crest**, so orographic enhancement must be
+bias-corrected against PRISM before totals are trusted.
+
+## Data staging: Zarr on Kopah
+
+Staging follows `gaia-hazlab/gaia-cli` exactly, so the stores interoperate: **obstore +
+`zarr.storage.ObjectStore`, `zarr_format=3`, `consolidated=False`, ~10 MB chunks**, credentials from
+`AWS_PROFILE`, Kopah endpoint `https://s3.kopah.uw.edu` via `AWS_ENDPOINT_URL`.
+
+```
+s3://gaia/soil-twin/static/svm_cvm17.zarr        the SVM shallow-Vs grid
+s3://gaia/soil-twin/static/vs30_90m.zarr         derived Vs30
+s3://gaia/soil-twin/forecast/fuxi/<init>.zarr    AI rainfall forcing
+```
+
+**Why Zarr, concretely.** The USGS CVM17 SVM grid ships as a **6.2 GB netCDF that must be downloaded in
+full** — and is captcha-gated, so it cannot even be scripted — before a single Vs30 value can be read.
+Staged as chunked Zarr it is **756 MB**, read lazily: only the Puget window, only the shallow levels.
+Verified: Vs30 re-derived from the Zarr is **bit-identical** to the netCDF-derived map (max abs diff
+0.000e+00 m/s), in 3.7 s.
+
+Chunks are 256×256 spatial tiles × **full depth**, because every read is "a window, all depths" — the
+shape of the travel-time integral.
+
+::: {.callout-note}
+## Two staging gotchas worth recording
+- SkyPilot `file_mounts` **do not work** with Kopah's custom endpoint (documented in
+  `skypilot-hyak/templates/klone-kopah.yaml`). Write with the S3 API instead of mounting.
+- A chunking helper that overrides a caller's dask chunks makes one Zarr chunk span several dask
+  chunks; **xarray refuses outright**, because writing that in parallel can corrupt data. Dask-backed
+  variables must keep the caller's chunking.
+:::
+
+## Observed forcing: PRISM daily (the hindcast, and the truth)
+
+`src/data/fetch_prism_daily.py` reads the **same `gaia-hazlab/prism-stac` catalog as gaia-cli**, via
+`odc.stac`, staged to Zarr. Two additions over gaia-cli's `prism.py`: it also pulls `tmean` (which the
+catalog carries but gaia-cli leaves unused, and which the snow partition needs), and it adds Hamon PET
+**per day** (`fetch_prism_monthly` returns only monthly totals).
+
+This gives two things the AI forecast cannot: a **hindcast** — driving the soil state with what
+actually fell, a perfect-forcing baseline that isolates the physics from weather-forecast error — and
+later the **verification truth** to score FuXi's precipitation against. gaia-cli also stages **HRRR**,
+the natural analysis truth for that scoring.
+
+```bash
+pixi run prism-daily      # observed daily forcing -> Zarr
+pixi run hindcast         # Dec-2025 hindcast on the 90 m grid
+pixi run forecast-leadtime --forcing-zarr s3://gaia/soil-twin/forecast/fuxi/<init>.zarr
+```
+
+## Status
+
+| | |
+|---|---|
+| daily / sub-monthly water budget | **done** (monthly bit-for-bit preserved) |
+| saturated-area runoff | **done** (fires correctly on valley floors) |
+| water state → Vs (petrophysical) | **done** |
+| Zarr staging on Kopah | **done** (SVM verified bit-identical) |
+| PRISM daily observed forcing + hindcast | **done** |
+| FuXi adapter + zero-precip guards | written, **not yet run on a GPU** |
+| **water-table magnitude** | **fails validation, 8–26× too large** (#88) |
+| unsaturated travel-time lag | missing (#87) |
+| infiltration-excess runoff | missing (#57) — needs sub-daily rain |
+| orographic downscaling / bias correction | not started |
+| runoff routing → hydrograph | LandLab's, by design (#55) |
+
+The honest summary: **θ, dv/v and the event-timing behaviour look right; the water-table magnitude does
+not, and is quantified as such.** The next fix is lateral interflow (#88) — testable against the same
+1,205 well observations that exposed the problem.
