@@ -50,6 +50,16 @@ from src.models.water_budget import coupled_water_budget
 
 VS30_TOP_M = 30.0
 
+# Degree-day snow parameters, CALIBRATED against 28 SNOTEL SWE stations in the domain (881-1414 m),
+# fitting MELT-OUT TIMING rather than SWE RMSE. That distinction matters: RMSE is dominated by the
+# accumulation season and selecting on it picked ddf=1.5, which melted so slowly the pack lingered
+# into June and pushed melt release into MAY -- when the wells peak in APRIL. Fitting when the snow
+# actually LEAVES recovers the April melt peak. The snowpack is the water table's clock (#100).
+DDF_MM_C_DAY = 3.0      # melt factor (mm / degC / day)
+T_SNOW_LO = 0.0         # all snow below this
+T_SNOW_HI = 4.0         # all rain above this
+T_MELT = 1.0            # melt threshold
+
 
 @dataclass
 class ForecastForcing:
@@ -92,7 +102,8 @@ class SoilStateForecast:
     source: str
 
 
-def liquid_input(forcing, ddf_mm_c_day=3.0, t_snow_hi=3.0, t_snow_lo=-1.0, t_melt=0.0):
+def liquid_input(forcing, ddf_mm_c_day=DDF_MM_C_DAY, t_snow_hi=T_SNOW_HI,
+                 t_snow_lo=T_SNOW_LO, t_melt=T_MELT):
     """Partition precipitation into liquid input (rain + snowmelt) with a degree-day snow model.
 
     Returns ``precip_mm`` unchanged when no temperature is supplied. The degree-day factor is per
