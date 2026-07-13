@@ -19,10 +19,16 @@ water through explicit fluxes, and lateral redistribution moves water down-gradi
 
 Mass is conserved by construction each step: dS = cap_rise + input - runoff - AET - recharge.
 
-Scope / caveats (tracked as follow-ups): the balance is monthly, so *infiltration-excess* runoff
-(a sub-daily, intensity-driven process) is not represented (issue #57); full channel routing to a
-hydrograph is left to a downstream runoff model (issue #55). Nominal parameters (specific yield,
-recession time, capillary reach, TOPMODEL m) are calibration-pending.
+The timestep is set by ``dt_days`` (default: one month, reproducing the original monthly behaviour).
+A **daily** step is what lets an AI weather forecast (GraphCast et al., 6-hourly) drive the budget at
+the scale storms actually happen: aggregating a 10-day forecast to a monthly mean destroys the very
+event signal the forecast exists to provide, and a concentrated storm generates far more
+saturation-excess runoff (and less recharge) than the same water spread evenly over a month.
+
+Scope / caveats (tracked as follow-ups): *infiltration-excess* runoff (intensity-driven, needs
+sub-daily rainfall) is still not represented (issue #57); full channel routing to a hydrograph is left
+to a downstream runoff model (issue #55). Nominal parameters (specific yield, recession time,
+capillary reach, TOPMODEL m) are calibration-pending.
 """
 
 from __future__ import annotations
@@ -34,10 +40,16 @@ import numpy as np
 # Nominal, calibration-pending parameters.
 SPECIFIC_YIELD = 0.12          # unconfined specific yield S_y (dimensionless)
 RECESSION_MONTHS = 6.0         # water-table baseflow recession time constant tau (months)
-CAP_MAX_MM = 30.0              # max capillary-rise flux into the root zone (mm/month)
+CAP_MAX_MM = 30.0              # max capillary-rise flux into the root zone (mm PER MONTH)
 CAP_FRINGE_M = 1.0             # capillary reach below the root-zone base (m)
 TOPMODEL_M = 0.6               # TOPMODEL transmissivity-decay scale (m of water-table spread)
-_DRAIN_FRAC = 0.6              # gravity-drainage fraction above field capacity (matches bucket)
+_DRAIN_FRAC = 0.6              # gravity-drainage fraction above field capacity, PER MONTH (legacy)
+DAYS_PER_MONTH = 30.436875     # mean Gregorian month; the unit the rate parameters are quoted in
+# Gravity drainage above field capacity is a ~1-3 day process. Note that the legacy monthly
+# drain_frac=0.6 implies a timescale of 30.44/ln(2.5) ~ 33 days -- i.e. it is a lumped monthly
+# calibration with no physical meaning at daily resolution. Sub-monthly runs must use a real
+# timescale instead, or the column drains ~15x too slowly. Calibration-pending (see issue).
+DRAIN_TAU_DAYS = 2.0           # e-folding timescale of gravity drainage above field capacity (days)
 
 
 @dataclass
@@ -67,15 +79,28 @@ def _capillary_rise(wt_depth_m, root_depth_m, deficit_frac, cap_max_mm, fringe_m
 def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, root_depth_m=1.0,
                          specific_yield=SPECIFIC_YIELD, recession_months=RECESSION_MONTHS,
                          cap_max_mm=CAP_MAX_MM, cap_fringe_m=CAP_FRINGE_M, drain_frac=_DRAIN_FRAC,
-                         wt_depth0_m=5.0, init="fc"):
-    """Time-step the coupled vadose-column + water-table budget.
+                         wt_depth0_m=5.0, init="fc", dt_days=None, drain_tau_days=DRAIN_TAU_DAYS):
+    """Time-step the coupled vadose-column + water-table budget at an arbitrary timestep.
 
-    ``liquid_in_mm`` (rain + snowmelt) and ``pet_mm`` are (t, ...) arrays; the envelope limits
-    (``theta_wp/fc/sat``) broadcast to ``(...)``. Returns a :class:`WaterBudget`. The water table
-    is a linear reservoir in head anomaly h: ``h += (R/S_y - h/tau) dt`` with ``R`` the recharge in
-    metres and ``dt = 1`` month; ``wt_depth = wt_depth0 - h`` (rising head -> shallower table).
-    Capillary rise uses the *previous* step's table (explicit coupling), so the loop
-    theta -> recharge -> table -> capillary rise -> theta is closed without an implicit solve.
+    ``liquid_in_mm`` (rain + snowmelt) and ``pet_mm`` are (t, ...) arrays **per timestep** — mm/month
+    for a monthly run, mm/day for a daily one. The envelope limits (``theta_wp/fc/sat``) broadcast to
+    ``(...)``. Returns a :class:`WaterBudget`.
+
+    ``dt_days`` sets the step length. ``None`` (default) means one mean month and reproduces the
+    original monthly behaviour exactly. Three of the parameters are **per-month rates**, and each is
+    converted to the step so that a daily run is physically equivalent rather than 30x too fast:
+
+      - recession: ``h -= h * dt/tau`` with ``tau = recession_months`` in days,
+      - gravity drainage: sub-monthly steps use a physical e-folding time ``drain_tau_days``
+        (~1-3 d), **not** the lumped monthly ``drain_frac`` (which implies an unphysical ~33 d),
+      - capillary rise: ``cap_max_mm`` is a mm/month flux, scaled linearly by ``dt/month``.
+
+    Getting this wrong is the whole difficulty of driving the budget from a sub-daily AI weather
+    forecast: pass mm/day into a model whose rates are per-month and the column drains ~30x too fast.
+
+    The water table is a linear reservoir in head anomaly h (``wt_depth = wt_depth0 - h``; rising head
+    -> shallower table). Capillary rise uses the *previous* step's table (explicit coupling), so the
+    loop theta -> recharge -> table -> capillary rise -> theta closes without an implicit solve.
     """
     liquid = np.asarray(liquid_in_mm, dtype="float64")
     pet = np.asarray(pet_mm, dtype="float64")
@@ -89,7 +114,20 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
     S = np.broadcast_to(S, liquid.shape[1:]).astype("float64").copy()
     h = np.zeros_like(S)                                       # water-table head anomaly (m)
     wt0 = np.broadcast_to(np.asarray(wt_depth0_m, float), S.shape).astype("float64")
-    tau = max(recession_months, 1e-6)
+
+    # --- per-month rates -> per-step rates -------------------------------------------------------
+    if dt_days is None:                                        # legacy monthly step, bit-for-bit
+        step_frac = 1.0
+        recess = 1.0 / max(recession_months, 1e-6)
+        drain_step = np.clip(drain_frac, 0.0, 1.0)             # the lumped per-month fraction, as-is
+    else:
+        step_frac = float(dt_days) / DAYS_PER_MONTH
+        recess = float(dt_days) / max(recession_months * DAYS_PER_MONTH, 1e-6)
+        # NOT the compounded monthly fraction: that implies a ~33 d drainage timescale (see
+        # DRAIN_TAU_DAYS). Sub-monthly drainage uses its own physical e-folding time.
+        drain_step = 1.0 - np.exp(-float(dt_days) / max(drain_tau_days, 1e-6))
+    recess = min(recess, 1.0)                                  # never overshoot the reservoir
+    cap_max_step = cap_max_mm * step_frac                      # mm/month -> mm/step
 
     theta = np.empty_like(liquid)
     wt = np.empty_like(liquid); rech_o = np.empty_like(liquid)
@@ -98,21 +136,21 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
     for t in range(nt):
         wt_depth = wt0 - h                                    # current table depth (m)
         deficit_frac = (Ssat - S) / span
-        cap = _capillary_rise(wt_depth, root_depth_m, deficit_frac, cap_max_mm, cap_fringe_m)
+        cap = _capillary_rise(wt_depth, root_depth_m, deficit_frac, cap_max_step, cap_fringe_m)
         cap_eff = np.minimum(S + cap, Ssat) - S              # actual added (exact mass balance)
         S = S + cap_eff
 
         S = S + liquid[t]
         runoff = np.maximum(S - Ssat, 0.0); S = S - runoff   # saturation-excess surface runoff
         aet = np.minimum(pet[t], np.maximum(S - Swp, 0.0)); S = S - aet
-        rech = np.maximum(S - Sfc, 0.0) * drain_frac; S = S - rech   # deep percolation = recharge
+        rech = np.maximum(S - Sfc, 0.0) * drain_step; S = S - rech   # deep percolation = recharge
         S = np.clip(S, Swp, Ssat)
 
         theta[t] = S / z
         rech_o[t] = rech; run_o[t] = runoff; aet_o[t] = aet; cap_o[t] = cap_eff
 
         # water-table reservoir: recharge (m) raises head, recession lowers it
-        h = h + (rech / 1000.0 / max(specific_yield, 1e-6) - h / tau)
+        h = h + (rech / 1000.0 / max(specific_yield, 1e-6) - h * recess)
         wt[t] = wt0 - h
 
     return WaterBudget(theta=theta.astype("float32"), wt_depth_m=wt.astype("float32"),
