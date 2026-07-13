@@ -118,3 +118,37 @@ def write_zarr(ds, path, mode="w"):
 def open_zarr(path):
     """Open a Zarr store from a local path or Kopah/S3, lazily (no full download)."""
     return xr.open_dataset(store_for_path(path), engine="zarr", consolidated=False)
+
+
+def list_stores(prefix, suffix=".zarr"):
+    """List the Zarr stores under an ``s3://`` prefix (Kopah) or a local directory.
+
+    Used to discover which FuXi forecast initialisations Tillicum has actually produced, rather than
+    assuming. Returns full URIs, sorted. An unreachable/empty prefix returns [] (never raises), so a
+    caller can report "not generated yet" instead of failing.
+    """
+    prefix = str(path_str := str(prefix)).rstrip("/")
+    if not is_remote(prefix):
+        p = __import__("pathlib").Path(prefix)
+        return sorted(str(q) for q in p.glob(f"*{suffix}")) if p.is_dir() else []
+    try:
+        from obstore.auth.boto3 import Boto3CredentialProvider
+        from obstore.store import from_url
+
+        kw = {"credential_provider": Boto3CredentialProvider(), "region": "us-west-2"}
+        endpoint = os.environ.get("AWS_ENDPOINT_URL")
+        if endpoint:
+            kw["endpoint"] = endpoint
+            kw["virtual_hosted_style_request"] = False
+        store = from_url(prefix, **kw)
+        names = set()
+        for batch in store.list():
+            for obj in batch:
+                key = obj["path"] if isinstance(obj, dict) else obj.path
+                head = str(key).split("/", 1)[0]             # <init>.zarr/<chunk...>
+                if head.endswith(suffix):
+                    names.add(head)
+        return sorted(f"{prefix}/{n}" for n in names)
+    except Exception as exc:                                 # unreachable / no creds / empty
+        logger.warning("could not list %s (%s)", prefix, exc)
+        return []

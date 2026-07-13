@@ -6,11 +6,20 @@ antecedent state is set.
 
 Three streams, and they play different roles — this is the point of staging them together:
 
-  FORCING     PRISM daily precip + tmean (+ Hamon PET)   what went in
-  STATE       NWIS wells, depth to water                  where the water table sat
-  FLUX        USGS river gauges, discharge -> mm/day      what came out (and, via baseflow
-                                                          separation, how much came out as
-                                                          groundwater vs quickflow)
+  FORCING     PRISM daily precip + tmean (+ Hamon PET)   what went in            (observed)
+  STATE       NWIS wells, depth to water                  where the water table sat (observed)
+  FLUX        USGS river gauges, discharge -> mm/day      what came out            (observed)
+  FORECAST    FuXi 15-day precip, generated on Tillicum,  what we PREDICT would go in
+              staged to Kopah, read lazily from here
+
+The forecast is the only stream that is not an observation, and it is what the other three exist to
+score. FuXi needs an H200 (9.4 GB of weights; GraphCast's jax[cuda13] will not even install on
+arm64), so it is generated ON TILLICUM and staged to Kopah -- this end only reads the Zarr. A rolling
+weekly initialisation gives ~30 forecasts across the wet season, which is what lets us measure skill
+AS A FUNCTION OF LEAD TIME (+1..+15 d) rather than from a single lucky run:
+
+    FuXi precip     vs PRISM        -> weather-forecast skill by lead
+    forecast state  vs wells/gauges -> soil-state forecast skill by lead
 
 Together they **close the water budget**: precipitation in, storage change observed by the wells,
 and every outgoing flux observed by the gauges. Wells alone constrain the state but not the fluxes,
@@ -29,7 +38,9 @@ import argparse
 import logging
 from pathlib import Path
 
-from src.io.zarr_store import GAIA_BUCKET, write_zarr
+import pandas as pd
+
+from src.io.zarr_store import GAIA_BUCKET, open_zarr, write_zarr
 
 logger = logging.getLogger("stage_mvp")
 
@@ -37,6 +48,21 @@ logger = logging.getLogger("stage_mvp")
 MVP_START = "2025-09-01"
 MVP_END = "2026-03-31"
 PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
+FUXI_PREFIX = f"{GAIA_BUCKET}/forecast/fuxi"
+FORECAST_EVERY_DAYS = 7        # a rolling init each week -> ~30 forecasts across the wet season
+FUXI_LEAD_DAYS = 15            # FuXi's long cascade is trained to 15 d
+
+
+def fuxi_init_dates(start, end, every_days=FORECAST_EVERY_DAYS, lead_days=FUXI_LEAD_DAYS):
+    """Forecast initialisation dates across the window.
+
+    Each init is verified against the observations over its own +1..+15 day lead, so the last useful
+    init is `lead_days` before the window ends. A rolling weekly init gives ~30 forecasts across the
+    season -- enough to measure skill AS A FUNCTION OF LEAD TIME, which a single forecast cannot.
+    """
+    last = pd.Timestamp(end) - pd.Timedelta(days=lead_days)
+    return [d.strftime("%Y-%m-%d")
+            for d in pd.date_range(start, last, freq=f"{every_days}D")]
 
 
 def main():
@@ -45,7 +71,10 @@ def main():
     p.add_argument("--start", default=MVP_START)
     p.add_argument("--end", default=MVP_END)
     p.add_argument("--kopah", action="store_true", help="stage to s3://gaia/soil-twin instead of local")
-    p.add_argument("--skip", nargs="*", default=[], choices=["prism", "gauges", "wells"])
+    p.add_argument("--forecast-every", type=int, default=FORECAST_EVERY_DAYS,
+                   help="days between FuXi initialisations across the window")
+    p.add_argument("--skip", nargs="*", default=[],
+                   choices=["prism", "gauges", "wells", "forecast"])
     a = p.parse_args()
 
     root = f"{GAIA_BUCKET}" if a.kopah else "data/processed"
@@ -80,6 +109,41 @@ def main():
         dst.parent.mkdir(parents=True, exist_ok=True)
         out.to_parquet(dst, index=False)
         logger.info("wrote %s", dst)
+
+    # --- FORECAST: FuXi, generated on Tillicum, staged on Kopah, fetched here ---------------------
+    # The fourth stream, and the only one that is not an observation. Without it stage-mvp only
+    # describes the PAST; with it we can score the forecast against all three observation streams:
+    #   FuXi precip   vs  PRISM        -> weather-forecast skill by lead time
+    #   forecast state vs wells/gauges -> soil-state forecast skill by lead time
+    # FuXi needs an H200 (9.4 GB of weights, 60 six-hourly steps), so it is generated ON TILLICUM and
+    # staged to Kopah; this end only reads the Zarr lazily. Nothing is fabricated when it is absent.
+    if "forecast" not in a.skip:
+        from src.io.zarr_store import list_stores
+        found = list_stores(FUXI_PREFIX)
+        inits = fuxi_init_dates(a.start, a.end, every_days=a.forecast_every)
+        have = {f.rstrip("/").split("/")[-1].replace(".zarr", "") for f in found}
+        missing = [d for d in inits if d not in have]
+
+        logger.info("FuXi forecasts on Kopah (%s): %d found, %d of %d wanted inits missing",
+                    FUXI_PREFIX, len(found), len(missing), len(inits))
+        if found:
+            for uri in found[:3]:
+                try:
+                    ds = open_zarr(uri)
+                    logger.info("  %s: %s", uri.split("/")[-1], dict(ds.sizes))
+                except Exception as exc:
+                    logger.warning("  %s unreadable (%s)", uri, exc)
+        if missing:
+            logger.warning(
+                "NOT GENERATED YET — FuXi runs on Tillicum, not here (it needs an H200; the weights "
+                "alone are 9.4 GB and GraphCast's jax[cuda13] will not even install on arm64).\n"
+                "Generate the %d missing initialisations with:\n\n"
+                "    sky launch --infra slurm/tillicum -c fuxi deploy/tillicum-fuxi.yaml \\\n"
+                "      --env INITS=\"%s\" \\\n"
+                "      --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY\n\n"
+                "Each init writes %s/<init>.zarr; re-run `pixi run stage-mvp` to pull them.",
+                len(missing), ",".join(missing[:6]) + ("..." if len(missing) > 6 else ""),
+                FUXI_PREFIX)
 
     # --- STATE: NWIS wells (where the table sat) --------------------------------------------------
     if "wells" not in a.skip:

@@ -28,19 +28,23 @@ config:
   slurm:
     sbatch_options:
       account: gaia
-      # WARNING: time is a HARD limit -- the node is killed at expiry, finished or not.
-      # FuXi is 60 six-hourly steps through a 3-model cascade (~9.4 GB of weights to pull on
-      # first run). 1 h is generous on an H200; raise it if the HF download is slow.
-      time: "1:00:00"
-      # qos: debug            # <- debug qos caps runtime at 1 h; fine for a first run
+      # WARNING: time is a HARD limit -- the node is killed at expiry, finished or not, and Slurm
+      # nodes do NOT autostop. Size it for the WHOLE SWEEP: 9.4 GB of weights pulled once, then
+      # 60 six-hourly steps per init through the 3-model cascade. Start with one init and time it.
+      # (The `debug` qos caps runtime at 1 h -- too short for a 29-init sweep.)
+      time: "8:00:00"
 
 workdir: .
 
 envs:
-  START: "2024-12-01"           # forecast initialisation (override: --env START=YYYY-MM-DD)
+  # A COMMA-SEPARATED SWEEP of initialisations, not a single run. `pixi run stage-mvp` prints the
+  # exact list of inits still missing from Kopah; paste it here (or pass --env INITS=...).
+  # A rolling weekly init across the wet season (~29 forecasts) is what lets us measure forecast
+  # skill AS A FUNCTION OF LEAD TIME (+1..+15 d) instead of from one lucky run.
+  INITS: "2025-12-01"
   LEAD_DAYS: "15"
-  # Staged straight to Kopah as Zarr -- nothing is copied by hand (the gaia-cli staging pattern).
-  OUT: "s3://gaia/soil-twin/forecast/fuxi/2024-12-01.zarr"
+  # Each init is staged straight to Kopah as Zarr -- nothing is copied by hand (gaia-cli pattern).
+  OUT_PREFIX: "s3://gaia/soil-twin/forecast/fuxi"
 
 # Kopah credentials. NOTE (from skypilot-hyak/templates/klone-kopah.yaml): SkyPilot `file_mounts`
 # does NOT work with Kopah's custom endpoint, so we do not mount -- we write with the S3 API directly.
@@ -65,19 +69,39 @@ run: |
   source ~/fuxi-venv/bin/activate
   nvidia-smi
 
-  # Writes daily precip_mm + tmean_c (0.25 deg, Puget/Cascades) as chunked Zarr on Kopah.
-  # Fails loudly if tp06 comes back zero-filled (the GraphCastOperational trap) or in the wrong units.
-  python -m src.data.fetch_earth2studio \
-    --model FuXi \
-    --start "${START}" \
-    --lead-days "${LEAD_DAYS}" \
-    --out "${OUT}"
+  # Sweep the initialisations. The FuXi weights (9.4 GB, short/medium/long cascade) are pulled ONCE
+  # on the first init and cached, so a 29-init sweep is not 29 downloads -- which is exactly why the
+  # sweep belongs in one job rather than one job per init (Slurm nodes do not autostop, and `time` is
+  # a hard kill: size it for the whole sweep).
+  IFS=',' read -ra LIST <<< "${INITS}"
+  echo "sweeping ${#LIST[@]} initialisations -> ${OUT_PREFIX}"
 
-  python - <<EOF
-  from src.io.zarr_store import open_zarr
-  ds = open_zarr("${OUT}")
-  print(ds)
-  print("total precip over window: %.1f mm (grid mean)" % float(ds.precip_mm.mean(["lat","lon"]).sum()))
+  for INIT in "${LIST[@]}"; do
+    INIT="$(echo "$INIT" | xargs)"          # trim
+    OUT="${OUT_PREFIX}/${INIT}.zarr"
+    echo "=== FuXi init ${INIT} -> ${OUT} ==="
+    # Fails loudly if tp06 comes back zero-filled (the GraphCastOperational trap) or in wrong units.
+    # || true so one bad init (e.g. missing GFS ICs) does not kill the whole sweep.
+    python -m src.data.fetch_earth2studio \
+      --model FuXi \
+      --start "${INIT}" \
+      --lead-days "${LEAD_DAYS}" \
+      --out "${OUT}" || echo "WARN: init ${INIT} FAILED, continuing sweep"
+  done
+
+  echo "=== sweep complete; what landed on Kopah ==="
+  python - <<'EOF'
+  import os
+  from src.io.zarr_store import list_stores, open_zarr
+  found = list_stores(os.environ["OUT_PREFIX"])
+  print(f"{len(found)} forecasts on Kopah")
+  for uri in found:
+      try:
+          ds = open_zarr(uri)
+          tot = float(ds.precip_mm.mean([d for d in ds.precip_mm.dims if d != "lead_time"]).sum())
+          print(f"  {uri.split('/')[-1]:22s} {dict(ds.sizes)}  total precip {tot:7.1f} mm")
+      except Exception as exc:
+          print(f"  {uri} UNREADABLE: {exc}")
   EOF
 
 # Then, anywhere (no GPU, no file copy -- the Zarr is read lazily from Kopah):
