@@ -28,7 +28,9 @@ water through explicit fluxes, and lateral redistribution moves water down-gradi
       table. Omitting it turned ~94% of rain into recharge (issue #88).
 
 Mass is conserved by construction each step:
-``dS = cap_rise + input - runoff - AET - recharge - interflow``.
+``dS = cap_rise + input - runoff - AET - recharge - interflow``, and the water table balances
+``S_y * dh = recharge - baseflow``. Streamflow, the quantity a gauge actually measures, is
+``Q = runoff + interflow + baseflow``.
 
 The timestep is set by ``dt_days`` (default: one month, reproducing the original monthly behaviour).
 A **daily** step is what lets an AI weather forecast (GraphCast et al., 6-hourly) drive the budget at
@@ -51,7 +53,13 @@ from dataclasses import dataclass
 import numpy as np
 
 # Nominal, calibration-pending parameters.
-SPECIFIC_YIELD = 0.12          # unconfined specific yield S_y (dimensionless)
+# --- CALIBRATED (D7, #98) against the gauges AND the wells, in DAILY mode, with the snow clock on.
+# Each parameter is pinned by a DIFFERENT observation, so this is a constrained fit, not curve-fitting:
+#   specific_yield      <- water-table seasonal AMPLITUDE (1.06 m, 26,816 well obs)
+#   k_aniso             <- QUICKFLOW / runoff coefficient Q/P (0.57-0.73, per-basin closure)
+#   recharge_ref_mm_day <- BASEFLOW INDEX (0.47, Lyne-Hollick separation, 6 gauges)
+# Result: BFI 0.52 (obs 0.47) | Q/P 0.71 (obs 0.65) | amplitude 1.02 m (obs 1.06 m).
+SPECIFIC_YIELD = 0.30          # unconfined specific yield S_y -- calibrated (was a nominal 0.12)
 RECESSION_MONTHS = 6.0         # water-table baseflow recession time constant tau (months)
 CAP_MAX_MM = 30.0              # max capillary-rise flux into the root zone (mm PER MONTH)
 CAP_FRINGE_M = 1.0             # capillary reach below the root-zone base (m)
@@ -66,13 +74,18 @@ DRAIN_TAU_DAYS = 2.0           # e-folding timescale of gravity drainage above f
 # Lateral:vertical hydraulic-conductivity anisotropy K_h/K_v. Layered, macroporous forest soils are
 # strongly anisotropic (literature 10-100), which is why hillslope drainage leaves DOWNSLOPE as
 # interflow rather than recharging the water table. Calibration-pending (issue #88).
-K_ANISO = 20.0
+# NOTE, honestly: the fitted Ka is BELOW the 10-100 literature range for forest-soil anisotropy. On
+# this steep domain (median slope 13.3 deg) Ka=20 drove f_lat to ~0.82 -- 82% of drainage shed
+# laterally -- which starved recharge and gave Q/P 0.96 against an observed 0.65. Either the
+# literature range does not transfer to a 90 m cell, or this single term is absorbing other processes.
+# Flagged rather than dressed up.
+K_ANISO = 2.0
 # Groundwater discharge to the stream network (baseflow). The table relaxes toward the local drainage
 # elevation (HAND) on this timescale -- the rivers take the water away. This is the SELF-LIMITING sink
 # the model lacked: without it recharge piles up and the water table runs away (issue #88).
 # Long-term mean recharge used to anchor the stream-discharge coefficient so the OBSERVED baseline
 # water table is a steady state. PNW: ~1500 mm/yr precip, ~40% recharge -> ~600 mm/yr ~ 1.6 mm/day.
-RECHARGE_REF_MM_DAY = 1.6      # calibration-pending (issue #88)
+RECHARGE_REF_MM_DAY = 3.0      # calibrated (D7, #98)
 
 
 @dataclass
@@ -84,6 +97,7 @@ class WaterBudget:
     recharge_mm: np.ndarray    # (t, ...) deep percolation to the water table
     runoff_mm: np.ndarray      # (t, ...) saturation-excess surface runoff generated
     interflow_mm: np.ndarray   # (t, ...) lateral subsurface stormflow leaving the column downslope
+    baseflow_mm: np.ndarray    # (t, ...) groundwater discharged to the stream network ("the rivers")
     aet_mm: np.ndarray         # (t, ...) actual evapotranspiration
     cap_rise_mm: np.ndarray    # (t, ...) capillary rise from the water table into the root zone
 
@@ -95,8 +109,10 @@ def _capillary_rise(wt_depth_m, root_depth_m, deficit_frac, cap_max_mm, fringe_m
     scales with how close the table is to the root zone and with the current storage deficit
     (a full column pulls nothing up). ``deficit_frac`` in [0, 1] is (S_sat - S)/(S_sat - S_wp).
     """
-    reach = root_depth_m + fringe_m
-    proximity = np.clip((reach - wt_depth_m) / max(reach, 1e-6), 0.0, 1.0)
+    # root_depth_m may be a PER-CELL array (D3 derives it from soil thickness), so use np.maximum --
+    # Python's max() raises on arrays, and root depth was a scalar until the soils were regridded.
+    reach = np.asarray(root_depth_m, dtype="float64") + fringe_m
+    proximity = np.clip((reach - wt_depth_m) / np.maximum(reach, 1e-6), 0.0, 1.0)
     return cap_max_mm * proximity * np.clip(deficit_frac, 0.0, 1.0)
 
 
@@ -191,6 +207,7 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
 
     theta = np.empty_like(liquid)
     int_o = np.empty_like(liquid)
+    bf_o = np.empty_like(liquid)
     wt = np.empty_like(liquid); rech_o = np.empty_like(liquid)
     run_o = np.empty_like(liquid); aet_o = np.empty_like(liquid); cap_o = np.empty_like(liquid)
 
@@ -248,16 +265,22 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
         # ran away (issue #88). hand_m=None keeps the legacy recession.
         h = h + rech / 1000.0 / max(specific_yield, 1e-6)
         if hand_m is None:
-            h = h - h * recess                                # legacy: relax to the baseline
+            drop = h * recess                                 # legacy: relax to the baseline
         else:
             d_now = wt0 - h                                   # current depth below surface (m)
             to_river = np.clip(hand - d_now, 0.0, None)       # head above the nearest drainage (m)
-            h = h - to_river * gw_recess                      # baseflow, gradient-weighted (below)
+            drop = to_river * gw_recess                       # relax toward the drainage
+        h = h - drop
+        # RECORD the discharge as a flux. It was previously applied to the head but never reported,
+        # so every budget comparison scored the model's baseflow as ZERO against an observed BFI of
+        # ~0.5 -- an accounting artefact, not (only) a physics failure. A head drop of `drop` metres
+        # releases S_y * drop of water to the stream.
+        bf_o[t] = np.clip(drop, 0.0, None) * max(specific_yield, 1e-6) * 1000.0
         wt[t] = wt0 - h
 
     return WaterBudget(theta=theta.astype("float32"), wt_depth_m=wt.astype("float32"),
                        recharge_mm=rech_o.astype("float32"), runoff_mm=run_o.astype("float32"),
-                       interflow_mm=int_o.astype("float32"),
+                       interflow_mm=int_o.astype("float32"), baseflow_mm=bf_o.astype("float32"),
                        aet_mm=aet_o.astype("float32"), cap_rise_mm=cap_o.astype("float32"))
 
 

@@ -13,7 +13,7 @@ from src.data.fetch_earth2studio import (
     assert_precipitation_is_real,
 )
 from src.models.forecast import ForecastForcing, forecast_soil_state, liquid_input
-from src.models.water_budget import coupled_water_budget
+from src.models.water_budget import SPECIFIC_YIELD, coupled_water_budget
 
 ENV = dict(theta_wp=0.10, theta_fc=0.25, theta_sat=0.45)
 
@@ -113,7 +113,9 @@ def test_forecast_storm_response_has_the_right_physics():
     # the RECESSION timescale, not the rise. Rise must match the reservoir arithmetic.
     rise = 5.0 - fc.wt_depth_m.min()
     assert rise > 0.5                                           # a real storm lifts the table
-    assert abs(rise - fc.recharge_mm.sum() / 1000.0 / 0.12) < 0.05   # == R/S_y
+    # == R/S_y. Reference the actual default, not a hard-coded 0.12: S_y is CALIBRATED
+    # (D7) against the well seasonal amplitude, so pinning it here would break on recalibration.
+    assert abs(rise - fc.recharge_mm.sum() / 1000.0 / SPECIFIC_YIELD) < 0.05
     # and it recedes only slowly: still well above baseline at the end of the window
     assert (5.0 - fc.wt_depth_m[-1, 0]) > 0.8 * rise
 

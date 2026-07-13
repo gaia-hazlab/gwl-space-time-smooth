@@ -128,6 +128,8 @@ baseline-wt-domain = "python -m src.models.baseline_wt_domain"
 # D8: snow is the water table's clock (#100)
 snotel-swe = "python -m src.data.fetch_snotel_swe"
 calibrate-snow = "python notebooks/calibrate_snow_swe.py"
+# D7: joint flux calibration against gauges + wells (closes #88/#90)
+calibrate-fluxes = "python notebooks/calibrate_fluxes.py"
 vs30-domain = "python -m src.data.fetch_vs30 --source svm --svm-zarr data/processed/svm_cvm17.zarr --vs-var vs --depth-name z --like data/processed/domain_grid_90m.tif --output data/processed/vs30_domain_90m.tif --zarr-out data/processed/vs30_domain_90m.zarr"
 stage-mvp = "python -m src.data.stage_mvp_window"
 gauges = "python -m src.data.fetch_usgs_discharge --start 2025-09-01 --end 2026-03-31"
