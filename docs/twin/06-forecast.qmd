@@ -103,40 +103,60 @@ scored against different data: dv/v against event *timing*, wells against the cu
 state*.
 :::
 
-![**Hindcast, December 2025**, forced by *observed* PRISM daily rainfall on the 90 m Puget/Cascades grid
-(440k land cells). Two storms (days 8–12, 15–19) give two θ / dv/v peaks but a single cumulative
-water-table rise. The **runoff panel and the water-table rise should not be believed** — see the
-validation below.](assets/hindcast_dec2025.png){#fig-hindcast}
+![**Hindcast, December 2025**, forced by *observed* PRISM daily rainfall. Two storms (days 8–12,
+15–19) give two θ / dv/v peaks but a single cumulative water-table rise — the qualitative behaviour
+that motivated everything below. **This figure predates v0.4**: it is the *uncalibrated* model on the
+old Puget-lowland grid, so its runoff panel and the magnitude of the water-table rise are the ones the
+gauges later showed to be wrong. It is kept because the *structure* it reveals — event detectors vs
+integrator — survived the calibration unchanged.](assets/hindcast_dec2025.png){#fig-hindcast}
 
-## Validation against the wells — and a failure
+## Validation: the budget now closes against gauges and wells
 
-The hindcast is forced by *observed* rain, so it isolates the physics from weather-forecast error. That
-makes it a fair test, and the physics failed it.
+The hindcast is forced by *observed* rain, so it isolates the physics from weather-forecast error.
+That makes it a fair test — and the physics failed it badly, until the domain was extended to the
+Cascades (v0.4) and the fluxes were calibrated against **both** observation types.
 
-| Nov→Dec water-table rise | |
-|---|---|
-| observed — 1205 paired shallow NWIS wells, 16 yr — median | **+0.12 m** |
-| observed — mean / p90 | +0.21 m / +0.84 m |
-| **modelled (Dec 2025)** | **+3.24 m** |
+**Wells constrain the state; gauges constrain the fluxes.** That distinction is the whole story: the
+water table could be 8–26× wrong while every field *looked* plausible, because nothing in the well
+data sees the flux partition directly. River discharge does.
 
-**Over-predicted by roughly 8–26×.** The cause is quantified: domain-wide the budget turns **94% of
-December's rain into groundwater recharge** (425.8 of 455 mm; real PNW recharge is ~20–40%), and
-426 mm / $S_y$ 0.12 = 3.55 m fully accounts for the modelled rise.
+| | model | observed |
+|---|---|---|
+| **baseflow index** | **0.52** | 0.47 (Lyne–Hollick separation, 6 gauges) |
+| **runoff coefficient Q/P** | **0.71** | 0.57–0.73 (per-basin closure) |
+| **seasonal amplitude** | **1.02 m** | 1.06 m (26,816 shallow-well obs) |
+| water-table peak month | 5 | 4 |
+| *before v0.4* | *BFI 0.00, Q/P 0.96, Nov→Dec rise **+3.24 m*** | *(observed +0.12 m)* |
 
-::: {.callout-caution}
-## The vadose column has no lateral outlet (issue #88)
-This is **not** missing runoff. Saturated-area runoff works — but only 0.57% of cells have a table
-shallow enough (<1 m) to trigger it, the baseline table being deep (median 23.4 m).
+Each parameter is pinned by a **different** observation — $S_y$ by the amplitude, $k_a$ by $Q/P$,
+the river-sink strength by the BFI — so this is a constrained fit, not curve-fitting. It is done in
+**daily** mode, the mode we forecast in: daily and monthly drain 4.7× differently (issue #89), and a
+monthly calibration already produced one false "perfect fit".
 
-Everything above field capacity is forced **vertically** into the water table. In forested PNW
-hillslopes most of that water instead travels **downslope as interflow / subsurface stormflow** and
-reaches streams within days. This is issue #44's "subsurface lateral flow" — described in the module
-docstring, never implemented as a flux. Until it exists, **the water-table forecast is not usable**.
+::: {.callout-important}
+## What actually closed it: two mechanisms and two of our own errors
+**The rivers take the water.** Groundwater standing above the local drainage flows to it, and HAND is
+literally the *Height Above Nearest Drainage* — so the table relaxes toward the stream, and the higher
+it climbs the harder it drains. Without this self-limiting sink, recharge piles up without bound.
+
+**Snowmelt is the recharge clock, not rainfall.** Precipitation peaks in November; the snowpack peaks
+in February; **melt release peaks in April — and so does the observed water table.** The snowpack, not
+the unsaturated zone, is what lags the system. It delivers ~312 mm/yr (20% of precipitation) when rain
+*and* ET are low, so an unusually large share becomes recharge.
+
+And two errors that were ours, not the model's:
+
+- **"Model BFI = 0.00" was largely an accounting artefact.** The budget recorded recharge, runoff and
+  interflow but had **no baseflow field** — the sink removed head and the flux was never *written*.
+  Scored properly, the uncalibrated model already had BFI 0.22.
+- **The first calibration objective omitted the amplitude**, leaving $S_y$ unconstrained. It drifted to
+  the grid edge and gave a 5.4 m seasonal swing — fluxes right, storage wrong.
 :::
 
-A second, separate gap: recharge reaches the water table **instantaneously** — no unsaturated
-travel-time lag (issue #87). Harmless monthly; first-order on a 10-day horizon, where it times
-storm-driven water-table rise too early.
+**Honest residuals.** The fitted $k_a = 2$ sits *below* the 10–100 literature range for forest-soil
+anisotropy (flagged in the code, not dressed up). And the peak is one month **late** — note the
+direction: an unsaturated travel-time lag (issue #87) would make it **worse**, which independently
+confirms that #87 was correctly demoted once snowmelt was identified as the clock.
 
 ## The AI weather forcing: earth2studio
 

@@ -12,7 +12,7 @@ command that produced it is named.
 
 | component | status |
 |---|---|
-| Static layers (terrain, soils, Vs30) at 90 m | **done** — Puget-lowland strip only |
+| Static layers (terrain, soils, Vs30) at 90 m | **done** — **western Cascades**, 2.96 M cells (v0.4) |
 | Vs30 from the SVM (Grant, Wirth & Stone 2025) | **done**, staged as Zarr on Kopah |
 | Daily water budget (θ, water table, Vs) | **done** — monthly path preserved bit-for-bit |
 | Saturated-area runoff + lateral interflow + river/baseflow sink | **done** — see caveat below |
@@ -20,38 +20,42 @@ command that produced it is named.
 | Zarr staging on Kopah (gaia-cli conventions) | **done** |
 | Observed forcing (PRISM daily), state (NWIS wells), flux (USGS gauges) | **done**, Fall–Winter 2025-26 |
 | FuXi 15-day AI forecast adapter | **written, never run on a GPU** |
-| **Water-table magnitude** | **FAILS validation** — see below |
+| Snow module (degree-day) | **done** — calibrated against 30 SNOTEL SWE stations |
+| **Water-table magnitude + phase** | **PASSES** — see below |
 
-### The one thing that is wrong, stated plainly
+### The water budget now closes against the observations
 
-The **θ / dv/v half of the twin looks right**; the **water-table half does not**.
+v0.4 fixed it. The model is calibrated in **daily** mode against **gauges** (fluxes) and **wells**
+(state), with the snow clock on:
 
 | | model | observed |
 |---|---|---|
-| quickflow (Newaukum Ck) | 328 mm | 278 mm ✓ |
-| **baseflow** | **0 mm** | **344 mm** |
-| **baseflow index** | **0.00** | **0.55** |
-| Nov→Dec water-table rise | **+3.24 m** | **+0.12 m** (median, 1205 paired wells) |
+| **baseflow index** | **0.52** | 0.47 (Lyne–Hollick, 6 gauges) |
+| **runoff coefficient Q/P** | **0.71** | 0.57–0.73 (per-basin closure) |
+| **seasonal amplitude** | **1.02 m** | 1.06 m (26,816 shallow-well obs) |
+| water-table peak month | 5 | 4 |
+| *before v0.4* | *BFI 0.00, Q/P 0.96, Nov→Dec rise **+3.24 m*** | *(obs +0.12 m)* |
 
-Two distinct errors, both now measured:
+Each parameter is pinned by a **different** observation — `S_y` ← amplitude, `k_aniso` ← Q/P,
+`recharge_ref` ← BFI — so it is a constrained fit, not curve-fitting.
 
-1. **Magnitude** — the river/baseflow sink discharges nothing. 438 mm of recharge is retained instead
-   of returning to the streams. Interflow *works* (quickflow 328 vs 278 mm observed); the sink does not.
-2. **Phase** — the observed water table peaks in **April**, and the model cannot reproduce that,
-   because **the recharge clock is snowmelt, not rainfall** ([#100](../../issues/100)): snowmelt
-   release peaks in April, delivering 312 mm/yr (20% of precipitation) when rain and ET are both low.
-   Our degree-day snow module **exists and is never exercised** — the current domain is rain-dominated
-   lowland.
+**Two of the "errors" were mine, not the model's**, and both are worth remembering:
 
-**Both are fixed by the same thing: getting the Cascades into the domain (v0.4).**
+1. **"Model BFI = 0.00" was largely an accounting artefact.** `WaterBudget` recorded recharge, runoff
+   and interflow but had **no baseflow field**: the river sink removed head and the flux was never
+   *recorded*. Scored properly, the *uncalibrated* model already had BFI 0.22.
+2. **The first calibration objective omitted the amplitude**, so `specific_yield` was unconstrained,
+   drifted to the grid edge, and gave a 5.4 m seasonal swing. Fluxes right, storage wrong.
 
-Do not present a water-table forecast until these close.
+**Honest residuals:** the fitted `Ka = 2` is *below* the 10–100 literature range for forest-soil
+anisotropy (flagged in code). And the peak is one month **late** — note the direction: an unsaturated
+travel-time lag (#87) would make it **worse**, which independently confirms #87 was correctly demoted.
 
 ---
 
 ## The plan, in order
 
-### v0.4 — Domain extension: western Cascades ([milestone](../../milestone/3)) ← **NOW**
+### v0.4 — Domain extension: western Cascades ([milestone](../../milestone/3)) — **DONE**
 
 **Why (two reasons, both measured):**
 
@@ -75,18 +79,18 @@ the one least able to constrain the parameter that matters. Calibrating there wo
 ≈1670 × 1980 = **~3.3 M cells** (2.8–3.6× current). Covers the **Puyallup and Nisqually headwaters
 (Mt Rainier)**, Green, Cedar, Snoqualmie, Skykomish.
 
-| | issue | note |
+| | issue | outcome |
 |---|---|---|
-| D1 | [#92](../../issues/92) Freeze the domain grid | do first; one definition, no drifting bbox copies |
-| D2 | [#93](../../issues/93) 3DEP terrain (HAND/slope/TWI/flow-acc) | **long pole**; ~300 M cells at 10 m — must be tiled |
-| D3 | [#94](../../issues/94) SOLUS soils + Saxton-Rawls envelope | mountain soils are thin — root depth should stop being a global 1 m |
-| D4 | [#95](../../issues/95) Vs30 from the SVM Kopah Zarr | **nearly free** — the Zarr already covers all Cascadia |
-| D5 | [#96](../../issues/96) Baseline water table (RF + kriging) | **wells are in the lowlands** — the headwater table will be an *extrapolation*; mask it |
-| D6 | [#97](../../issues/97) Acceptance: ≥5 basins fully inside | measure it; the current domain was *assumed* adequate |
-| D7 | [#98](../../issues/98) Recalibrate the flux partition | **closes #88 and #90** |
-| D8 | [#100](../../issues/100) Snow: calibrate the melt module; verify the April peak emerges | **do before/alongside D7**, or D7 fits `Ka` to compensate for missing snow |
+| D1 | [#92](../../issues/92) Freeze the grid | ✅ 1567×1890 = **2.96 M cells**. Defined in **EPSG:5070, not lat/lon** — Albers is conic, and defining it in lat/lon inflated the grid to 5.1 M and failed to round-trip the legacy one. 7 drifting bbox copies converged. `assert_on_grid()` **raises** on legacy products. |
+| D2 | [#93](../../issues/93) 3DEP terrain | ✅ **Download tiled; routing global** (flow crosses seams). Old HAND was a Python double loop (~1e11 ops here) → **pointer doubling, 831× faster**, r=0.9996. Slope median 2.6° → **13.3°**. |
+| D3 | [#94](../../issues/94) SOLUS soils | ✅ Old source **dead**; moved to the authoritative NRCS release. **Root depth is no longer a global 1 m** (steep 1.05 m, flat 1.49 m). Real organic matter, not a 2.5% constant. |
+| D4 | [#95](../../issues/95) Vs30 | ✅ 3.7 s from the Kopah Zarr. Surface-referencing **verified over high relief**. Valley 378 → ridge 528 m/s. |
+| D5 | [#96](../../issues/96) Baseline water table | ✅ **The RF would have put a 75 m water table on Cascade ridges.** Applicability-domain mask (covariate space, not distance) flags 44% of the domain; TOPMODEL prior blended in where wells cannot speak. |
+| D6 | [#97](../../issues/97) Basin coverage | ✅ **All 8 gauged basins 100% inside** (was 1) — met at D1. |
+| D8 | [#100](../../issues/100) Snow clock | ✅ Calibrated on **30 SNOTEL SWE stations**. Objective had to be **melt-out timing, not RMSE** — RMSE picked a melt factor so slow the pack lingered to June and pushed melt to May. |
+| D7 | [#98](../../issues/98) Flux calibration | ✅ **Closes #88 and #90.** BFI 0.52/0.47, Q/P 0.71, amplitude 1.02/1.06 m. |
 
-### v0.5 — Eastern Cascades: Stehekin ([milestone](../../milestone/4))
+### v0.5 — Eastern Cascades: Stehekin ([milestone](../../milestone/4)) ← **NEXT**
 
 Deliberately separate: **not a bigger bbox, different hydrology.** East of the crest it is
 rain-shadowed and **snowmelt-dominated** (spring/summer peak, not the western autumn/winter rain
@@ -103,16 +107,14 @@ water-budget work lands. [#81–#86](../../issues/81)
 
 ## Open physics debts (blocking the water table)
 
-| issue | what | why it matters |
+| issue | what | status |
 |---|---|---|
-| [#100](../../issues/100) | **SNOW is the water-table clock** | **The dominant control on phase.** Snowmelt release peaks in **April** and the observed water table peaks in **April**. The snowpack — not the vadose zone — stores the November rain and releases it in spring. It delivers **312 mm/yr (20% of precipitation)**, arriving when rainfall *and* ET are low, so an unusually large share becomes recharge. Our snow module **exists and is never exercised**, because the current domain is rain-dominated lowland. **v0.4 is the fix.** |
-| [#87](../../issues/87) | ~~No unsaturated travel-time lag~~ **DEMOTED** | I originally blamed the 4-month lag on vadose travel time. **That was wrong** — it is snowmelt (#100). A vadose lag is still real physics but **second-order**; re-assess only *after* v0.4, when snow is actually in the model. |
-| [#88](../../issues/88) | Water table 8–26× too high | Now measured as a *discharge* failure, not a recharge one |
-| [#90](../../issues/90) | Model BFI 0.00 vs observed 0.55 | The river sink retains what it should discharge |
-| [#89](../../issues/89) | **Daily and monthly drain 4.7× differently** | A monthly calibration is **invalid** for the daily mode we forecast in. This already produced one false "perfect fit". |
-| [#57](../../issues/57) | No infiltration-excess runoff | Needs sub-daily rain — and we currently *discard* FuXi's native 6-hourly steps |
-| [#91](../../issues/91) | Domain does not cover the gauged basins | superseded by v0.4 |
+| ~~#88 / #90~~ | Water table 8–26× too high; BFI 0.00 | ✅ **CLOSED by D7.** BFI 0.52 vs 0.47; amplitude 1.02 vs 1.06 m. |
+| [#87](../../issues/87) | Unsaturated travel-time lag | **DEMOTED, and now doubly so.** I first blamed the 4-month lag on vadose transit; it is **snowmelt**. And the calibrated model peaks one month **late**, so a vadose lag would make it *worse*. |
+| [#89](../../issues/89) | **Daily and monthly drain 4.7× differently** | Open. A monthly calibration is **invalid** for the daily mode we forecast in — it already produced one false "perfect fit". D7 was done in daily mode. |
+| [#57](../../issues/57) | No infiltration-excess runoff | Open. Needs sub-daily rain — and we still *discard* FuXi's native 6-hourly steps. |
 | [#55](../../issues/55) | Runoff routing → hydrograph | **LandLab's job by design.** We generate the source term; we do not route. |
+| ~~#91~~ | Domain misses the gauged basins | ✅ superseded by v0.4 |
 
 ---
 
@@ -132,8 +134,19 @@ water-budget work lands. [#81–#86](../../issues/81)
 6. **A perfect fit can be right for the wrong reason.** The monthly calibration reproduced the well
    seasonal cycle *exactly* by under-draining, compensating for missing physics.
 7. **Do not attribute a lag to diffusion before checking the reservoir.** The 4-month rain→water-table
-   lag was blamed on unsaturated travel time; it is **snowmelt**. The snowpack holds the water and
-   releases it in April. Always ask *what is storing the water* before inventing a transport delay.
+   lag was blamed on unsaturated travel time; it is **snowmelt**. Always ask *what is storing the
+   water* before inventing a transport delay.
+8. **Check that the flux is even RECORDED before calling it zero.** "Model BFI = 0.00" was largely an
+   accounting artefact: the river sink removed head but the flux was never written to an output field.
+9. **A calibration objective must contain every quantity whose parameter you claim to constrain.**
+   Omitting the water-table amplitude left `specific_yield` free; it drifted to the grid edge and gave
+   a 5.4 m seasonal swing with the fluxes still looking right.
+10. **A domain mean can erase the physics.** Driving the budget with the domain-mean temperature formed
+    **no snow at all** — the mean of a cold mountain and a warm lowland is ~7 °C. The elevation
+    dependence *is* the mechanism.
+11. **Fit the quantity the physics needs, not the convenient one.** Calibrating snow on SWE *RMSE*
+    (dominated by accumulation) chose a melt factor so slow the pack lingered into June. Fitting
+    **melt-out timing** recovered the April peak.
 
 ---
 
