@@ -22,7 +22,13 @@ water through explicit fluxes, and lateral redistribution moves water down-gradi
       table follows the topographic wetness index (valleys wet/shallow, ridges dry/deep),
     - generated runoff can be routed down-gradient with a flow-accumulation weight.
 
-Mass is conserved by construction each step: dS = cap_rise + input - runoff - AET - recharge.
+    - **lateral interflow / subsurface stormflow**: drainage out of the root zone competes between a
+      vertical velocity ~K_v and a downslope one ~K_h*tan(beta). With the anisotropy of layered forest
+      soils most of it leaves DOWNSLOPE and reaches a stream in days rather than recharging the water
+      table. Omitting it turned ~94% of rain into recharge (issue #88).
+
+Mass is conserved by construction each step:
+``dS = cap_rise + input - runoff - AET - recharge - interflow``.
 
 The timestep is set by ``dt_days`` (default: one month, reproducing the original monthly behaviour).
 A **daily** step is what lets an AI weather forecast (GraphCast et al., 6-hourly) drive the budget at
@@ -57,6 +63,10 @@ DAYS_PER_MONTH = 30.436875     # mean Gregorian month; the unit the rate paramet
 # calibration with no physical meaning at daily resolution. Sub-monthly runs must use a real
 # timescale instead, or the column drains ~15x too slowly. Calibration-pending (see issue).
 DRAIN_TAU_DAYS = 2.0           # e-folding timescale of gravity drainage above field capacity (days)
+# Lateral:vertical hydraulic-conductivity anisotropy K_h/K_v. Layered, macroporous forest soils are
+# strongly anisotropic (literature 10-100), which is why hillslope drainage leaves DOWNSLOPE as
+# interflow rather than recharging the water table. Calibration-pending (issue #88).
+K_ANISO = 20.0
 
 
 @dataclass
@@ -67,6 +77,7 @@ class WaterBudget:
     wt_depth_m: np.ndarray     # (t, ...) water-table depth below surface (m; smaller = shallower)
     recharge_mm: np.ndarray    # (t, ...) deep percolation to the water table
     runoff_mm: np.ndarray      # (t, ...) saturation-excess surface runoff generated
+    interflow_mm: np.ndarray   # (t, ...) lateral subsurface stormflow leaving the column downslope
     aet_mm: np.ndarray         # (t, ...) actual evapotranspiration
     cap_rise_mm: np.ndarray    # (t, ...) capillary rise from the water table into the root zone
 
@@ -87,7 +98,7 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
                          specific_yield=SPECIFIC_YIELD, recession_months=RECESSION_MONTHS,
                          cap_max_mm=CAP_MAX_MM, cap_fringe_m=CAP_FRINGE_M, drain_frac=_DRAIN_FRAC,
                          wt_depth0_m=5.0, init="fc", dt_days=None, drain_tau_days=DRAIN_TAU_DAYS,
-                         sat_area_runoff=True):
+                         sat_area_runoff=True, slope_tan=None, k_aniso=K_ANISO):
     """Time-step the coupled vadose-column + water-table budget at an arbitrary timestep.
 
     ``liquid_in_mm`` (rain + snowmelt) and ``pet_mm`` are (t, ...) arrays **per timestep** — mm/month
@@ -137,7 +148,17 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
     recess = min(recess, 1.0)                                  # never overshoot the reservoir
     cap_max_step = cap_max_mm * step_frac                      # mm/month -> mm/step
 
+    # lateral fraction of root-zone drainage: f_lat = Ka*tan(beta) / (1 + Ka*tan(beta)).
+    # Flat ground (tan beta = 0) -> f_lat = 0, i.e. ALL drainage recharges the water table, which is
+    # correct: valley floors recharge, hillslopes shed. slope_tan=None reproduces the old behaviour.
+    if slope_tan is None:
+        f_lat = 0.0
+    else:
+        kt = np.clip(k_aniso * np.abs(np.asarray(slope_tan, dtype="float64")), 0.0, None)
+        f_lat = kt / (1.0 + kt)
+
     theta = np.empty_like(liquid)
+    int_o = np.empty_like(liquid)
     wt = np.empty_like(liquid); rech_o = np.empty_like(liquid)
     run_o = np.empty_like(liquid); aet_o = np.empty_like(liquid); cap_o = np.empty_like(liquid)
 
@@ -166,11 +187,22 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
         excess = np.maximum(S - Ssat, 0.0); S = S - excess   # root-zone saturation excess
         runoff = sat_runoff + excess
         aet = np.minimum(pet[t], np.maximum(S - Swp, 0.0)); S = S - aet
-        rech = np.maximum(S - Sfc, 0.0) * drain_step; S = S - rech   # deep percolation = recharge
+
+        # --- drainage above field capacity: DOWN (recharge) vs DOWNSLOPE (interflow) --------------
+        # Water leaving the root zone does not all go to the water table. On a slope it competes
+        # between a vertical velocity ~K_v and a lateral one ~K_h*tan(beta); with the strong
+        # anisotropy of layered/macroporous forest soils (K_a = K_h/K_v ~ 10-100) most of it leaves
+        # DOWNSLOPE as interflow / subsurface stormflow and reaches a stream within days.
+        # Forcing all of it vertically (the old behaviour) turned ~94% of rain into recharge and
+        # over-predicted the water-table rise by 8-26x against the NWIS wells (issue #88).
+        drain = np.maximum(S - Sfc, 0.0) * drain_step
+        inter = drain * f_lat                                # leaves the column downslope
+        rech = drain - inter                                 # the rest reaches the water table
+        S = S - drain
         S = np.clip(S, Swp, Ssat)
 
         theta[t] = S / z
-        rech_o[t] = rech; run_o[t] = runoff; aet_o[t] = aet; cap_o[t] = cap_eff
+        rech_o[t] = rech; run_o[t] = runoff; aet_o[t] = aet; cap_o[t] = cap_eff; int_o[t] = inter
 
         # water-table reservoir: recharge (m) raises head, recession lowers it
         h = h + (rech / 1000.0 / max(specific_yield, 1e-6) - h * recess)
@@ -178,6 +210,7 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
 
     return WaterBudget(theta=theta.astype("float32"), wt_depth_m=wt.astype("float32"),
                        recharge_mm=rech_o.astype("float32"), runoff_mm=run_o.astype("float32"),
+                       interflow_mm=int_o.astype("float32"),
                        aet_mm=aet_o.astype("float32"), cap_rise_mm=cap_o.astype("float32"))
 
 

@@ -121,7 +121,8 @@ def liquid_input(forcing, ddf_mm_c_day=3.0, t_snow_hi=3.0, t_snow_lo=-1.0, t_mel
 
 
 def forecast_soil_state(forcing, theta_wp, theta_fc, theta_sat, vs30_base, wt_depth0_m,
-                        sand_pct=None, clay_pct=None, root_depth_m=1.0, **budget_kw):
+                        sand_pct=None, clay_pct=None, root_depth_m=1.0, slope_tan=None,
+                        **budget_kw):
     """Drive the coupled water budget from a rainfall forecast and map it onto Vs30.
 
     ``theta_*`` and ``vs30_base`` / ``wt_depth0_m`` are the static envelope + baseline state on the
@@ -133,9 +134,11 @@ def forecast_soil_state(forcing, theta_wp, theta_fc, theta_sat, vs30_base, wt_de
     from a fitted correlation.
     """
     liquid = liquid_input(forcing)
+    # slope_tan enables lateral interflow: drainage on a hillslope leaves DOWNSLOPE rather than
+    # recharging the water table. Without it ~94% of rain becomes recharge (issue #88).
     wb = coupled_water_budget(liquid, forcing.pet_mm, theta_wp, theta_fc, theta_sat,
                               root_depth_m=root_depth_m, wt_depth0_m=wt_depth0_m,
-                              dt_days=forcing.dt_days, **budget_kw)
+                              dt_days=forcing.dt_days, slope_tan=slope_tan, **budget_kw)
 
     # petrophysical coupling: water state -> velocity change. theta_ref / wt reference are the
     # initial (t=0) state, so the forecast reports a change relative to the analysis, not an absolute.

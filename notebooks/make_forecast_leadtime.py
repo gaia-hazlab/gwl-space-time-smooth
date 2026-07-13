@@ -74,6 +74,8 @@ def main(argv=None):
     env = xr.open_zarr(PROC / "soil_hydraulic_envelope_90m.zarr")
     vs30 = rxr.open_rasterio(PROC / "vs30_90m.tif", masked=True).squeeze("band", drop=True)
     dtw0 = rxr.open_rasterio(PROC / "baseline_dtw_m.tif", masked=True).squeeze("band", drop=True)
+    slope = rxr.open_rasterio(PROC / "terrain_slope_90m.tif", masked=True).squeeze("band", drop=True)
+    tan_beta = np.tan(np.radians(slope.values))       # drives lateral interflow (issue #88)
     solus = xr.open_zarr(PROC / "solus100_wa.zarr").rio.write_crs("EPSG:5070")
     sand = solus["sand_pct"].rio.reproject_match(vs30).values
     clay = solus["clay_pct"].rio.reproject_match(vs30).values
@@ -118,7 +120,7 @@ def main(argv=None):
     # --- forecast the soil state -----------------------------------------------------------------
     fcst = forecast_soil_state(forcing, theta_wp=wp, theta_fc=fc, theta_sat=sat,
                                vs30_base=vs30.values, wt_depth0_m=dtw0.values,
-                               sand_pct=sand, clay_pct=clay)
+                               sand_pct=sand, clay_pct=clay, slope_tan=tan_beta)
 
     def m(a_):                                    # land-masked spatial mean per lead day
         x = np.where(land[None, :, :], a_, np.nan)
