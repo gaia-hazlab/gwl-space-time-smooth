@@ -67,6 +67,12 @@ DRAIN_TAU_DAYS = 2.0           # e-folding timescale of gravity drainage above f
 # strongly anisotropic (literature 10-100), which is why hillslope drainage leaves DOWNSLOPE as
 # interflow rather than recharging the water table. Calibration-pending (issue #88).
 K_ANISO = 20.0
+# Groundwater discharge to the stream network (baseflow). The table relaxes toward the local drainage
+# elevation (HAND) on this timescale -- the rivers take the water away. This is the SELF-LIMITING sink
+# the model lacked: without it recharge piles up and the water table runs away (issue #88).
+# Long-term mean recharge used to anchor the stream-discharge coefficient so the OBSERVED baseline
+# water table is a steady state. PNW: ~1500 mm/yr precip, ~40% recharge -> ~600 mm/yr ~ 1.6 mm/day.
+RECHARGE_REF_MM_DAY = 1.6      # calibration-pending (issue #88)
 
 
 @dataclass
@@ -98,7 +104,8 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
                          specific_yield=SPECIFIC_YIELD, recession_months=RECESSION_MONTHS,
                          cap_max_mm=CAP_MAX_MM, cap_fringe_m=CAP_FRINGE_M, drain_frac=_DRAIN_FRAC,
                          wt_depth0_m=5.0, init="fc", dt_days=None, drain_tau_days=DRAIN_TAU_DAYS,
-                         sat_area_runoff=True, slope_tan=None, k_aniso=K_ANISO):
+                         sat_area_runoff=True, slope_tan=None, k_aniso=K_ANISO,
+                         hand_m=None, recharge_ref_mm_day=RECHARGE_REF_MM_DAY):
     """Time-step the coupled vadose-column + water-table budget at an arbitrary timestep.
 
     ``liquid_in_mm`` (rain + snowmelt) and ``pet_mm`` are (t, ...) arrays **per timestep** — mm/month
@@ -147,6 +154,31 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
         drain_step = 1.0 - np.exp(-float(dt_days) / max(drain_tau_days, 1e-6))
     recess = min(recess, 1.0)                                  # never overshoot the reservoir
     cap_max_step = cap_max_mm * step_frac                      # mm/month -> mm/step
+
+    # Groundwater discharge to the stream network -- "the rivers take the water away". Groundwater
+    # standing ABOVE the local drainage (HAND is literally the Height Above Nearest Drainage) flows to
+    # it, so the table relaxes toward the drainage elevation. This is the SELF-LIMITING sink the model
+    # lacked: the higher the table climbs above the river, the harder it drains (issue #88).
+    #
+    # The coefficient is not free. A ridge water table genuinely sits tens of metres above the valley
+    # stream -- that is normal and PERSISTENT, sustained by continuous recharge down a long, slow flow
+    # path. So the discharge is anchored to make the OBSERVED baseline table a steady state: at the
+    # long-term mean recharge R_ref, discharge exactly balances recharge. Storms then perturb around
+    # that equilibrium. An arbitrary coefficient instead drains the baseline away (metres per month).
+    #
+    #     gw_recess_i = (R_ref/S_y) / [HAND_i - d0_i]_+
+    #
+    # Cells whose table already sits below the drainage (HAND < d0) do not discharge.
+    hand = None if hand_m is None else np.clip(np.asarray(hand_m, dtype="float64"), 0.0, None)
+    if hand_m is None:
+        gw_recess = 0.0
+    else:
+        dt_d = float(dt_days if dt_days else DAYS_PER_MONTH)
+        head0 = np.clip(hand - wt0, 0.0, None)                        # baseline head above the river
+        r_ref = float(recharge_ref_mm_day) * dt_d / 1000.0            # m of water per step
+        gw_recess = np.where(head0 > 1e-3,
+                             (r_ref / max(specific_yield, 1e-6)) / np.clip(head0, 1e-3, None), 0.0)
+        gw_recess = np.clip(gw_recess, 0.0, 1.0)
 
     # lateral fraction of root-zone drainage: f_lat = Ka*tan(beta) / (1 + Ka*tan(beta)).
     # Flat ground (tan beta = 0) -> f_lat = 0, i.e. ALL drainage recharges the water table, which is
@@ -204,8 +236,23 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
         theta[t] = S / z
         rech_o[t] = rech; run_o[t] = runoff; aet_o[t] = aet; cap_o[t] = cap_eff; int_o[t] = inter
 
-        # water-table reservoir: recharge (m) raises head, recession lowers it
-        h = h + (rech / 1000.0 / max(specific_yield, 1e-6) - h * recess)
+        # --- water table: recharge raises it, the RIVERS drain it ---------------------------------
+        # Recharge (m of water) lifts the table by R/S_y. The sink is discharge to the stream
+        # network: groundwater sitting ABOVE the local drainage flows to it (Dupuit). HAND is
+        # literally the Height Above Nearest Drainage, so the head driving that discharge is
+        # (HAND - wt_depth), and the table relaxes TOWARD the drainage elevation.
+        #
+        # This is self-limiting, which the old spatially-uniform h/tau recession was not: the higher
+        # the table climbs above the river, the harder it drains, so recharge cannot pile up without
+        # bound. Valley floors (HAND ~ 0) cannot rise at all; ridges can. Without it the water table
+        # ran away (issue #88). hand_m=None keeps the legacy recession.
+        h = h + rech / 1000.0 / max(specific_yield, 1e-6)
+        if hand_m is None:
+            h = h - h * recess                                # legacy: relax to the baseline
+        else:
+            d_now = wt0 - h                                   # current depth below surface (m)
+            to_river = np.clip(hand - d_now, 0.0, None)       # head above the nearest drainage (m)
+            h = h - to_river * gw_recess                      # baseflow, gradient-weighted (below)
         wt[t] = wt0 - h
 
     return WaterBudget(theta=theta.astype("float32"), wt_depth_m=wt.astype("float32"),
