@@ -108,7 +108,8 @@ dvv-demo = "python notebooks/make_dvv_figures.py"
 vs30 = "python -m src.data.fetch_vs30 --source svm --output data/processed/vs30_90m.tif"
 # AI weather -> rainfall forcing. Needs earth2studio[graphcast] on a Linux+NVIDIA host
 # (jax[cuda13]); will not run on macOS/arm64. Writes data/forecast/graphcast_precip.nc
-graphcast = "python -m src.data.fetch_earth2studio --start 2024-12-01 --lead-days 10"
+ai-precip = "python -m src.data.fetch_earth2studio --start 2024-12-01 --lead-days 15"
+forecast-leadtime = "python notebooks/make_forecast_leadtime.py"
 # Digital-twin MVP: 2x3 animated GIF (GWL, soil moisture, Vs30 + uncertainty) with dv/v assimilation.
 digital-twin = "python notebooks/make_digital_twin.py"
 # Coupled water budget: recharge + capillary rise (#43), saturation-excess runoff + TOPMODEL (#44).

@@ -49,6 +49,16 @@ def test_graphcast_operational_zeros_are_refused():
     assert abs(total - 60.0) < 1e-9
 
 
+def test_fuxi_is_the_15_day_precip_model():
+    # FuXi is the only other earth2studio prognostic that natively emits tp06, at 0.25 deg, and is a
+    # cascade trained for 5/10/15-day leads -- so it, not GraphCast, is the +1..+15 model.
+    from src.data.fetch_earth2studio import MAX_LEAD_DAYS, PREFERRED_MODEL
+    assert PREFERRED_MODEL == "FuXi"
+    assert "FuXi" in PRECIP_CAPABLE
+    assert MAX_LEAD_DAYS["FuXi"] == 15 and MAX_LEAD_DAYS["GraphCastSmall"] == 10
+    assert assert_precipitation_is_real(np.full((4, 3), 2.0), "FuXi") > 0
+
+
 def test_daily_step_does_not_drain_30x_too_fast():
     # The per-month rate parameters must be converted to the step. A daily run driven with mm/day
     # must NOT behave like a monthly run driven with mm/month.
@@ -119,6 +129,7 @@ def test_forecast_storm_response_has_the_right_physics():
 
 if __name__ == "__main__":
     test_graphcast_operational_zeros_are_refused()
+    test_fuxi_is_the_15_day_precip_model()
     test_daily_step_does_not_drain_30x_too_fast()
     test_storm_concentration_changes_the_answer()
     test_snow_defers_the_response_until_melt()
