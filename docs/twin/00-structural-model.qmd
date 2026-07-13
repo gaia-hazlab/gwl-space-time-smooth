@@ -57,7 +57,14 @@ The static layers needed for the soil-hydromechanical state and the downstream h
 the same 90 m analysis grid (@fig-static-layers shows the **real** data over the Puget Sound / Cascades
 pilot):
 
-![**The static-layer catalog — real 90 m data.** Nine of the static layers over the Puget Sound /
+![**The static layers over the western Cascades domain** (v0.4): 90 m, EPSG:5070, **2.96 M cells**,
+covering the Puyallup and Nisqually headwaters — all 8 gauged basins now inside (was 1). Mt Rainier is
+visible in every panel. Note **root depth**, which is no longer a global 1 m constant: it thins on the
+ridges (1.05 m on steep ground vs 1.49 m on the flats), so a Cascade ridge no longer fabricates storm
+buffering it does not have. Vs30 is the measurement-based Soil Velocity Model.
+](assets/static_layers_domain.png){#fig-static-domain}
+
+![**The original lowland catalog** (pre-v0.4), kept for comparison. Nine of the static layers over the Puget Sound /
 Cascades analysis footprint, all on the 90 m EPSG:5070 grid: terrain derivatives HAND / slope / TWI
 (from the 3DEP DEM), the SOLUS100 soil texture (clay / sand), the Saxton–Rawls hydraulic envelope
 (saturated conductivity Ksat, field-capacity θ, available water capacity AWC), and **Vs30 from the Soil

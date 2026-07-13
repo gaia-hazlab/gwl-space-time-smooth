@@ -133,6 +133,20 @@ the river-sink strength by the BFI — so this is a constrained fit, not curve-f
 **daily** mode, the mode we forecast in: daily and monthly drain 4.7× differently (issue #89), and a
 monthly calibration already produced one false "perfect fit".
 
+![**The water budget closes.** Left: the calibrated model against the two independent observation
+types — **gauges constrain the fluxes, wells constrain the state**. Centre: the seasonal cycle, driven
+by the **snowmelt clock** — precipitation peaks in November, but melt (and the water table) peak in
+April. Right: where the water actually goes. Before v0.4 this model turned 94% of rain into recharge
+and over-predicted the water-table rise by 8–26×.](assets/validation_domain.png){#fig-validation}
+
+## The twin, running
+
+![**The GAIA Digital Twin of Soil over the 2025–26 wet season** (western Cascades, 90 m, daily). Soil
+moisture, water-table rise and the shallow dv/v band, driven by observed PRISM daily rainfall. θ and
+dv/v track individual storms; the water table integrates them and holds the memory. **dv/v is the
+observable that sees the storm** — which is why the seismic network, not the wells, is the right
+instrument for the short-lead forecast.](assets/twin_wetseason.gif){#fig-twin}
+
 ::: {.callout-important}
 ## What actually closed it: two mechanisms and two of our own errors
 **The rivers take the water.** Groundwater standing above the local drainage flows to it, and HAND is
