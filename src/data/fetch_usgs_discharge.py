@@ -36,7 +36,18 @@ logger = logging.getLogger("fetch_usgs_discharge")
 
 CFS_TO_M3S = 0.0283168466
 # Puget / Cascades gauges inside the pilot bbox. The first four are the seis-hydro-2-sed corridor.
+# Gauges whose DRAINAGE BASIN lies inside the 90 m static-layer footprint -- the only ones whose
+# budget we can actually model. The seis-hydro-2-sed corridor gauges (Nisqually, Puyallup, Skykomish,
+# Snoqualmie, Cedar) are Cascade HEADWATER catchments and overlap our footprint by 0-17%: running the
+# budget on the Puget lowland and comparing it to discharge generated in the mountains is meaningless.
+# Basin overlap measured against terrain_hand_90m.tif via NLDI polygons (issue #90).
 PUGET_GAGES = {
+    "12108500": "Newaukum Cr nr Black Diamond",   # 79 km2, 100% inside the footprint
+    "12102078": "Clarks Cr at Stewart Ave",       # 70 km2,  82% inside
+}
+# Cascade headwater gauges: real data, but OUTSIDE the modelled domain. Kept for reference and for
+# the seasonal baseflow-index constraint (which is scale-free), NOT for per-basin closure.
+HEADWATER_GAGES = {
     "12082500": "Nisqually R nr National",
     "12092000": "Puyallup R nr Electron",
     "12097500": "Green R nr Lester",
