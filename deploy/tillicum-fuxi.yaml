@@ -4,15 +4,19 @@
 # templates/tillicum-H200.yaml). Set that repo up first -- it has the Tillicum/SkyPilot
 # setup notes in docs/tillicum.md.
 #
-#   sky launch --infra slurm/tillicum -c fuxi deploy/tillicum-fuxi.yaml
+#   pixi run stage-mvp                 # prints the inits still missing from Kopah
+#   sky launch --infra slurm/tillicum -c fuxi deploy/tillicum-fuxi.yaml \
+#     --env INITS="2025-09-01,2025-09-08,..." \
+#     --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY
 #   sky down fuxi                      # Slurm nodes do NOT autostop -- see below
 #
-# This job ONLY produces the rainfall forcing netCDF. That is deliberate: the soil-state
-# forecast (water budget -> theta / GWL / Vs) is pure numpy and costs nothing, so it runs
-# locally. The forcing file is the interface between the GPU and the physics:
+# This job ONLY produces the rainfall forcing (as Zarr, on Kopah). That is deliberate: the
+# soil-state forecast (water budget -> theta / GWL / Vs) is pure numpy and costs nothing, so it
+# runs anywhere. The forcing store is the interface between the GPU and the physics:
 #
-#   Tillicum (H200):  FuXi -> data/forecast/fuxi_precip.nc      (this job)
-#   anywhere:         pixi run forecast-leadtime --forcing-nc data/forecast/fuxi_precip.nc
+#   GENERATE  Tillicum (H200):  FuXi  -> s3://gaia/soil-twin/forecast/fuxi/<init>.zarr
+#   FETCH     anywhere:         pixi run stage-mvp        (discovers + reads them lazily)
+#             anywhere:         pixi run forecast-leadtime --forcing-zarr <that URI>
 #
 # Why FuXi and not GraphCast:
 #   - FuXi natively emits tp06; it is a cascade trained for 5/10/15-day leads (we want +1..+15).
@@ -105,7 +109,8 @@ run: |
   EOF
 
 # Then, anywhere (no GPU, no file copy -- the Zarr is read lazily from Kopah):
-#   pixi run forecast-leadtime --forcing-zarr s3://gaia/soil-twin/forecast/fuxi/2024-12-01.zarr
+#   pixi run stage-mvp
+#   pixi run forecast-leadtime --forcing-zarr s3://gaia/soil-twin/forecast/fuxi/2025-12-01.zarr
 #
 # Static layers live alongside it, staged once:
 #   s3://gaia/soil-twin/static/svm_cvm17.zarr   (the 6.2 GB SVM netCDF, chunked -> 756 MB)
