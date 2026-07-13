@@ -119,6 +119,9 @@ prism-daily = "python -m src.data.fetch_prism_daily --start 2025-12-01 --end 202
 # -> the water budget can be CLOSED against observations, not just plotted.
 # the frozen analysis grid — everything reprojects to this (issue #92)
 domain-grid = "python -m src.config.domain"
+# D2: 3DEP DEM over the extended domain (tiled download) + GLOBAL flow routing
+3dep-domain = "python -m src.data.download_3dep_domain"
+terrain-domain = "python -m src.features.compute_terrain_domain"
 stage-mvp = "python -m src.data.stage_mvp_window"
 gauges = "python -m src.data.fetch_usgs_discharge --start 2025-09-01 --end 2026-03-31"
 gauge-basins = "python -m src.data.fetch_gauge_basins"
