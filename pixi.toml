@@ -117,6 +117,8 @@ stage-svm-zarr = "python -m src.data.stage_svm_zarr"
 prism-daily = "python -m src.data.fetch_prism_daily --start 2025-12-01 --end 2025-12-31 --out data/processed/prism_daily_puget.zarr"
 # MVP window: Fall-Winter 2025-2026. Forcing (PRISM) + state (wells) + flux (USGS gauges)
 # -> the water budget can be CLOSED against observations, not just plotted.
+# the frozen analysis grid — everything reprojects to this (issue #92)
+domain-grid = "python -m src.config.domain"
 stage-mvp = "python -m src.data.stage_mvp_window"
 gauges = "python -m src.data.fetch_usgs_discharge --start 2025-09-01 --end 2026-03-31"
 gauge-basins = "python -m src.data.fetch_gauge_basins"

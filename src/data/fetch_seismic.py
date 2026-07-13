@@ -36,7 +36,9 @@ import pandas as pd
 logger = logging.getLogger("fetch_seismic")
 
 # Same Puget + Cascades pilot window used by the SNOTEL / TerraClimate fetchers.
-PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
+# Domain is defined ONCE in src.config.domain (issue #92). Do not re-declare a bbox here.
+from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
+
 NETWORKS = ("UW", "CC")
 # Vertical channels only for the demo: broadband (BH/HH) and short-period (EH).
 CHANNELS = "BHZ,HHZ,EHZ"

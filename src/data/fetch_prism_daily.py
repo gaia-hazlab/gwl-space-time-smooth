@@ -32,8 +32,8 @@ logger = logging.getLogger("fetch_prism_daily")
 
 PRISM_STAC = ("https://raw.githubusercontent.com/gaia-hazlab/prism-stac/"
               "refs/heads/main/stac/catalog.json")
-PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
-
+# Domain is defined ONCE in src.config.domain (issue #92). Do not re-declare a bbox here.
+from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
 
 def hamon_pet_per_day_mm(tmean_c, times, lat):
     """Hamon (1961) PET in **mm/day** (the same formula as fetch_prism_monthly, without x days)."""

@@ -32,7 +32,9 @@ logger = logging.getLogger(__name__)
 
 _BASE = "https://wcc.sc.egov.usda.gov/awdbRestApi/services/v1"
 # Puget lowland pilot + adjacent Cascades (where the SMS stations live).
-PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
+# Domain is defined ONCE in src.config.domain (issue #92). Do not re-declare a bbox here.
+from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
+
 CANDIDATE_DEPTHS_IN = (-2, -4, -8, -20, -40)   # SNOTEL SMS sensor depths (inches)
 IN_TO_M = 0.0254
 

@@ -47,7 +47,9 @@ logger = logging.getLogger("stage_mvp")
 # The PNW wet season: fall build-up through the winter AR season and the spring water-table peak.
 MVP_START = "2025-09-01"
 MVP_END = "2026-03-31"
-PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
+# Domain is defined ONCE in src.config.domain (issue #92). Do not re-declare a bbox here.
+from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
+
 FUXI_PREFIX = f"{GAIA_BUCKET}/forecast/fuxi"
 FORECAST_EVERY_DAYS = 7        # a rolling init each week -> ~30 forecasts across the wet season
 FUXI_LEAD_DAYS = 15            # FuXi's long cascade is trained to 15 d

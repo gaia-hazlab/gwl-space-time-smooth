@@ -46,7 +46,9 @@ from src.io.zarr_store import is_remote
 
 logger = logging.getLogger("fetch_earth2studio")
 
-PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
+# Domain is defined ONCE in src.config.domain (issue #92). Do not re-declare a bbox here.
+from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
+
 # earth2studio prognostic models that genuinely predict total precipitation (tp06). Anything not on
 # this list must be paired with a precipitation *diagnostic* (e.g. dx.PrecipitationAFNO).
 PRECIP_CAPABLE = {"FuXi", "GraphCastSmall"}

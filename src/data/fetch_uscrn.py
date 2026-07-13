@@ -23,7 +23,9 @@ import pandas as pd
 
 logger = logging.getLogger("fetch_uscrn")
 
-PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
+# Domain is defined ONCE in src.config.domain (issue #92). Do not re-declare a bbox here.
+from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
+
 BASE = "https://www.ncei.noaa.gov/pub/data/uscrn/products"
 CACHE = Path("data/cache/uscrn")
 # CRND0103 daily soil-moisture columns (1-based 19-23) and their depths (cm).

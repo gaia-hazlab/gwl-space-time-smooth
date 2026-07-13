@@ -32,7 +32,9 @@ import numpy as np
 
 logger = logging.getLogger("fetch_vs30")
 
-PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
+# Domain is defined ONCE in src.config.domain (issue #92). Do not re-declare a bbox here.
+from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
+
 USGS_GLOBAL_VS30_GRD = "https://apps.usgs.gov/shakemap_geodata/vs30/global_vs30.grd"
 SVM_CRS = "EPSG:32610"   # CVM17 grid: UTM Zone 10N (utme / utmn coordinates)
 
