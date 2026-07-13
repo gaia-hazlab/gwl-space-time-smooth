@@ -33,11 +33,19 @@ The **θ / dv/v half of the twin looks right**; the **water-table half does not*
 | **baseflow index** | **0.00** | **0.55** |
 | Nov→Dec water-table rise | **+3.24 m** | **+0.12 m** (median, 1205 paired wells) |
 
-Interflow works. **The river sink discharges nothing** — 438 mm of recharge is retained instead of
-returning to the streams. That is the entire remaining error, and it is now *measured per basin*
-rather than guessed.
+Two distinct errors, both now measured:
 
-Do not present a water-table forecast until this closes.
+1. **Magnitude** — the river/baseflow sink discharges nothing. 438 mm of recharge is retained instead
+   of returning to the streams. Interflow *works* (quickflow 328 vs 278 mm observed); the sink does not.
+2. **Phase** — the observed water table peaks in **April**, and the model cannot reproduce that,
+   because **the recharge clock is snowmelt, not rainfall** ([#100](../../issues/100)): snowmelt
+   release peaks in April, delivering 312 mm/yr (20% of precipitation) when rain and ET are both low.
+   Our degree-day snow module **exists and is never exercised** — the current domain is rain-dominated
+   lowland.
+
+**Both are fixed by the same thing: getting the Cascades into the domain (v0.4).**
+
+Do not present a water-table forecast until these close.
 
 ---
 
@@ -45,7 +53,14 @@ Do not present a water-table forecast until this closes.
 
 ### v0.4 — Domain extension: western Cascades ([milestone](../../milestone/3)) ← **NOW**
 
-**Why:** the gauged basins are not in our modelled domain. Measured overlap with the current static
+**Why (two reasons, both measured):**
+
+**(a) The recharge clock is snowmelt, and we have no snow.** Snowmelt release peaks in **April**; the
+observed water table peaks in **April**. The current lowland domain is rain-dominated, so the snow
+module never fires and the model cannot produce the observed phase at *any* parameter setting. Putting
+the Cascades in the domain is the fix ([#100](../../issues/100)).
+
+**(b) The gauged basins are not in our modelled domain.** Measured overlap with the current static
 footprint:
 
 | Nisqually | Puyallup | Green | Skykomish | Cedar | Snoqualmie | **Newaukum Ck** |
@@ -69,6 +84,7 @@ the one least able to constrain the parameter that matters. Calibrating there wo
 | D5 | [#96](../../issues/96) Baseline water table (RF + kriging) | **wells are in the lowlands** — the headwater table will be an *extrapolation*; mask it |
 | D6 | [#97](../../issues/97) Acceptance: ≥5 basins fully inside | measure it; the current domain was *assumed* adequate |
 | D7 | [#98](../../issues/98) Recalibrate the flux partition | **closes #88 and #90** |
+| D8 | [#100](../../issues/100) Snow: calibrate the melt module; verify the April peak emerges | **do before/alongside D7**, or D7 fits `Ka` to compensate for missing snow |
 
 ### v0.5 — Eastern Cascades: Stehekin ([milestone](../../milestone/4))
 
@@ -89,7 +105,8 @@ water-budget work lands. [#81–#86](../../issues/81)
 
 | issue | what | why it matters |
 |---|---|---|
-| [#87](../../issues/87) | **No unsaturated travel-time lag** | **The dominant control.** With a ~20 m water table, December's recharge *does not arrive in December*. The wells show rain peaking Nov–Dec but the table peaking in **April** — a 4-month lag an instantaneous-recharge model **cannot** produce at any parameter setting. |
+| [#100](../../issues/100) | **SNOW is the water-table clock** | **The dominant control on phase.** Snowmelt release peaks in **April** and the observed water table peaks in **April**. The snowpack — not the vadose zone — stores the November rain and releases it in spring. It delivers **312 mm/yr (20% of precipitation)**, arriving when rainfall *and* ET are low, so an unusually large share becomes recharge. Our snow module **exists and is never exercised**, because the current domain is rain-dominated lowland. **v0.4 is the fix.** |
+| [#87](../../issues/87) | ~~No unsaturated travel-time lag~~ **DEMOTED** | I originally blamed the 4-month lag on vadose travel time. **That was wrong** — it is snowmelt (#100). A vadose lag is still real physics but **second-order**; re-assess only *after* v0.4, when snow is actually in the model. |
 | [#88](../../issues/88) | Water table 8–26× too high | Now measured as a *discharge* failure, not a recharge one |
 | [#90](../../issues/90) | Model BFI 0.00 vs observed 0.55 | The river sink retains what it should discharge |
 | [#89](../../issues/89) | **Daily and monthly drain 4.7× differently** | A monthly calibration is **invalid** for the daily mode we forecast in. This already produced one false "perfect fit". |
@@ -114,6 +131,9 @@ water-budget work lands. [#81–#86](../../issues/81)
 5. **Q > P is not a mass violation** — it means you averaged precipitation over the wrong area.
 6. **A perfect fit can be right for the wrong reason.** The monthly calibration reproduced the well
    seasonal cycle *exactly* by under-draining, compensating for missing physics.
+7. **Do not attribute a lag to diffusion before checking the reservoir.** The 4-month rain→water-table
+   lag was blamed on unsaturated travel time; it is **snowmelt**. The snowpack holds the water and
+   releases it in April. Always ask *what is storing the water* before inventing a transport delay.
 
 ---
 
