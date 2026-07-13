@@ -284,7 +284,7 @@ def vs30_surface_referenced(vs, depth_m, top_m=30.0, axis=0, min_vs=1.0):
 
 def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
                    svm_vs30_tif=Path("data/processed/svm_vs30.tif"), svm_nc=None,
-                   vs_var="vs", depth_name="depth", like=None, min_vs=1.0):
+                   vs_var="vs", depth_name="depth", like=None, min_vs=1.0, svm_zarr=None):
     """Vs30 from the **Soil Velocity Model** (Grant, Wirth & Stone 2025; USGS data release) — the
     preferred PNW Vs source. Returns a Vs30 DataArray (m/s) or None if the model is not staged.
 
@@ -302,13 +302,19 @@ def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
         vs = rxr.open_rasterio(svm_vs30_tif, masked=True).squeeze("band", drop=True)
         return vs.rio.reproject_match(like) if like is not None else vs
 
-    if svm_nc and Path(svm_nc).exists():
-        # A staged-but-broken netCDF must FAIL LOUDLY: silently falling back here once shipped a
+    # Zarr (local or Kopah/S3) is the preferred source: chunked and read lazily over the network, so
+    # the 6.2 GB CVM17 netCDF never has to be downloaded. Falls through to the netCDF if not staged.
+    src = svm_zarr if svm_zarr else (svm_nc if svm_nc and Path(svm_nc).exists() else None)
+    if src:
+        # A staged-but-broken source must FAIL LOUDLY: silently falling back here once shipped a
         # Wald-Allen map that looked like an SVM one. Not-staged still falls back gracefully (below).
         import xarray as xr
         from pyproj import Transformer
 
-        with xr.open_dataset(svm_nc) as ds:                               # closes the handle promptly
+        from src.io.zarr_store import is_remote, open_zarr
+        opener = (open_zarr(str(src)) if (is_remote(str(src)) or str(src).endswith(".zarr"))
+                  else xr.open_dataset(src))
+        with opener as ds:                                                # closes the handle promptly
             v = ds[vs_var]
             xdim = next(d for d in v.dims if d in ("utme", "x", "easting"))
             ydim = next(d for d in v.dims if d in ("utmn", "y", "northing"))
@@ -337,7 +343,7 @@ def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
         da = da.rio.write_crs(SVM_CRS).rio.set_spatial_dims(x_dim="x", y_dim="y")
         da = da.rio.clip_box(*bbox, crs="EPSG:4326")
         logger.info("SVM Vs30 extracted from %s: %d x %d cells, %.0f%% valid",
-                    Path(svm_nc).name, da.sizes["y"], da.sizes["x"],
+                    str(src), da.sizes["y"], da.sizes["x"],
                     100.0 * float(np.isfinite(da.values).mean()))
         return da.rio.reproject_match(like) if like is not None else da
 
@@ -350,14 +356,14 @@ def fetch_svm_vs30(bbox=PUGET_CASCADES_BBOX,
 def get_vs30(bbox=PUGET_CASCADES_BBOX, source="svm",
              slope_tif=Path("data/processed/terrain_slope_90m.tif"), like=None, region="active",
              svm_vs30_tif=Path("data/processed/svm_vs30.tif"), svm_nc=None,
-             vs_var="vs", depth_name="depth", min_vs=1.0):
+             vs_var="vs", depth_name="depth", min_vs=1.0, svm_zarr=None):
     """Unified Vs30 accessor. ``source`` in {svm, wald_allen, usgs, sanger_maurer}; the default
     **svm** (Grant, Wirth & Stone 2025) is the preferred measurement-based PNW model. Every non-proxy
     source falls back to the always-available Wald-Allen slope proxy. ``like`` reprojects the result
     onto the analysis grid (pass the 90 m terrain grid so the output co-registers with the other static
     layers). Returns a Vs30 DataArray (m/s)."""
     if source == "svm":
-        vs = fetch_svm_vs30(bbox, svm_vs30_tif=svm_vs30_tif, svm_nc=svm_nc,
+        vs = fetch_svm_vs30(bbox, svm_vs30_tif=svm_vs30_tif, svm_nc=svm_nc, svm_zarr=svm_zarr,
                             vs_var=vs_var, depth_name=depth_name, like=like, min_vs=min_vs)
         if vs is not None:
             return vs
@@ -391,6 +397,12 @@ def main():
                    help="Pre-extracted SVM Vs30 raster (Grant, Wirth & Stone 2025).")
     p.add_argument("--svm-nc", type=Path, default=None,
                    help="SVM/CVM Vs netCDF from the USGS data release (doi:10.5066/P14HJ3IC).")
+    p.add_argument("--svm-zarr", default=None,
+                   help="Staged SVM Zarr, local or Kopah "
+                        "(s3://gaia/soil-twin/static/svm_cvm17.zarr). Preferred: read lazily, no "
+                        "6.2 GB download. Build it with src.data.stage_svm_zarr.")
+    p.add_argument("--zarr-out", default=None,
+                   help="Also write Vs30 as Zarr (local path or s3://... on Kopah).")
     p.add_argument("--vs-var", default="vs", help="Vs variable name inside --svm-nc.")
     p.add_argument("--depth-name", default="depth", help="Depth coordinate name inside --svm-nc.")
     p.add_argument("--min-vs", type=float, default=1.0,
@@ -408,12 +420,15 @@ def main():
         like = rxr.open_rasterio(args.like, masked=True).squeeze("band", drop=True)
 
     vs = get_vs30(tuple(args.bbox), source=args.source, slope_tif=args.slope, region=args.region,
-                  svm_vs30_tif=args.svm_vs30, svm_nc=args.svm_nc, vs_var=args.vs_var,
-                  depth_name=args.depth_name, like=like, min_vs=args.min_vs)
+                  svm_vs30_tif=args.svm_vs30, svm_nc=args.svm_nc, svm_zarr=args.svm_zarr,
+                  vs_var=args.vs_var, depth_name=args.depth_name, like=like, min_vs=args.min_vs)
     if vs.rio.crs is None:
         vs = vs.rio.write_crs("EPSG:5070")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     vs.rio.to_raster(args.output)
+    if args.zarr_out:                                   # Zarr is the staging format (gaia-cli convention)
+        from src.io.zarr_store import write_zarr
+        write_zarr(vs.rename("vs30").to_dataset(), args.zarr_out)
     finite = np.isfinite(vs.values)
     logger.info("Wrote Vs30 (%s) to %s | range %.0f-%.0f m/s, median %.0f",
                 args.source, args.output, float(np.nanmin(vs.values)), float(np.nanmax(vs.values)),

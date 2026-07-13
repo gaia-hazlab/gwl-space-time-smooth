@@ -42,6 +42,8 @@ from pathlib import Path
 
 import numpy as np
 
+from src.io.zarr_store import is_remote
+
 logger = logging.getLogger("fetch_earth2studio")
 
 PUGET_CASCADES_BBOX = (-123.3, 46.8, -120.8, 48.5)
@@ -152,9 +154,12 @@ def ai_precip_forecast(start_time, lead_days=15, bbox=PUGET_CASCADES_BBOX,
                         caveat=f"{res} deg grid: orographic enhancement over the Cascades is "
                                "under-resolved; bias-correct against PRISM before trusting totals")
     if out:
-        Path(out).parent.mkdir(parents=True, exist_ok=True)
-        out_ds.to_netcdf(out)
-        logger.info("wrote %s", out)
+        # Zarr, not netCDF: chunked + lazily readable over the network, and it stages straight to
+        # Kopah so the physics side never copies a file by hand (gaia-cli convention).
+        from src.io.zarr_store import write_zarr
+        if not is_remote(str(out)):
+            Path(out).parent.mkdir(parents=True, exist_ok=True)
+        write_zarr(out_ds, str(out))
     return out_ds
 
 
@@ -165,7 +170,8 @@ def main():
     p.add_argument("--lead-days", type=int, default=15)
     p.add_argument("--model", default=PREFERRED_MODEL, choices=sorted(PRECIP_CAPABLE))
     p.add_argument("--bbox", type=float, nargs=4, default=PUGET_CASCADES_BBOX)
-    p.add_argument("--out", type=Path, default=Path("data/forecast/graphcast_precip.nc"))
+    p.add_argument("--out", default="data/forecast/fuxi_precip.zarr",
+                   help="Local .zarr path or s3://gaia/soil-twin/forecast/... on Kopah.")
     a = p.parse_args()
     ai_precip_forecast(a.start, a.lead_days, tuple(a.bbox), a.model, a.out)
 

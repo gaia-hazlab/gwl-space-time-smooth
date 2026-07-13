@@ -3,8 +3,10 @@
 Drives the coupled water budget forward one day at a time from a daily rainfall forecast and maps it
 onto theta / water table / Vs30 (and the two dv/v bands). The rainfall source is swappable:
 
-  --forcing-nc data/forecast/fuxi_precip.nc    real AI forecast (FuXi, 0.25 deg, 15-day cascade;
-                                               produced by src.data.fetch_earth2studio on a GPU host)
+  --forcing-zarr s3://gaia/soil-twin/forecast/fuxi/<init>.zarr
+                                               real AI forecast (FuXi, 0.25 deg, 15-day cascade),
+                                               staged to Kopah by src.data.fetch_earth2studio on a
+                                               GPU host and read lazily -- no file copy
   --scenario ar                                a documented atmospheric-river SCENARIO (clearly
                                                labelled as such -- NOT an observation, NOT a forecast)
 
@@ -58,8 +60,9 @@ def _scenario_ar(n_days=15, total_mm=220.0, tmean_c=7.0):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="+1..+15 day soil-state forecast on the 90 m grid.")
-    ap.add_argument("--forcing-nc", type=Path, default=None,
-                    help="Daily AI forecast netCDF (precip_mm, tmean_c) from fetch_earth2studio.")
+    ap.add_argument("--forcing-zarr", default=None,
+                    help="Daily AI forecast Zarr (precip_mm, tmean_c): a local .zarr or a Kopah "
+                         "s3://gaia/soil-twin/forecast/... URI, read lazily (no download).")
     ap.add_argument("--scenario", default="ar", choices=["ar"],
                     help="Fallback scenario when no --forcing-nc is given.")
     ap.add_argument("--lead-days", type=int, default=15)
@@ -79,9 +82,10 @@ def main(argv=None):
 
     # --- forcing ---------------------------------------------------------------------------------
     n = a.lead_days
-    if a.forcing_nc and a.forcing_nc.exists():
-        f = xr.open_dataset(a.forcing_nc)
-        src = f.attrs.get("source", str(a.forcing_nc))
+    if a.forcing_zarr:
+        from src.io.zarr_store import open_zarr
+        f = open_zarr(a.forcing_zarr)
+        src = f.attrs.get("source", str(a.forcing_zarr))
         # area-mean the coarse AI field onto the analysis grid (MVP: no orographic downscaling --
         # the native cell is ~28 km, so this is a spatially flat forcing over the pilot, and it is
         # labelled as such rather than dressed up as 90 m rainfall)
@@ -91,7 +95,7 @@ def main(argv=None):
     else:
         pr, tm = _scenario_ar(n)
         src = "SCENARIO: 3-day atmospheric river (not a forecast, not an observation)"
-        logger.warning("No --forcing-nc; using %s", src)
+        logger.warning("No --forcing-zarr; using %s", src)
 
     # broadcast the (coarse / scenario) daily forcing over the 90 m grid
     shp = (n,) + vs30.shape

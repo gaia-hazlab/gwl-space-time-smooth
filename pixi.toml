@@ -48,6 +48,7 @@ mapie = "*"
 hsclient = "*"
 scikit-gstat = "*"
 zarr = "*"
+obstore = "*"
 hf-hydrodata = "*"
 odc-stac = "*"
 odc-geo = "*"
@@ -110,6 +111,8 @@ vs30 = "python -m src.data.fetch_vs30 --source svm --output data/processed/vs30_
 # (jax[cuda13]); will not run on macOS/arm64. Writes data/forecast/graphcast_precip.nc
 ai-precip = "python -m src.data.fetch_earth2studio --start 2024-12-01 --lead-days 15"
 forecast-leadtime = "python notebooks/make_forecast_leadtime.py"
+# stage the 6.2 GB SVM netCDF as chunked Zarr (local, or s3://gaia/... on Kopah)
+stage-svm-zarr = "python -m src.data.stage_svm_zarr"
 # Digital-twin MVP: 2x3 animated GIF (GWL, soil moisture, Vs30 + uncertainty) with dv/v assimilation.
 digital-twin = "python notebooks/make_digital_twin.py"
 # Coupled water budget: recharge + capillary rise (#43), saturation-excess runoff + TOPMODEL (#44).

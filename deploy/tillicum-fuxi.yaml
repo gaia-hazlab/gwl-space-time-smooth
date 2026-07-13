@@ -39,6 +39,18 @@ workdir: .
 envs:
   START: "2024-12-01"           # forecast initialisation (override: --env START=YYYY-MM-DD)
   LEAD_DAYS: "15"
+  # Staged straight to Kopah as Zarr -- nothing is copied by hand (the gaia-cli staging pattern).
+  OUT: "s3://gaia/soil-twin/forecast/fuxi/2024-12-01.zarr"
+
+# Kopah credentials. NOTE (from skypilot-hyak/templates/klone-kopah.yaml): SkyPilot `file_mounts`
+# does NOT work with Kopah's custom endpoint, so we do not mount -- we write with the S3 API directly.
+# Pass the keys through at launch, do not bake them in:
+#   sky launch ... --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY
+  AWS_ACCESS_KEY_ID: ""
+  AWS_SECRET_ACCESS_KEY: ""
+  AWS_ENDPOINT_URL: "https://s3.kopah.uw.edu"
+  S3_ENDPOINT_URL: "https://s3.kopah.uw.edu"      # s5cmd/s3cmd read this name
+  AWS_DEFAULT_REGION: "us-west-2"
 
 setup: |
   set -euo pipefail
@@ -46,32 +58,31 @@ setup: |
   uv venv --python 3.11 ~/fuxi-venv
   source ~/fuxi-venv/bin/activate
   # FuXi's extra pins onnxruntime-gpu (NOT jax/cuda -- that is GraphCast's problem)
-  uv pip install "earth2studio[fuxi]" xarray netcdf4 h5netcdf
+  uv pip install "earth2studio[fuxi]" xarray zarr obstore boto3 rioxarray
 
 run: |
   set -euo pipefail
   source ~/fuxi-venv/bin/activate
   nvidia-smi
-  mkdir -p data/forecast
 
-  # Produces data/forecast/fuxi_precip.nc (daily precip_mm + tmean_c, 0.25 deg, clipped to the
-  # Puget/Cascades bbox). Fails loudly if tp06 comes back zero-filled or in the wrong units.
+  # Writes daily precip_mm + tmean_c (0.25 deg, Puget/Cascades) as chunked Zarr on Kopah.
+  # Fails loudly if tp06 comes back zero-filled (the GraphCastOperational trap) or in the wrong units.
   python -m src.data.fetch_earth2studio \
     --model FuXi \
     --start "${START}" \
     --lead-days "${LEAD_DAYS}" \
-    --out data/forecast/fuxi_precip.nc
+    --out "${OUT}"
 
-  python - <<'EOF'
-  import xarray as xr
-  ds = xr.open_dataset("data/forecast/fuxi_precip.nc")
+  python - <<EOF
+  from src.io.zarr_store import open_zarr
+  ds = open_zarr("${OUT}")
   print(ds)
   print("total precip over window: %.1f mm (grid mean)" % float(ds.precip_mm.mean(["lat","lon"]).sum()))
   EOF
 
-# Retrieve the forcing, then run the (free) physics locally:
-#   rsync -avP fuxi:~/sky_workdir/data/forecast/fuxi_precip.nc data/forecast/
-#   pixi run forecast-leadtime --forcing-nc data/forecast/fuxi_precip.nc
+# Then, anywhere (no GPU, no file copy -- the Zarr is read lazily from Kopah):
+#   pixi run forecast-leadtime --forcing-zarr s3://gaia/soil-twin/forecast/fuxi/2024-12-01.zarr
 #
-# Alternatively write straight to Kopah (S3-compatible) so nothing has to be copied by hand --
-# see gaia-hazlab/skypilot-hyak/docs/kopah.md and templates/klone-kopah.yaml.
+# Static layers live alongside it, staged once:
+#   s3://gaia/soil-twin/static/svm_cvm17.zarr   (the 6.2 GB SVM netCDF, chunked -> 756 MB)
+#   s3://gaia/soil-twin/static/vs30_90m.zarr    (derived Vs30)
