@@ -12,7 +12,12 @@ water through explicit fluxes, and lateral redistribution moves water down-gradi
       (GWL -> theta), closing the feedback.
 
   Lateral (issue #44)
-    - **saturation-excess surface runoff** is generated when the column fills to porosity,
+    - **saturated-area (variable-source-area) runoff**: where the water table is at or near the
+      surface there is no space to infiltrate into, so rain runs off. This is the dominant runoff
+      mechanism in humid temperate catchments like the PNW -- it fires on valley floors and riparian
+      corridors (HAND ~ 0) while ridges infiltrate freely. It is a **sink** in this budget, so
+      omitting it biases theta and the water table high,
+    - **root-zone saturation excess** on top of that, when the column itself fills to porosity,
     - **subsurface lateral flow** is represented by a TOPMODEL relation: the steady-state water
       table follows the topographic wetness index (valleys wet/shallow, ridges dry/deep),
     - generated runoff can be routed down-gradient with a flow-accumulation weight.
@@ -25,9 +30,11 @@ the scale storms actually happen: aggregating a 10-day forecast to a monthly mea
 event signal the forecast exists to provide, and a concentrated storm generates far more
 saturation-excess runoff (and less recharge) than the same water spread evenly over a month.
 
-Scope / caveats (tracked as follow-ups): *infiltration-excess* runoff (intensity-driven, needs
-sub-daily rainfall) is still not represented (issue #57); full channel routing to a hydrograph is left
-to a downstream runoff model (issue #55). Nominal parameters (specific yield, recession time,
+Scope / caveats (tracked as follow-ups): *infiltration-excess* (Hortonian) runoff is still not
+represented (issue #57) -- it is intensity-driven and needs sub-daily rain: a 68 mm/day storm is only
+2.8 mm/hr, far below these soils' Ksat (15-55 mm/hr), so it correctly never fires at a daily mean even
+though real storms burst well above it. Runoff *routing* to a hydrograph is deliberately NOT done here
+-- we generate the source term and LandLab routes it (issue #55). Nominal parameters (specific yield, recession time,
 capillary reach, TOPMODEL m) are calibration-pending.
 """
 
@@ -79,7 +86,8 @@ def _capillary_rise(wt_depth_m, root_depth_m, deficit_frac, cap_max_mm, fringe_m
 def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, root_depth_m=1.0,
                          specific_yield=SPECIFIC_YIELD, recession_months=RECESSION_MONTHS,
                          cap_max_mm=CAP_MAX_MM, cap_fringe_m=CAP_FRINGE_M, drain_frac=_DRAIN_FRAC,
-                         wt_depth0_m=5.0, init="fc", dt_days=None, drain_tau_days=DRAIN_TAU_DAYS):
+                         wt_depth0_m=5.0, init="fc", dt_days=None, drain_tau_days=DRAIN_TAU_DAYS,
+                         sat_area_runoff=True):
     """Time-step the coupled vadose-column + water-table budget at an arbitrary timestep.
 
     ``liquid_in_mm`` (rain + snowmelt) and ``pet_mm`` are (t, ...) arrays **per timestep** — mm/month
@@ -140,8 +148,23 @@ def coupled_water_budget(liquid_in_mm, pet_mm, theta_wp, theta_fc, theta_sat, ro
         cap_eff = np.minimum(S + cap, Ssat) - S              # actual added (exact mass balance)
         S = S + cap_eff
 
-        S = S + liquid[t]
-        runoff = np.maximum(S - Ssat, 0.0); S = S - runoff   # saturation-excess surface runoff
+        # --- saturated-area (variable-source-area) runoff -----------------------------------------
+        # The dominant runoff mechanism in humid temperate catchments: rain falling where the water
+        # table is at/near the surface cannot infiltrate, because there is no space to put it. The
+        # storage available between the table and the surface is S_y * wt_depth; anything above that
+        # runs off. Where the table outcrops (wt_depth <= 0) the deficit is zero and ALL rain runs off.
+        # This fires on valley floors / riparian corridors (HAND ~ 0) while ridges infiltrate freely,
+        # which is exactly the variable source area -- and it is a SINK in this budget, so omitting it
+        # biases theta and the water table high.
+        if sat_area_runoff:
+            deficit_mm = np.clip(specific_yield * wt_depth, 0.0, None) * 1000.0
+            sat_runoff = np.maximum(liquid[t] - deficit_mm, 0.0)
+        else:
+            sat_runoff = np.zeros_like(S)
+
+        S = S + (liquid[t] - sat_runoff)                     # only what can infiltrate
+        excess = np.maximum(S - Ssat, 0.0); S = S - excess   # root-zone saturation excess
+        runoff = sat_runoff + excess
         aet = np.minimum(pet[t], np.maximum(S - Swp, 0.0)); S = S - aet
         rech = np.maximum(S - Sfc, 0.0) * drain_step; S = S - rech   # deep percolation = recharge
         S = np.clip(S, Swp, Ssat)
