@@ -1,0 +1,77 @@
+# FuXi 15-day rainfall forecast on UW Hyak Tillicum (H200), via SkyPilot.
+#
+# Conventions follow gaia-hazlab/skypilot-hyak (templates/nvidia-earth2studio.yaml,
+# templates/tillicum-H200.yaml). Set that repo up first -- it has the Tillicum/SkyPilot
+# setup notes in docs/tillicum.md.
+#
+#   sky launch --infra slurm/tillicum -c fuxi deploy/tillicum-fuxi.yaml
+#   sky down fuxi                      # Slurm nodes do NOT autostop -- see below
+#
+# This job ONLY produces the rainfall forcing netCDF. That is deliberate: the soil-state
+# forecast (water budget -> theta / GWL / Vs) is pure numpy and costs nothing, so it runs
+# locally. The forcing file is the interface between the GPU and the physics:
+#
+#   Tillicum (H200):  FuXi -> data/forecast/fuxi_precip.nc      (this job)
+#   anywhere:         pixi run forecast-leadtime --forcing-nc data/forecast/fuxi_precip.nc
+#
+# Why FuXi and not GraphCast:
+#   - FuXi natively emits tp06; it is a cascade trained for 5/10/15-day leads (we want +1..+15).
+#   - It runs on onnxruntime-gpu, not jax[cuda13].
+#   - GraphCastOperational emits tp06 as a ZERO-FILLED PLACEHOLDER -- it does not predict rain at
+#     all. src.data.fetch_earth2studio.assert_precipitation_is_real refuses it by name.
+
+resources:
+  infra: slurm/tillicum
+  accelerators: H200:1          # required, else SkyPilot tries to run on the login node
+
+config:
+  slurm:
+    sbatch_options:
+      account: gaia
+      # WARNING: time is a HARD limit -- the node is killed at expiry, finished or not.
+      # FuXi is 60 six-hourly steps through a 3-model cascade (~9.4 GB of weights to pull on
+      # first run). 1 h is generous on an H200; raise it if the HF download is slow.
+      time: "1:00:00"
+      # qos: debug            # <- debug qos caps runtime at 1 h; fine for a first run
+
+workdir: .
+
+envs:
+  START: "2024-12-01"           # forecast initialisation (override: --env START=YYYY-MM-DD)
+  LEAD_DAYS: "15"
+
+setup: |
+  set -euo pipefail
+  pip install uv
+  uv venv --python 3.11 ~/fuxi-venv
+  source ~/fuxi-venv/bin/activate
+  # FuXi's extra pins onnxruntime-gpu (NOT jax/cuda -- that is GraphCast's problem)
+  uv pip install "earth2studio[fuxi]" xarray netcdf4 h5netcdf
+
+run: |
+  set -euo pipefail
+  source ~/fuxi-venv/bin/activate
+  nvidia-smi
+  mkdir -p data/forecast
+
+  # Produces data/forecast/fuxi_precip.nc (daily precip_mm + tmean_c, 0.25 deg, clipped to the
+  # Puget/Cascades bbox). Fails loudly if tp06 comes back zero-filled or in the wrong units.
+  python -m src.data.fetch_earth2studio \
+    --model FuXi \
+    --start "${START}" \
+    --lead-days "${LEAD_DAYS}" \
+    --out data/forecast/fuxi_precip.nc
+
+  python - <<'EOF'
+  import xarray as xr
+  ds = xr.open_dataset("data/forecast/fuxi_precip.nc")
+  print(ds)
+  print("total precip over window: %.1f mm (grid mean)" % float(ds.precip_mm.mean(["lat","lon"]).sum()))
+  EOF
+
+# Retrieve the forcing, then run the (free) physics locally:
+#   rsync -avP fuxi:~/sky_workdir/data/forecast/fuxi_precip.nc data/forecast/
+#   pixi run forecast-leadtime --forcing-nc data/forecast/fuxi_precip.nc
+#
+# Alternatively write straight to Kopah (S3-compatible) so nothing has to be copied by hand --
+# see gaia-hazlab/skypilot-hyak/docs/kopah.md and templates/klone-kopah.yaml.
