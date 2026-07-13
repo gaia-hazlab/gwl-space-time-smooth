@@ -113,6 +113,9 @@ ai-precip = "python -m src.data.fetch_earth2studio --start 2024-12-01 --lead-day
 forecast-leadtime = "python notebooks/make_forecast_leadtime.py"
 # stage the 6.2 GB SVM netCDF as chunked Zarr (local, or s3://gaia/... on Kopah)
 stage-svm-zarr = "python -m src.data.stage_svm_zarr"
+# observed daily forcing (gaia prism-stac) + the Dec-2025 hindcast demo
+prism-daily = "python -m src.data.fetch_prism_daily --start 2025-12-01 --end 2025-12-31 --out data/processed/prism_daily_puget.zarr"
+hindcast = "python notebooks/make_forecast_leadtime.py --forcing-zarr data/processed/prism_daily_puget.zarr --lead-days 31 --title 'HINDCAST — December 2025, forced by OBSERVED PRISM daily rainfall (90 m Puget/Cascades)' --out figures/demo/hindcast_dec2025.png"
 # Digital-twin MVP: 2x3 animated GIF (GWL, soil moisture, Vs30 + uncertainty) with dv/v assimilation.
 digital-twin = "python notebooks/make_digital_twin.py"
 # Coupled water budget: recharge + capillary rise (#43), saturation-excess runoff + TOPMODEL (#44).

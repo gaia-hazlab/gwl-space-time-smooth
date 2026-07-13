@@ -66,6 +66,8 @@ def main(argv=None):
     ap.add_argument("--scenario", default="ar", choices=["ar"],
                     help="Fallback scenario when no --forcing-nc is given.")
     ap.add_argument("--lead-days", type=int, default=15)
+    ap.add_argument("--title", default=None, help="Override the figure title (e.g. HINDCAST).")
+    ap.add_argument("--out", type=Path, default=OUT)
     a = ap.parse_args(argv)
 
     # --- static layers (real) --------------------------------------------------------------------
@@ -82,16 +84,20 @@ def main(argv=None):
 
     # --- forcing ---------------------------------------------------------------------------------
     n = a.lead_days
+    pet_series = None
     if a.forcing_zarr:
         from src.io.zarr_store import open_zarr
         f = open_zarr(a.forcing_zarr)
         src = f.attrs.get("source", str(a.forcing_zarr))
-        # area-mean the coarse AI field onto the analysis grid (MVP: no orographic downscaling --
-        # the native cell is ~28 km, so this is a spatially flat forcing over the pilot, and it is
-        # labelled as such rather than dressed up as 90 m rainfall)
-        pr = f["precip_mm"].mean(dim=[d for d in f["precip_mm"].dims if d != "lead_time"]).values[:n]
-        tm = f["tmean_c"].mean(dim=[d for d in f["tmean_c"].dims if d != "lead_time"]).values[:n]
-        logger.info("forcing: %s (%.0f mm total over %d d)", src, np.nansum(pr), n)
+        tdim = "lead_time" if "lead_time" in f["precip_mm"].dims else "time"
+        n = min(n, f.sizes[tdim]) if a.lead_days else f.sizes[tdim]
+
+        def _mean(v):                       # area-mean the coarse forcing (4 km PRISM / 28 km FuXi)
+            return f[v].mean(dim=[d for d in f[v].dims if d != tdim]).values[:n]
+        pr, tm = _mean("precip_mm"), _mean("tmean_c")
+        if "pet_mm" in f:                   # PRISM ships a real Hamon PET; use it, do not invent one
+            pet_series = _mean("pet_mm")
+        logger.info("forcing: %s (%d d, %.0f mm total, area mean)", src, n, np.nansum(pr))
     else:
         pr, tm = _scenario_ar(n)
         src = "SCENARIO: 3-day atmospheric river (not a forecast, not an observation)"
@@ -101,7 +107,10 @@ def main(argv=None):
     shp = (n,) + vs30.shape
     precip = np.broadcast_to(pr[:, None, None], shp).astype("float64")
     tmean = np.broadcast_to(tm[:, None, None], shp).astype("float64")
-    pet = np.full(shp, 0.6)                       # winter PNW PET ~0.6 mm/day (Hamon-scale)
+    if pet_series is not None:
+        pet = np.broadcast_to(pet_series[:, None, None], shp).astype("float64")
+    else:
+        pet = np.full(shp, 0.6)                   # fallback: winter PNW PET ~0.6 mm/day (Hamon-scale)
 
     forcing = ForecastForcing(times=np.arange(1, n + 1), precip_mm=precip, pet_mm=pet,
                               dt_days=1.0, tmean_c=tmean, source=src)
@@ -149,16 +158,17 @@ def main(argv=None):
     ax[1, 2].legend(fontsize=8, frameon=False)
 
     for x in ax.ravel():
-        x.set_xlabel("forecast lead (days)"); x.grid(alpha=0.25, lw=0.6)
-        x.set_xticks(lead[::2])
+        x.set_xlabel("day"); x.grid(alpha=0.25, lw=0.6)
+        x.set_xticks(lead[::max(1, n // 8)])
 
-    fig.suptitle(f"Soil-state forecast, lead +1…+{n} days (90 m Puget/Cascades)\n{src}",
+    fig.suptitle(a.title or f"Soil-state forecast, lead +1…+{n} days (90 m Puget/Cascades)\n{src}",
                  fontsize=12, fontweight="bold")
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUT, dpi=130, bbox_inches="tight", facecolor="white")
-    logger.info("wrote %s", OUT)
+    out = a.out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=130, bbox_inches="tight", facecolor="white")
+    logger.info("wrote %s", out)
     assets = Path("docs/twin/assets"); assets.mkdir(parents=True, exist_ok=True)
-    shutil.copy(OUT, assets / OUT.name)
+    shutil.copy(out, assets / out.name)
 
     logger.info("lead+1  θ=%.3f  WT=%.2f m  Vs30=%.1f", th[0], wt[0], v30[0])
     logger.info("lead+%-2d θ=%.3f  WT=%.2f m  Vs30=%.1f  | dv/v shallow %+.2f%%, deep %+.4f%%",
