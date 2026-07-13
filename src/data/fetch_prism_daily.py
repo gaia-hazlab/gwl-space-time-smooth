@@ -52,24 +52,82 @@ def hamon_pet_per_day_mm(tmean_c, times, lat):
     return np.clip(np.where(T > 0.0, pet, 0.0), 0.0, None).astype("float32")   # no PET below freezing
 
 
-def open_prism_daily(start, end, bbox=PUGET_CASCADES_BBOX, catalog_url=PRISM_STAC):
-    """Daily PRISM precip + tmean + Hamon PET, clipped to ``bbox``. Returns an xarray Dataset."""
+PRISM_SERVICE = "https://services.nacse.org/prism/data/get/us/{res}/{elem}/{yyyymmdd}"
+
+
+def _fetch_prism_day(elem, day, res, bbox, raw_dir):
+    """One daily PRISM grid straight from the PRISM service (same endpoint fetch_prism_monthly uses,
+    which also accepts yyyymmdd). Cached, since the service is rate-limited by courtesy."""
+    import io
+    import zipfile
+
+    import requests
+    import rioxarray
+
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    ymd = day.strftime("%Y%m%d")
+    cache = raw_dir / f"prism_{elem}_{ymd}_{res}.tif"
+    if not cache.exists():
+        r = requests.get(PRISM_SERVICE.format(res=res, elem=elem, yyyymmdd=ymd), timeout=120)
+        r.raise_for_status()
+        with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+            name = next(n for n in zf.namelist() if n.endswith((".bil", ".tif")))
+            zf.extractall(raw_dir)
+            (raw_dir / name).rename(cache) if name.endswith(".tif") else None
+            if not cache.exists():                          # .bil -> read and re-save as tif
+                da = rioxarray.open_rasterio(raw_dir / name, masked=True).squeeze("band", drop=True)
+                da.rio.to_raster(cache)
+    da = rioxarray.open_rasterio(cache, masked=True).squeeze("band", drop=True)
+    return da.rio.clip_box(*bbox)
+
+
+def open_prism_daily_service(start, end, bbox=PUGET_CASCADES_BBOX, res="4km",
+                             raw_dir=None):
+    """Daily PRISM direct from the PRISM service — covers ANY window, unlike the STAC catalog."""
+    from pathlib import Path as _P
+
+    raw_dir = _P(raw_dir or "data/raw/prism_daily")
+    days = pd.date_range(start, end, freq="D")
+    logger.info("fetching %d days of PRISM daily (ppt + tmean) from the PRISM service", len(days))
+    ppt, tmn = [], []
+    for i, d in enumerate(days):
+        ppt.append(_fetch_prism_day("ppt", d, res, bbox, raw_dir))
+        tmn.append(_fetch_prism_day("tmean", d, res, bbox, raw_dir))
+        if (i + 1) % 30 == 0:
+            logger.info("  %d/%d days", i + 1, len(days))
+    ds = xr.Dataset({
+        "precip_mm": xr.concat(ppt, dim=pd.Index(days, name="time")),
+        "tmean_c": xr.concat(tmn, dim=pd.Index(days, name="time")),
+    })
+    return ds.rename({"x": "x", "y": "y"})
+
+
+def open_prism_daily(start, end, bbox=PUGET_CASCADES_BBOX, catalog_url=PRISM_STAC, source="auto"):
+    """Daily PRISM precip + tmean + Hamon PET, clipped to ``bbox``. Returns an xarray Dataset.
+
+    ``source='auto'`` uses the gaia prism-stac catalog when it covers the window (it currently holds
+    only 2025-12-01..12-31) and otherwise falls back to the PRISM service, which covers any window.
+    """
     import odc.stac
     import pystac
 
-    odc.stac.configure_rio(cloud_defaults=True)
-    cat = pystac.Catalog.from_file(catalog_url)
-    items = [i for i in cat.get_all_items()
-             if i.datetime and start <= i.datetime.strftime("%Y-%m-%d") <= end]
-    if not items:
-        raise ValueError(f"prism-stac has no items in {start}..{end} "
-                         "(the catalog currently covers 2025-12-01..2025-12-31)")
+    ds = None
+    if source in ("auto", "stac"):
+        odc.stac.configure_rio(cloud_defaults=True)
+        cat = pystac.Catalog.from_file(catalog_url)
+        items = [i for i in cat.get_all_items()
+                 if i.datetime and start <= i.datetime.strftime("%Y-%m-%d") <= end]
+        covers = len(items) >= len(pd.date_range(start, end, freq="D"))
+        if items and (covers or source == "stac"):
+            w, s, e, n = bbox
+            ds = odc.stac.load(items, bands=["ppt", "tmean"], bbox=[w, s, e, n], chunks={})
+            ds = ds.rename({"ppt": "precip_mm", "tmean": "tmean_c"})
+        elif source == "auto":
+            logger.info("prism-stac covers only part of %s..%s; using the PRISM service instead",
+                        start, end)
+    if ds is None:
+        ds = open_prism_daily_service(start, end, bbox)
 
-    w, s, e, n = bbox
-    ds = odc.stac.load(items, bands=["ppt", "tmean"], bbox=[w, s, e, n], chunks={})
-    ds = ds.rename({"ppt": "precip_mm", "tmean": "tmean_c",
-                    "longitude": "x", "latitude": "y"} if "longitude" in ds.dims else
-                   {"ppt": "precip_mm", "tmean": "tmean_c"})
     # PRISM nodata is -9999; make it NaN so it cannot be summed as rainfall
     ds = ds.where(ds.precip_mm > -9000).where(ds.tmean_c > -9000)
     ds = ds.sortby("time").load()
