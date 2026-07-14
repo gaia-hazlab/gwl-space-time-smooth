@@ -53,27 +53,23 @@ grid would blur the valley-vs-ridge distinction that governs the hazard. Two con
 
 ## The static-layer catalog
 
-The static layers needed for the soil-hydromechanical state and the downstream hazards, each built to
-the same 90 m analysis grid (@fig-static-layers shows the **real** data over the Puget Sound / Cascades
-pilot):
+The static layers required by the soil-hydromechanical state and the downstream hazards, each built to
+the same 90 m analysis grid (@fig-static-layers).
 
-![**The static layers over the western Cascades domain** (v0.4): 90 m, EPSG:5070, **2.96 M cells**,
-covering the Puyallup and Nisqually headwaters — all 8 gauged basins now inside (was 1). Mt Rainier is
-visible in every panel. Note **root depth**, which is no longer a global 1 m constant: it thins on the
-ridges (1.05 m on steep ground vs 1.49 m on the flats), so a Cascade ridge no longer fabricates storm
-buffering it does not have. Vs30 is the measurement-based Soil Velocity Model.
-](assets/static_layers_domain.png){#fig-static-domain}
+The analysis domain is the **western Cascades**: EPSG:5070, 90 m, **2.96 M cells**, spanning the Puget
+lowland through the Puyallup and Nisqually headwaters. The extent is set by what the model must be able
+to *constrain*, not by what is convenient to fetch — the gauged basins are the only observational handle
+on the water-budget flux partition (see [Forecast](06-forecast.qmd)), and all eight of them lie
+inside it.
 
-![**The original lowland catalog** (pre-v0.4), kept for comparison. Nine of the static layers over the Puget Sound /
-Cascades analysis footprint, all on the 90 m EPSG:5070 grid: terrain derivatives HAND / slope / TWI
-(from the 3DEP DEM), the SOLUS100 soil texture (clay / sand), the Saxton–Rawls hydraulic envelope
-(saturated conductivity Ksat, field-capacity θ, available water capacity AWC), and **Vs30 from the Soil
-Velocity Model** [@grant2025svm]. The Vs30 panel is the real SVM field: soft ground (~180–300 m s⁻¹)
-tracks the valley floors and river corridors where the Holocene soils and fill sit, stiff ground
-(>500 m s⁻¹) the uplands — the same corridors that show HAND ≈ 0 and high clay. All panels share one
-land footprint; water is masked (the SVM does return a *seafloor* Vs30 over open water, which is not a
-surface site condition). Regenerate with
-`pixi run static-layers` (reads `data/processed/`).](assets/static_layers.png){#fig-static-layers}
+![**The static-layer catalog** over the western Cascades domain: 90 m, EPSG:5070, 2.96 M cells. Terrain
+derivatives (HAND / slope / TWI) from the 3DEP DEM, routed at 10 m before downsampling; SOLUS100 soil
+texture and organic matter; the Saxton–Rawls hydraulic envelope ($K_{sat}$); the baseline water table;
+and **Vs30 from the Soil Velocity Model** [@grant2025svm]. **Root depth** is derived from soil
+thickness rather than assumed constant, and thins on the ridges (1.05 m on steep ground against 1.49 m
+on the flats) — a thin, rocky mountain soil cannot buffer a storm the way a metre of lowland till can,
+and root depth scales that storage directly. Regenerate with `pixi run domain-figures`.
+](assets/static_layers_domain.png){#fig-static-layers}
 
 ::: {.callout-important}
 ## Vs30 is 200 m information on a 90 m grid
@@ -84,16 +80,16 @@ really 200 m texture. The provenance records this, and the honest reading is tha
 liquefaction stiffness can be resolved, and a reason the site condition is delivered as a *site-class
 probability* rather than a point value (see [Hazard integration](07-hazard-integration.qmd)).
 
-Two further properties of the extraction are worth stating plainly. The depth axis is **terrain
-following** — verified against the file, where the shallowest sample has a median $V_S$ of ~206 m s⁻¹
-(soil, not rock), so $z=0$ is the ground surface and the 30 m average is genuinely near-surface.
-And cells with no ground, a data gap inside the top 30 m, or less than 30 m of grid below the surface
-are returned as **NaN**, never as a filled-in value.
+Two further properties of the extraction bear stating. The depth axis is **terrain-following**: the
+shallowest valid sample has a median $V_S$ of ~207 m s⁻¹ — soil, not rock — so $z=0$ is the ground
+surface and the 30 m average is genuinely near-surface, including over high relief. And cells with no
+ground, a data gap inside the top 30 m, or less than 30 m of grid below the surface are returned as
+**NaN**, never as a filled value.
 :::
 
-Over the pilot footprint the resulting field is **NEHRP C for 75% of cells, D for 23%, and E for 2%**
-(median Vs30 416 m s⁻¹, 1st–99th percentile 179–593 m s⁻¹) — the soft D/E tail being exactly the valley
-fill that carries the liquefaction hazard.
+Over the domain the resulting field is **NEHRP C for 88% of cells, D for 11%, and E for 1%** (median
+Vs30 480 m s⁻¹). Vs30 tracks the terrain as it must — valley floor 378, lower slope 433, ridge
+528 m s⁻¹ — and the soft D/E tail is the valley fill that carries the liquefaction hazard.
 
 Additional static layers used by the pipeline but not shown above (lithology / geology, depth-to-bedrock,
 distance-to-coast, and the derived hydrogeologic-domain mask) are built the same way and enter the
@@ -109,6 +105,7 @@ domain stratification.
 | Soil thickness | depth to lithic contact | SOLUS100 100 m → 90 m | storage capacity; transmissivity $T=K_{sat}h$ |
 | Lithology / geology | surficial material class | geology polygons → 90 m raster | hydrogeologic domain; stiffness control |
 | Vs30 | 30 m time-averaged $V_S$ | SVM shallow-Vs grid, 200 m → 90 m (Wald–Allen fallback) | NEHRP site class; liquefaction stiffness |
+| Root depth | soil thickness | SOLUS100 depth-to-restrictive-layer → 90 m | root-zone storage; the buffer a storm fills |
 | Depth to bedrock | subsurface geometry | subsurface product → 90 m | aquifer bottom; domain stratification |
 | Distance to coast | coastal proximity | derived → 90 m | sea-level / tidal boundary conditioning |
 
