@@ -1,44 +1,167 @@
 ---
-title: "5 · Soil-state evaluation"
+title: "5 · Evaluation of the soil state"
 ---
 
-Every number here is tagged with its **basis** — is it a real, independent test, a shared-forcing
-consistency check, or a synthetic demonstration? — because the honest value of a score depends
-entirely on which it is ([Evaluation data](02-evaluation-data.qmd)).
+Every number here is tagged with its **basis** — a genuinely independent test, a shared-forcing
+consistency check, or a synthetic demonstration — because the value of a score depends entirely on
+which it is ([Evaluation data](02-evaluation-data.qmd)).
+
+## The observing networks, and what each one can say
+
+Four ground networks observe the twin, and they are **not interchangeable**. Each constrains a
+different term, and a model can be badly wrong in a way that only one of them can see.
+
+| network | observes | constrains |
+|---|---|---|
+| **NWIS wells** | depth to water, at a point | the **saturated store** — state, and its seasonal amplitude and phase |
+| **USGS gauges** | streamflow, integrated over a basin | the **fluxes** — runoff, interflow, baseflow, via a hydrograph separation |
+| **SNOTEL** | SWE and soil moisture, at a point | the **snowpack** — the recharge clock, and the vadose store |
+| **Seismic (UW/CC)** | dv/v, over a *volume* between stations | shallow **moisture change**, at storm timescales |
+
+::: {.callout-important}
+## Wells alone cannot validate a water budget
+The state can be reproduced while the **flux partition** is badly wrong, because nothing in a
+depth-to-water record sees where the water went. Streamflow does: it *is* the catchment water budget
+integrated over a basin, and a baseflow separation splits it into quickflow and groundwater discharge.
+The gauges are therefore not a secondary check on the wells — they constrain a different half of the
+problem, and the calibration uses both ([Physics — Hydrology](03a-physics-hydrology.qmd)).
+:::
+
+![**The observing networks over the domain, and the spatial support of a dv/v measurement.** Left: the
+four ground networks. Centre: the **coda sensitivity** $S(x)$ of the seismic network — the region the
+noise cross-correlations actually sample. Right: the measurement uncertainty that follows,
+$\sigma \propto S^{-1/2}$, expressed as a multiple of the best-observed cell. dv/v constrains the twin
+where the coda samples, and nowhere else.](assets/sensors_and_dvv_support.png){#fig-sensors}
+
+## dv/v: a forward prediction everywhere, a measurement over a volume
+
+::: {.callout-warning}
+## The twin's dv/v field is a model output, not an observation
+The twin evaluates `dvv_high` and `dvv_low` at **every 90 m cell**. That field is a **forward
+prediction**: it is computed from the modelled soil moisture and water table through the petrophysical
+coupling ([Physics — Hydromechanics](03b-physics-hydromechanics.qmd)), and it exists wherever the model
+exists.
+
+A **measured** dv/v does not live at a cell. It is a property of a **station pair**: the coda of the
+noise cross-correlation samples the medium over an extended region, with a sensitivity that is a
+spatial kernel rather than a point. Displaying the modelled field everywhere without saying so would
+imply the network measures it everywhere.
+:::
+
+For diffuse coda, the sensitivity of the travel-time change between receivers $r_1, r_2$ at lapse time
+$t$ to a perturbation at $s$ is [@pacheco2005time]
+
+$$
+K(s) = \frac{\int_0^t p(r_1, s, u)\, p(s, r_2, t-u)\, \mathrm{d}u}{p(r_1, r_2, t)},
+\qquad
+p(r,t) = \frac{1}{4\pi D t}\, e^{-r^2/(4Dt)},
+$$
+
+with $p$ the intensity Green's function of the diffusion equation. Summing over the available pairs
+gives the **network sensitivity** $S(x)=\sum_{\text{pairs}} K_{\text{pair}}(x)$
+(`src/models/dvv_sensitivity.py`). Treating pairs as independent observations of the local
+perturbation, the uncertainty of a dv/v-derived state scales as
+
+$$\sigma(x) \;\propto\; \big[\,S(x)\,\big]^{-1/2},$$
+
+so a cell with no sensitivity receives **no constraint at all** and falls back on the model — it is
+returned as *no constraint*, not as a large-but-finite number that invites interpolation.
+
+This is the **spatial** complement to the *depth* sensitivity of the coda (`codameter.uq_depth`, a
+Rayleigh-kernel band matrix). Together they state *where* and *at what depth* a dv/v measurement carries
+information. Both limits are real:
+
+- **Depth support.** The shallowest realistic ambient-noise band peaks near ~45 m, below the top-30 m
+  Vs30 window, so the Vs30 response to a shallow signal is diluted by the 30 m average — a depth-
+  resolution limit, not a tuning artefact.
+- **Spatial support.** Sensitivity concentrates near the stations and along the paths between them, and
+  broadens with lapse time. Where the network is sparse, a dv/v measurement cannot test the twin.
+
+::: {.callout-note}
+## dv/v complements the wells and the soil-moisture sensors; it does not replace them
+A well observes the **saturated store** at a point. SNOTEL observes the **vadose store** at a point.
+The coda samples a **volume**, and its shallow band responds to moisture on the timescale of individual
+storms — which the wells cannot see, because the water table *integrates* storms rather than resolving
+them ([Forecast](06-forecast.qmd)).
+
+The three are therefore complementary in **state**, in **support**, and in **timescale**. dv/v is the
+right instrument for short-lead, event-scale validation of the moisture state; the wells and gauges are
+the right instruments for the cumulative antecedent state and the flux partition.
+:::
+
+## Water-budget evaluation — fluxes and state together
+
+The calibrated budget is scored against both observation classes simultaneously, with each parameter
+pinned by a different one ([Physics — Hydrology](03a-physics-hydrology.qmd)):
+
+| | model | observed | basis |
+|---|---|---|---|
+| baseflow index | 0.52 | 0.47 | **independent** — Lyne–Hollick separation, 6 gauges |
+| runoff coefficient $Q/P$ | 0.71 | 0.57–0.73 | **independent** — per-basin closure |
+| water-table seasonal amplitude | 1.02 m | 1.06 m | **independent** — 26,816 shallow-well observations |
+| water-table peak month | 5 | 4 | **independent** — same wells |
+
+Precipitation is averaged over each gauge's **own watershed** (NLDI polygons). The gauged basins are
+Cascade headwater catchments receiving far more orographic precipitation than a domain mean, and
+comparing basin discharge against domain-mean rainfall is not a closure. Comparison against wells is
+likewise made **at the well locations**: wells are drilled where people live and are not a random sample
+of the terrain.
 
 ## Groundwater-level evaluation
 
-The groundwater baseline is scored by **spatial block cross-validation** with variogram-sized blocks,
-so nearby wells never appear in both train and test folds. This gives a deliberately hard **pooled
-RMSE ≈ 18.5 m** against held-out wells — a *real* number. Per-domain gates report the achieved
-valley-fill RMSE/bias/coverage separately from the pooled figure, since the shallow valley regime that
-liquefaction cares about is far better constrained than the fractured uplands.
+The baseline is scored by **spatial block cross-validation** with variogram-sized blocks, so nearby
+wells never appear in both train and test folds: **block-CV RMSE ≈ 19 m**. A random split would leak,
+because lowland wells cannot vouch for mountain cells.
 
-## Soil-moisture evaluation — consistency vs independent
+::: {.callout-caution}
+## The training wells do not sample the terrain the model must predict
+The wells sit in the flat lowland (median slope 3.1°, 1% on ground steeper than 20°); the domain is
+37% steep. A tree ensemble asked to predict there does not extrapolate — it returns the nearest
+training leaf, so a ridge inherits a lowland water table with a small, confident, and meaningless
+variance.
 
-Two comparisons, two very different meanings:
+The baseline therefore carries an explicit **applicability domain**: confidence is the distance in
+*standardised covariate space* to the nearest training well, not a spatial distance — a cell 200 m from
+a well but 30° steeper than anything in training is an extrapolation. It flags **44% of the domain** as
+low-confidence, where a physical (TOPMODEL) prior is blended in. The confidence field ships with the
+water table; the ensemble spread is documented as a **lower bound** off-sample.
+:::
 
-- Against **MERRA-2** root-zone reanalysis (a *model evaluation dataset*), the model tracks at
-  domain-mean **r = 0.85** (bias −0.08 m³ m⁻³, RMSE 0.095), depth-matched with the total-water store.
-  This is inter-model agreement.
-- Against **in-situ SNOTEL** θ held out of the estimator (a *genuinely independent* reference), the
-  pooled skill is **r ≈ 0.33** in the sparse Cascade uplands — far below the shared-forcing consistency
-  figure, exactly as an honest independent test should read. That gap is the point: it localised the
-  missing physics (no snowpack in the bare bucket), motivating a temperature-index snow module and a
-  per-station representativeness anchor.
+## Soil-moisture evaluation — consistency versus independence
 
-## dv/v recovery and depth support
+Two comparisons with very different meanings:
 
-The dv/v pipeline is validated end-to-end on a controlled synthetic with a known imposed velocity
+- Against **MERRA-2** root-zone reanalysis — a *model evaluation dataset* — the model tracks at
+  domain-mean **r = 0.85** (bias −0.08 m³ m⁻³, RMSE 0.095). This is **inter-model agreement**, not
+  validation.
+- Against **in-situ SNOTEL** θ held out of the estimator — a *genuinely independent* reference — the
+  pooled skill is markedly lower in the sparse Cascade uplands, exactly as an honest independent test
+  should read. That gap is diagnostic rather than embarrassing: it localised missing physics.
+
+## Snow evaluation
+
+The degree-day module is scored against **30 SNOTEL SWE stations** in the domain (881–1414 m), fitted
+on each station's own precipitation and temperature so that the rain/snow-line smearing of a 4 km
+gridded product does not enter the calibration. The target is **melt-out timing** rather than SWE RMSE:
+RMSE is dominated by the accumulation season, and minimising it selects a melt factor slow enough to
+place melt release a month late.
+
+## dv/v recovery — synthetic
+
+The dv/v pipeline is validated end-to-end on a controlled synthetic with a *known* imposed velocity
 change: coda-wave stretching recovers the banded $\delta v/v$ at **r > 0.95**, and the depth inversion
-returns the imposed profile within its propagated covariance. The honest caveat is **depth support**:
-the shallowest realistic ambient-noise band peaks near ~45 m, below the top-30 m Vs30 window, so the
-Vs30 response to a shallow signal is diluted by the 30 m average — a real depth-resolution limit, not a
-tuning artefact.
+returns the imposed profile within its propagated covariance. This is a **synthetic demonstration** —
+it establishes that the estimator is unbiased, not that the field measurement is.
 
-## Calibrated uncertainty (coverage / PIT / CRPS)
+## Calibrated uncertainty
 
-Uncertainty is calibrated, not decorative: from out-of-fold `(mean, σ)` we report empirical **interval
-coverage** at the 50/80/90/95% levels, the **PIT** mean, and the **CRPS**. A product whose stated σ
-does not cover the observations at the nominal rate is recalibrated before release, so the per-cell σ
-that travels to the hazard models ([Hazard integration](07-hazard-integration.qmd)) means what it says.
+Uncertainty is calibrated, not decorative. From out-of-fold $(\mu, \sigma)$ we report empirical
+**interval coverage** at the 50/80/90/95% levels, the **PIT** mean, and the **CRPS**. A product whose
+stated $\sigma$ does not cover the observations at the nominal rate is recalibrated before release, so
+the per-cell $\sigma$ that travels to the hazard models
+([Hazard integration](07-hazard-integration.qmd)) means what it says.
+
+Two uncertainties are reported separately and must not be conflated: the **model** uncertainty (the
+spread of the estimate) and the **observability** (whether any instrument constrains that cell at all).
+The dv/v sensitivity field above is the latter — a cell can have a confident model prediction and no
+measurement able to test it.

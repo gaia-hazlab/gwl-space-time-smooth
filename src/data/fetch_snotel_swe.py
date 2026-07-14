@@ -71,6 +71,7 @@ def fetch_swe(start, end, bbox=None, out="data/processed/snotel_swe_daily.parque
                           "tmean_c": (tavg - 32.0) * 5.0 / 9.0 if not tavg.empty else pd.NA,
                           "precip_mm": prcp * 25.4 if not prcp.empty else pd.NA})
         d["triplet"], d["name"], d["elev_m"] = r.triplet, r["name"], r.elev_m
+        d["lat"], d["lon"] = r.lat, r.lon        # needed to place the station on a map
         d.index.name = "date"
         frames.append(d.reset_index())
         logger.info("  %-28s %5.0f m  peak SWE %6.0f mm", str(r["name"])[:28], r.elev_m,
