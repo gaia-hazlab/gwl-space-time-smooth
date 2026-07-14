@@ -1,0 +1,126 @@
+---
+title: "Appendix A · Compute and deployment"
+---
+
+Implementation detail for the forecast pipeline: which AI weather model, where it executes, and how its
+output is staged. None of this changes the physics ([Physics — Hydrology](03a-physics-hydrology.qmd));
+it is the machinery that delivers the forcing to it.
+
+## Model selection: which model predicts rain
+
+The budget needs precipitation. Whether an AI weather model actually predicts it is **not** something
+that can be assumed from its name, its resolution, or its variable list.
+
+::: {.callout-important}
+## `GraphCastOperational` emits `tp06` as a zero-filled placeholder
+It is HRES-fine-tuned and does not predict precipitation at all; the `tp06` slot is filled with
+`np.zeros` purely to keep the variable list consistent. It is also the *obvious* selection, being the
+0.25° "operational" model. Choosing it yields a rainfall forecast that is **identically zero**, and the
+water budget will forecast a drought with **no error raised**.
+
+`assert_precipitation_is_real()` refuses it by name, refuses any all-zero field, and is pinned by a
+test. A forecast that is exactly zero everywhere is never a physical outcome over a PNW wet-season
+window — it is a bug.
+:::
+
+Across earth2studio's prognostic models, **FuXi is the only other model that natively emits `tp06`**.
+Pangu, FengWu, Aurora, SFNO, FCN3 and ACE2 emit no precipitation at all, and require the
+`PrecipitationAFNO` diagnostic to be chained on.
+
+| | GraphCastSmall | **FuXi** (selected) |
+|---|---|---|
+| precipitation | `tp06` | `tp06` |
+| grid | 1° (~110 × 75 km) | **0.25°** (~28 × 19 km) |
+| horizon | ~10 d | **cascade trained for 5 / 10 / 15 d** |
+| runtime dependency | `jax[cuda13]` → GPU-only | **onnxruntime** |
+
+FuXi covers the +1…+15 day horizon by design, at 4× the resolution, and is not CUDA-JAX-locked.
+
+### Adapter guards
+
+Two failure modes are guarded rather than assumed away:
+
+- **Zero / placeholder precipitation** — refused by name and by magnitude (above).
+- **Unit convention.** The `tp06` field is accumulated **metres** in some checkpoints and millimetres in
+  others. A 6-hour total of 0.02 m is a heavy but ordinary PNW event; the same number read as
+  millimetres is a drizzle, and read the other way, 20 mm becomes 20 m of rain. The adapter decides on
+  magnitude and **logs which branch it took**, rather than guessing silently.
+
+## Execution: GPU
+
+GraphCast cannot run on macOS/arm64 at all — its earth2studio extra requires `jax[cuda13]`. FuXi is
+onnxruntime-based and imports on CPU/arm64, but its weights are **9.43 GB** (a three-model cascade) and
+CPU inference over 60 six-hourly steps is impractical. It is a cluster job.
+
+Forecasts are generated on **UW Hyak Tillicum (H200)** via SkyPilot (`deploy/tillicum-fuxi.yaml`),
+following `gaia-hazlab/skypilot-hyak` conventions:
+
+```bash
+pixi run stage-mvp                 # reports which initialisations are missing from Kopah
+sky launch --infra slurm/tillicum -c fuxi deploy/tillicum-fuxi.yaml \
+  --env INITS="2025-09-01,2025-09-08,..." \
+  --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY
+```
+
+A **rolling weekly initialisation** across the wet season is run as a **single job**: the 9.43 GB weight
+cascade is pulled once and cached, so 29 initialisations are not 29 downloads. One failing
+initialisation warns and the sweep continues rather than losing the run.
+
+::: {.callout-warning}
+## Slurm nodes do not autostop
+`time` is a hard kill: the node is terminated at expiry, finished or not. It must be sized for the
+**whole sweep**, not one initialisation. (The `debug` QoS caps runtime at 1 h, which is far too short.)
+:::
+
+The GPU job writes only the forcing store. The soil-state forecast is pure NumPy and runs anywhere
+afterwards; nothing is copied by hand.
+
+## Staging: Zarr on Kopah
+
+Staging follows `gaia-hazlab/gaia-cli` so that the stores interoperate: obstore +
+`zarr.storage.ObjectStore`, `zarr_format=3`, `consolidated=False`, ~10 MB chunks, credentials from
+`AWS_PROFILE`, and the Kopah endpoint via `AWS_ENDPOINT_URL`.
+
+```
+s3://gaia/soil-twin/static/svm_cvm17.zarr        SVM shallow-Vs grid
+s3://gaia/soil-twin/static/vs30_90m.zarr         derived Vs30
+s3://gaia/soil-twin/forecast/fuxi/<init>.zarr    AI rainfall forcing
+```
+
+**Why object-stored Zarr rather than files.** The USGS CVM17 SVM grid is distributed as a **6.2 GB
+netCDF that must be downloaded in full** — and is captcha-gated, so the download cannot even be
+scripted — before a single Vs30 value can be read. Staged as chunked Zarr it is **756 MB** and is read
+lazily: only the analysis window, only the shallow levels. Vs30 re-derived from the Zarr is
+bit-identical to the netCDF-derived field.
+
+Chunks are 256 × 256 spatial tiles × **full depth**, because every read is "a window, all depths" — the
+shape of the travel-time integral that defines Vs30.
+
+::: {.callout-note}
+## Two staging constraints, recorded
+- SkyPilot `file_mounts` **do not work** with Kopah's custom endpoint. The S3 API is used directly
+  rather than mounting.
+- A chunking helper that overrides a caller's dask chunks makes one Zarr chunk span several dask
+  chunks. **xarray refuses this outright**, because writing it in parallel can corrupt data.
+  Dask-backed variables must keep the caller's chunking.
+:::
+
+## Observed forcing and the analysis window
+
+`src/data/fetch_prism_daily.py` reads the `gaia-hazlab/prism-stac` catalog via `odc.stac`, falling back
+to the PRISM service directly for windows the catalog does not cover. It pulls precipitation and
+`tmean` — the latter required by the snow partition — and adds Hamon PET per day.
+
+`pixi run stage-mvp` stages the four streams of an analysis window together, because only together do
+they close the budget:
+
+| stream | source | role |
+|---|---|---|
+| **forcing** | PRISM daily | what went in |
+| **state** | NWIS wells | where the water table sat |
+| **flux** | USGS gauges (+ baseflow separation) | what came out |
+| **forecast** | FuXi on Kopah | what we predict would go in |
+
+The forecast is the only stream that is not an observation; the other three exist to score it. When
+initialisations are missing from Kopah, `stage-mvp` reports which and emits the exact launch command —
+it does not fabricate a forcing.

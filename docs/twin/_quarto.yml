@@ -17,30 +17,42 @@ website:
         href: "https://github.com/gaia-hazlab/gwl-space-time-smooth"
   sidebar:
     style: docked
-    collapse-level: 2
+    collapse-level: 3
+    # NOTE: a `section:` entry WITHOUT `contents:` renders as a non-clickable heading in Quarto.
+    # Leaf pages must therefore be declared with `text:` + `href:`; `section:` is reserved for
+    # genuine groupings that have children.
     contents:
       - text: "Overview"
         href: index.qmd
-      - section: "0 · Structural model"
-        href: 00-structural-model.qmd
-      - section: "1 · Input data"
-        href: 01-input-data.qmd
-      - section: "2 · Evaluation data"
-        href: 02-evaluation-data.qmd
-      - section: "3 · Physics"
+
+      - section: "The twin"
         contents:
-          - text: "Part 1 — Hydrology"
+          - text: "1 · Structural model"
+            href: 00-structural-model.qmd
+          - text: "2 · Input data"
+            href: 01-input-data.qmd
+          - text: "3 · Physics — Hydrology"
             href: 03a-physics-hydrology.qmd
-          - text: "Part 2 — Hydromechanics"
+          - text: "4 · Physics — Hydromechanics"
             href: 03b-physics-hydromechanics.qmd
-      - section: "4 · Assimilation"
-        href: 04-assimilation.qmd
-      - section: "5 · Soil-state evaluation"
-        href: 05-state-evaluation.qmd
-      - section: "6 · Forecast"
-        href: 06-forecast.qmd
-      - section: "7 · Hazard integration"
-        href: 07-hazard-integration.qmd
+          - text: "5 · Assimilation"
+            href: 04-assimilation.qmd
+          - text: "6 · Forecast"
+            href: 06-forecast.qmd
+          - text: "7 · Hazard integration"
+            href: 07-hazard-integration.qmd
+
+      - section: "Evaluation"
+        contents:
+          - text: "Evaluation data"
+            href: 02-evaluation-data.qmd
+          - text: "Soil-state evaluation"
+            href: 05-state-evaluation.qmd
+
+      - section: "Appendices"
+        contents:
+          - text: "A · Compute and deployment"
+            href: A-compute-and-deployment.qmd
 
 format:
   html:

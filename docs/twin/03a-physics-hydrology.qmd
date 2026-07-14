@@ -48,12 +48,12 @@ pixel-wise water budget delivered with provenance for geotechnical/geomorphologi
 
 Rather than solve the flow equation or memorise wells, we **enforce a closed water balance at every
 90 m cell** (`src/models/water_budget.py`) and let observations anchor it. Over the fine
-SOLUS→Saxton–Rawls storage envelope [@saxton2006soil], each cell steps a monthly balance of: vertical
-infiltration/recharge, capillary rise, evapotranspiration, saturation-excess runoff, and a TOPMODEL
-lateral redistribution of the water table.
+SOLUS→Saxton–Rawls storage envelope [@saxton2006soil], each cell steps a balance of: vertical
+infiltration and recharge, capillary rise, evapotranspiration, saturated-area runoff, lateral
+interflow, and groundwater discharge to the stream network.
 
-The root-zone store $S=\theta\,z_r$ (mm over root depth $z_r$) is stepped each month against the
-Saxton–Rawls limits $S_x=\theta_x z_r$ ($x\in\{wp,fc,sat\}$), enforcing the closed balance
+The root-zone store $S=\theta\,z_r$ (mm over root depth $z_r$, itself derived from soil thickness
+rather than assumed constant) is stepped against the Saxton–Rawls limits $S_x=\theta_x z_r$ ($x\in\{wp,fc,sat\}$), enforcing the closed balance
 
 $$
 S_t = S_{t-1} + C_t + I_t - Q_t - E_t - R_t, \qquad \theta_t = S_t/z_r,
@@ -80,11 +80,169 @@ $$
 
 with specific yield $S_y$, recession time $\tau$ [@brutsaert1977recession], capillary fringe $z_f$, and
 the TOPMODEL slope $m$ [@beven1979physically]. This is the *integrated, per-pixel* counterpart of the
-3-D flow equation above: we do not solve the PDE, we **enforce its mass balance at every cell** —
-$\Delta S = C + I - Q - E - R$, exact by construction — and let observations anchor the coefficients.
-The vertical exchange between soil moisture and the water table (recharge $\leftrightarrow$ capillary
-rise) and the downhill routing of excess water are therefore represented, not assumed away; this is the
-sense in which the two water states are *coupled* rather than merely co-located.
+3-D flow equation above: we do not solve the PDE, we **enforce its mass balance at every cell** — exact
+by construction — and let observations anchor the coefficients. The vertical exchange between soil
+moisture and the water table (recharge $\leftrightarrow$ capillary rise) and the downhill routing of
+excess water are therefore represented, not assumed away; this is the sense in which the two water
+states are *coupled* rather than merely co-located.
+
+## Timestep
+
+The budget integrates at the timestep of its forcing. This is a physical choice, not a convenience: a
+storm-scale forecast aggregated to a monthly mean loses the event signal it exists to provide, and a
+month of rain applied as a single lump instantly oversaturates the column, generating spurious
+saturation-excess runoff while starving recharge.
+
+| 400 mm over one month | runoff | recharge |
+|---|---|---|
+| applied as one monthly lump | 200 mm (spurious) | 84 mm (starved) |
+| daily, uniform | 0 mm | 322 mm |
+| daily, 3-day atmospheric river | 54 mm (physical) | 305 mm |
+
+Three of the coefficients are **per-month rates** — baseflow recession, capillary rise, and gravity
+drainage — and each is converted to the step.
+
+::: {.callout-warning}
+## A lumped monthly drainage fraction has no meaning at daily resolution
+A gravity-drainage fraction of $0.6$ per month implies an e-folding timescale of
+$30.44/\ln(2.5) \approx 33$ days. Gravity drainage above field capacity is a **1–3 day** process, so
+propagating the monthly fraction to a daily step drains the column roughly 15× too slowly. Sub-monthly
+runs therefore use a physical drainage timescale rather than a converted monthly fraction. **The two
+timesteps are not equivalent, and a calibration performed at one does not transfer to the other.**
+:::
+
+## Runoff generation
+
+Runoff **generation** belongs to the budget — it is a sink, and omitting it biases $\theta$ and the
+water table high. Runoff **routing** does not: converting the source term into a discharge hydrograph
+is a surface-routing problem, handed to LandLab
+([Hazard integration](07-hazard-integration.qmd)).
+
+The dominant humid-temperate mechanism is **variable source area**: rain cannot infiltrate where there
+is no space between the water table and the surface,
+
+$$Q_t = \left[\;I_t - S_y\, d_{wt}\cdot 1000\;\right]_+ ,$$
+
+which is continuous rather than a switch — at a 1 m water table, 224 mm of a 400 mm input runs off
+while 167 mm still recharges — and concentrates on the shallow-water-table cells that are the valley
+floors and riparian corridors.
+
+**Infiltration-excess (Hortonian) runoff is not represented.** It is intensity-driven and requires
+sub-daily rainfall: 68 mm/day is only 2.8 mm/hr, far below these soils' $K_{sat}$ (15–55 mm/hr). Real
+storms burst well above their daily mean, which is an argument for driving the budget at the native
+sub-daily step of the forcing rather than aggregating it.
+
+## Lateral interflow
+
+Water draining out of the root zone does not all reach the water table. On a slope it partitions
+between a vertical velocity $\sim K_v$ and a downslope one $\sim K_h \tan\beta$; with the anisotropy
+$K_a = K_h/K_v$ of layered forest soils, a large fraction leaves **downslope** as subsurface stormflow
+and reaches a stream within days:
+
+$$f_{lat} = \frac{K_a \tan\beta}{1 + K_a \tan\beta}.$$
+
+Flat ground ($\tan\beta = 0$) gives $f_{lat}=0$ — valley floors recharge, hillslopes shed. Without
+this term the budget converts essentially all precipitation into groundwater recharge.
+
+## Groundwater discharge to the stream network
+
+The water table is bounded by the rivers. Groundwater standing above the local drainage flows to it,
+and HAND is by construction the *Height Above Nearest Drainage*, so the head driving that discharge is
+$[\mathrm{HAND} - d_{wt}]_+$ and the table relaxes toward the drainage elevation. The sink is
+**self-limiting**: the higher the table climbs above the river, the harder it drains, so recharge
+cannot accumulate without bound. Valley floors (HAND $\approx$ 0) cannot rise; ridges can.
+
+::: {.callout-note}
+## The discharge coefficient is not free
+A ridge water table genuinely sits tens of metres above the valley stream — a normal and *persistent*
+state, sustained by continuous recharge down a long, slow flow path. An arbitrary discharge coefficient
+drains that baseline away at metres per month. The coefficient is therefore anchored so that the
+**observed baseline water table is a steady state**: at the long-term mean recharge $R_{ref}$, discharge
+exactly balances recharge, and storms perturb around that equilibrium.
+:::
+
+Streamflow — the quantity a gauge measures — is therefore
+$Q_{\text{stream}} = \text{runoff} + \text{interflow} + \text{baseflow}$, and the water table
+balances $S_y\,\mathrm{d}h = \text{recharge} - \text{baseflow}$.
+
+## Snow: the recharge clock
+
+Recharge in this domain is governed by **snowmelt, not rainfall**. Precipitation peaks in November; the
+snowpack peaks in February; **melt release peaks in April — and so does the observed water table.** The
+snowpack, not the unsaturated zone, is what lags the system. Melt delivers ~312 mm/yr (≈20% of
+precipitation) in spring, when rainfall *and* ET are low, so an unusually large share of it becomes
+recharge rather than quickflow or evaporation.
+
+A degree-day partition holds precipitation as SWE until melt. Its parameters are calibrated against
+**30 SNOTEL SWE stations** within the domain (881–1414 m), using each station's own precipitation and
+temperature so that the rain/snow-line smearing of a 4 km gridded product does not enter the
+calibration.
+
+::: {.callout-important}
+## Melt-out timing, not SWE RMSE
+The calibration target is **when the snow leaves**, not the RMSE of the SWE series. RMSE is dominated by
+the accumulation season, and minimising it selects a melt factor slow enough that the pack lingers into
+June and melt release falls in May — a month later than the observed water-table peak. Fitting melt-out
+timing recovers the April peak. *Fit the quantity the physics depends on.*
+:::
+
+Snow is also **elevation-dependent**, and a domain mean destroys it: the mean of a cold mountain and a
+warm lowland is ~7 °C and forms no snow at all. The forcing must be spatially distributed — over this
+domain a January field spans −16.8 to +12.7 °C, with 23% of cells below freezing.
+
+## Calibration and validation
+
+The budget is constrained by **two independent classes of observation**, and the distinction is
+essential:
+
+- **Gauges constrain the fluxes.** Streamflow *is* the catchment water budget integrated over a basin,
+  and a Lyne–Hollick baseflow separation splits it into quickflow (surface runoff + interflow) and
+  baseflow (groundwater discharge). This is the only direct observation of the flux partition.
+- **Wells constrain the state.** Depth to water, its seasonal amplitude, and its phase.
+
+Wells alone are insufficient: the water table can be badly wrong while every field looks plausible,
+because nothing in well data sees the flux partition directly. River discharge does.
+
+Each parameter is pinned by a **different** observation, so the fit is constrained rather than tuned:
+
+| parameter | constrained by |
+|---|---|
+| $S_y$ (specific yield) | water-table seasonal **amplitude** |
+| $K_a$ (anisotropy) | **runoff coefficient** $Q/P$ |
+| $R_{ref}$ (river-sink strength) | **baseflow index** |
+
+Calibration is performed at the **daily** step — the step at which the model forecasts — because the
+daily and monthly formulations drain differently and a monthly fit does not transfer.
+
+| | model | observed |
+|---|---|---|
+| **baseflow index** | **0.52** | 0.47 (Lyne–Hollick separation, 6 gauges) |
+| **runoff coefficient $Q/P$** | **0.71** | 0.57–0.73 (per-basin closure) |
+| **seasonal amplitude** | **1.02 m** | 1.06 m (26,816 shallow-well observations) |
+| water-table peak month | 5 | 4 |
+
+![**The water budget closed against observations.** Left: the calibrated model against the two
+independent observation classes — gauges constrain the fluxes, wells constrain the state. Centre: the
+seasonal cycle, governed by the snowmelt clock — precipitation peaks in November, but melt and the water
+table peak in April. Right: the flux partition.](assets/validation_domain.png){#fig-validation}
+
+Precipitation is averaged over each gauge's **own watershed** (NLDI polygons), not over the analysis
+domain: the gauged basins are Cascade headwater catchments receiving far more orographic precipitation
+than a domain mean, and comparing basin discharge against domain-mean rainfall is not a closure.
+Comparison against wells is likewise made **at the well locations** — wells are drilled where people
+live and are not a random sample of the terrain.
+
+::: {.callout-caution}
+## Residuals, stated
+The fitted $K_a = 2$ lies **below** the 10–100 literature range for forest-soil anisotropy. On steep
+terrain a value of 20 drives $f_{lat}$ to ~0.82 — 82% of drainage shed laterally — which starves
+recharge and drives $Q/P$ to 0.96. Either the literature range does not transfer to a 90 m cell, or this
+single term absorbs other processes.
+
+The water table peaks one month **late**. The direction is informative: an unsaturated travel-time lag
+would make it *later still*, so that mechanism cannot explain the residual. Spin-up and the river-sink
+timescale are the likelier causes.
+:::
 
 ## The soil-moisture bucket
 

@@ -144,13 +144,27 @@ remains available on the [landing page](../index.html) as an archived full read.
 
 ## The chapters
 
+**The twin** — the core development: what the subsurface is, what drives it, the physics, and the forecast.
+
 | # | Chapter | What it covers |
 |---|---------|----------------|
-| 0 | [Structural model](00-structural-model.qmd) | How the **static layers** are aggregated and built to 90 m — the fine skeleton for soil hydromechanics and the hazards |
-| 1 | [Input data](01-input-data.qmd) | Ground sensors and satellite products; the assimilation principle; provenance |
-| 2 | [Evaluation data](02-evaluation-data.qmd) | Independent references and model evaluation datasets, held out from processing |
-| 3 | [Physics — hydrology](03a-physics-hydrology.qmd) · [hydromechanics](03b-physics-hydromechanics.qmd) | The constrained water budget; the petrophysical stiffness–water link |
-| 4 | [Assimilation](04-assimilation.qmd) | Precision-weighted fusion of sensors, dv/v depth separation, the uncertainty budget |
-| 5 | [Soil-state evaluation](05-state-evaluation.qmd) | How the estimated soil moisture and GWL are scored |
-| 6 | [Forecast](06-forecast.qmd) | Driving the twin forward from observed and AI-forecast precipitation |
+| 1 | [Structural model](00-structural-model.qmd) | The **static layers** — how they are aggregated and built to 90 m; the fine skeleton for soil hydromechanics and the hazards |
+| 2 | [Input data](01-input-data.qmd) | Ground sensors and satellite products; the assimilation principle; provenance |
+| 3 | [Physics — Hydrology](03a-physics-hydrology.qmd) | The **closed water budget**: runoff, interflow, groundwater discharge to the rivers, the snowmelt clock — and its calibration against gauges and wells |
+| 4 | [Physics — Hydromechanics](03b-physics-hydromechanics.qmd) | The petrophysical link from water to stiffness and dv/v |
+| 5 | [Assimilation](04-assimilation.qmd) | Precision-weighted fusion of sensors, dv/v depth separation, the uncertainty budget |
+| 6 | [Forecast](06-forecast.qmd) | Driving the twin forward from AI-forecast rainfall; what the forecast predicts and how skill is scored by lead time |
 | 7 | [Hazard integration](07-hazard-integration.qmd) | Handoff to landslide (LandLab), liquefaction, and flood models |
+
+**Evaluation** — held out of processing, scored at the native resolution of the sensor.
+
+| Chapter | What it covers |
+|---------|----------------|
+| [Evaluation data](02-evaluation-data.qmd) | Independent references, held out from processing |
+| [Soil-state evaluation](05-state-evaluation.qmd) | How the estimated soil moisture and GWL are scored |
+
+**Appendices** — implementation detail that the core report does not depend on.
+
+| Appendix | What it covers |
+|----------|----------------|
+| [A · Compute and deployment](A-compute-and-deployment.qmd) | Which AI weather model actually predicts rain; GPU execution on Tillicum; Zarr staging on Kopah |
