@@ -22,7 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 PROC = Path("data/processed")
 ASSETS = Path("docs/twin/assets")
 OUT = Path("figures/demo/sensors_and_dvv_support.png")
-STEP = 12                       # coarse grid: the kernel is smooth, and 1275 pairs is the cost
+STEP = 12                       # coarse grid: the kernel is smooth, and the pair count (printed at the
+                                # end, and set by max_pair_km) drives the cost
 
 
 def main():

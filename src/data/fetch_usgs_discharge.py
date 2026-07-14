@@ -35,15 +35,16 @@ import pandas as pd
 logger = logging.getLogger("fetch_usgs_discharge")
 
 CFS_TO_M3S = 0.0283168466
-# Puget / Cascades gauges inside the pilot bbox. The first four are the seis-hydro-2-sed corridor.
-# Gauges whose DRAINAGE BASIN lies inside the 90 m static-layer footprint -- the only ones whose
-# budget we can actually model. The seis-hydro-2-sed corridor gauges (Nisqually, Puyallup, Skykomish,
-# Snoqualmie, Cedar) are Cascade HEADWATER catchments and overlap our footprint by 0-17%: running the
-# budget on the Puget lowland and comparing it to discharge generated in the mountains is meaningless.
-# Basin overlap measured against terrain_hand_90m.tif via NLDI polygons (issue #90).
-# Gauges whose DRAINAGE BASIN lies inside the analysis domain -- the only ones whose budget can be
-# modelled, and therefore the only ones usable for per-basin closure. All eight are contained by the
-# western-Cascades domain; basin coverage is measured against the terrain grid via NLDI polygons.
+
+# Gauges used for per-basin closure. The criterion is a single one: the gauge's DRAINAGE BASIN must lie
+# inside the analysis domain, so that the budget can actually be modelled over the area the gauge
+# integrates. Basin coverage is measured from NLDI polygons against the terrain grid -- running the
+# budget on one area and comparing it to discharge generated in another is not a closure, however
+# carefully the millimetres are computed.
+#
+# All eight lie inside the western-Cascades domain. (Under the earlier Puget-lowland footprint only
+# Newaukum Ck did, which is what forced the domain extension: interflow is most active on steep ground,
+# and a lowland creek cannot constrain it.)
 PUGET_GAGES = {
     "12082500": "Nisqually R nr National",         # 361 km2, Mt Rainier headwaters
     "12092000": "Puyallup R nr Electron",          # 238 km2
