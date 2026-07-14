@@ -55,6 +55,7 @@ storms, which the wells cannot see.
 from __future__ import annotations
 
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
 # Diffuse-coda parameters. Both are properties of the medium and the measurement window, not free
 # knobs: D is the diffusivity of the scattered wavefield and t_lapse is the coda window in which dv/v
@@ -63,18 +64,34 @@ DIFFUSIVITY_KM2_S = 20.0     # D; crustal coda, v ~ 2 km/s with a ~20 km transpo
 LAPSE_TIME_S = 30.0          # centre of the coda window used for the stretching measurement
 
 
-def _intensity_2d(r_km, t_s, d_km2_s):
-    """2-D diffusion intensity Green's function p(r, t)."""
-    t = np.maximum(t_s, 1e-6)
-    return np.exp(-(r_km ** 2) / (4.0 * d_km2_s * t)) / (4.0 * np.pi * d_km2_s * t)
+def _intensity_2d(r_km: ArrayLike, t_s: ArrayLike, d_km2_s: float) -> NDArray[np.float64]:
+    """2-D diffusion intensity Green's function ``p(r, t)``.
+
+    ``r_km`` in km, ``t_s`` in seconds, ``d_km2_s`` in km^2/s.
+    """
+    t = np.maximum(np.asarray(t_s, dtype="float64"), 1e-6)
+    r = np.asarray(r_km, dtype="float64")
+    return np.exp(-(r ** 2) / (4.0 * d_km2_s * t)) / (4.0 * np.pi * d_km2_s * t)
 
 
-def pair_kernel(x_km, y_km, s1, s2, t_lapse=LAPSE_TIME_S, d=DIFFUSIVITY_KM2_S, n_quad=24):
-    """Coda sensitivity kernel K(x) of one station pair, on a grid (Pacheco & Snieder 2005).
+def pair_kernel(x_km: NDArray[np.float64], y_km: NDArray[np.float64],
+                s1: ArrayLike, s2: ArrayLike,
+                t_lapse: float = LAPSE_TIME_S, d: float = DIFFUSIVITY_KM2_S,
+                n_quad: int = 24) -> NDArray[np.float64]:
+    """Coda sensitivity kernel ``K(x)`` of one station pair, on a grid (Pacheco & Snieder 2005).
 
-    ``s1``/``s2`` are (x, y) station positions in km, on the same grid coordinates.
-    Returns an array shaped like ``x_km``, normalised so it integrates to 1 over the grid — the kernel
-    is a *weighting*, and its absolute scale is absorbed into the normalisation below.
+    ``x_km``/``y_km`` are grid coordinates in km (as from ``np.meshgrid``); ``s1``/``s2`` are ``(x, y)``
+    station positions in the same coordinates. Returns an array shaped like ``x_km``.
+
+    **Normalisation.** The kernel is divided by its **discrete sum over the grid cells** — not by a
+    cell-area-weighted integral — so each pair contributes unit total weight and the pairs can be summed
+    without one dominating on the strength of its geometry alone. The absolute scale is arbitrary: only
+    the *relative* spatial pattern is used downstream.
+
+    A consequence worth knowing: a pair whose sensitivity extends beyond the grid has the in-grid part
+    of its kernel upweighted to sum to one. Coverage near the domain edge is therefore optimistic, and
+    the sensitivity field should be read as a *relative* map within the domain rather than an absolute
+    one comparable across domains.
     """
     r1 = np.hypot(x_km - s1[0], y_km - s1[1])
     r2 = np.hypot(x_km - s2[0], y_km - s2[1])
@@ -93,13 +110,20 @@ def pair_kernel(x_km, y_km, s1, s2, t_lapse=LAPSE_TIME_S, d=DIFFUSIVITY_KM2_S, n
     return k / tot if tot > 0 else k
 
 
-def network_sensitivity(x_km, y_km, stations_km, t_lapse=LAPSE_TIME_S, d=DIFFUSIVITY_KM2_S,
-                        max_pair_km=None):
-    """Summed coda sensitivity S(x) over every station pair.
+def network_sensitivity(x_km: NDArray[np.float64], y_km: NDArray[np.float64],
+                        stations_km: ArrayLike, t_lapse: float = LAPSE_TIME_S,
+                        d: float = DIFFUSIVITY_KM2_S,
+                        max_pair_km: float | None = None
+                        ) -> tuple[NDArray[np.float64], int]:
+    """Summed coda sensitivity ``S(x)`` over every station pair.
 
-    ``stations_km`` is an (n, 2) array of station positions in km. ``max_pair_km`` optionally drops
-    pairs whose separation exceeds the distance over which a usable cross-correlation is realistic;
-    without a limit, distant pairs contribute a broad, near-uniform kernel that overstates coverage.
+    ``stations_km`` is an ``(n, 2)`` array of station positions in km, on the same grid coordinates as
+    ``x_km``/``y_km``. ``max_pair_km`` drops pairs whose separation exceeds the distance over which a
+    usable cross-correlation is realistic; without a limit, distant pairs contribute a broad,
+    near-uniform kernel that overstates coverage.
+
+    Returns ``(sensitivity_field, n_pairs_used)`` — the field shaped like ``x_km``, and the number of
+    pairs that actually contributed.
     """
     st = np.asarray(stations_km, dtype="float64")
     s = np.zeros_like(x_km, dtype="float64")
@@ -113,7 +137,7 @@ def network_sensitivity(x_km, y_km, stations_km, t_lapse=LAPSE_TIME_S, d=DIFFUSI
     return s, n_used
 
 
-def sensitivity_to_sigma(sens, floor=1e-6):
+def sensitivity_to_sigma(sens: ArrayLike, floor: float = 1e-6) -> NDArray[np.float64]:
     """Relative dv/v measurement uncertainty from the network sensitivity: sigma ∝ S^{-1/2}.
 
     Returned normalised to its minimum (the best-constrained cell = 1), so the field reads as
