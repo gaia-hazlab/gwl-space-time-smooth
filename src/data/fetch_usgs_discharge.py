@@ -41,19 +41,18 @@ CFS_TO_M3S = 0.0283168466
 # Snoqualmie, Cedar) are Cascade HEADWATER catchments and overlap our footprint by 0-17%: running the
 # budget on the Puget lowland and comparing it to discharge generated in the mountains is meaningless.
 # Basin overlap measured against terrain_hand_90m.tif via NLDI polygons (issue #90).
+# Gauges whose DRAINAGE BASIN lies inside the analysis domain -- the only ones whose budget can be
+# modelled, and therefore the only ones usable for per-basin closure. All eight are contained by the
+# western-Cascades domain; basin coverage is measured against the terrain grid via NLDI polygons.
 PUGET_GAGES = {
-    "12108500": "Newaukum Cr nr Black Diamond",   # 79 km2, 100% inside the footprint
-    "12102078": "Clarks Cr at Stewart Ave",       # 70 km2,  82% inside
-}
-# Cascade headwater gauges: real data, but OUTSIDE the modelled domain. Kept for reference and for
-# the seasonal baseflow-index constraint (which is scale-free), NOT for per-basin closure.
-HEADWATER_GAGES = {
-    "12082500": "Nisqually R nr National",
-    "12092000": "Puyallup R nr Electron",
-    "12097500": "Green R nr Lester",
-    "12115000": "Cedar R nr Cedar Falls",
-    "12134500": "Skykomish R nr Gold Bar",
-    "12144500": "Snoqualmie R nr Carnation",
+    "12082500": "Nisqually R nr National",         # 361 km2, Mt Rainier headwaters
+    "12092000": "Puyallup R nr Electron",          # 238 km2
+    "12097500": "Green R nr Lester",               # 190 km2
+    "12115000": "Cedar R nr Cedar Falls",          # 110 km2
+    "12134500": "Skykomish R nr Gold Bar",         # 1386 km2
+    "12144500": "Snoqualmie R nr Carnation",       # 977 km2
+    "12108500": "Newaukum Cr nr Black Diamond",    # 79 km2, lowland
+    "12102078": "Clarks Cr at Stewart Ave",        # 70 km2, lowland
 }
 
 

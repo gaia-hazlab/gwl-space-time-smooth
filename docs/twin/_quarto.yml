@@ -37,17 +37,17 @@ website:
             href: 03b-physics-hydromechanics.qmd
           - text: "5 · Assimilation"
             href: 04-assimilation.qmd
-          - text: "6 · Forecast"
+          - text: "6 · Evaluation of the soil state"
+            href: 05-state-evaluation.qmd
+          - text: "7 · Forecast"
             href: 06-forecast.qmd
-          - text: "7 · Hazard integration"
+          - text: "8 · Hazard integration"
             href: 07-hazard-integration.qmd
 
-      - section: "Evaluation"
+      - section: "Reference"
         contents:
           - text: "Evaluation data"
             href: 02-evaluation-data.qmd
-          - text: "Soil-state evaluation"
-            href: 05-state-evaluation.qmd
 
       - section: "Appendices"
         contents:
