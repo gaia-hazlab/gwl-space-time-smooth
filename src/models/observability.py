@@ -75,6 +75,78 @@ class GaussianPrior:
         return (self.sigma ** 2) * np.exp(-d2 / (2.0 * self.length_km ** 2))
 
 
+# --- the temporal axis --------------------------------------------------------------------------
+# Spatial resolution is only half the design. A state that changes fast is observed well only by a
+# stream that samples fast: soil moisture responds to a storm within DAYS, so a satellite that revisits
+# once a week aliases the very events dv/v or an hourly probe resolves. The two states have very
+# different temporal correlation times, which is why the same sensor is worth different amounts for each.
+TEMPORAL_TAU_DAYS = {
+    "soil_moisture": 5.0,     # a storm wets, then drains, over days
+    "gwl": 120.0,             # the water table integrates months (the snowmelt-clocked seasonal cycle)
+}
+
+
+def temporal_resolution(revisit_days: ArrayLike, tau_days: float) -> NDArray[np.float64]:
+    r"""Fraction of a state's temporal variability a stream with ``revisit_days`` sampling resolves.
+
+    For a state with exponential temporal correlation time :math:`\tau`, a sensor sampling at interval
+    :math:`\Delta t` captures :math:`\exp(-\Delta t / 2\tau)` of its variability: ~1 when it samples far
+    faster than the state changes, and ~0 when it aliases (revisit :math:`\gg \tau`). Continuous streams
+    (``revisit_days`` :math:`\to 0`) give 1.
+
+    This is the temporal analogue of the spatial resolution, and the two multiply: a stream's
+    observability of a *dynamic* field is ``spatial_resolution * temporal_resolution``. It is why a
+    weekly satellite with domain-wide coverage still misses the soil-moisture *event* a continuous
+    seismic array or an hourly probe catches — great space, poor time.
+    """
+    dt = np.asarray(revisit_days, dtype="float64")
+    return np.exp(-np.clip(dt, 0.0, None) / (2.0 * max(tau_days, 1e-6)))
+
+
+@dataclass(frozen=True)
+class ObsStream:
+    """One observation stream, characterised on BOTH axes of the design and by what it truly is.
+
+    ``kind`` is the spatial geometry (point / volume / satellite / channel). ``is_measurement`` records
+    whether the stream *measures* the state or *estimates* it through a retrieval model — a satellite
+    soil-moisture product is the latter, and its noise is a model error, not an instrument error.
+    """
+
+    name: str
+    states: tuple[str, ...]          # which model states it informs (from TEMPORAL_TAU_DAYS keys)
+    support_km: float                # spatial footprint (point ~ 0.1; SMAP 9; NISAR 0.2; dv/v ~ path)
+    revisit_days: float              # sampling interval (0 = continuous)
+    kind: str                        # "point" | "volume" | "satellite" | "channel"
+    noise: float                     # observation error relative to the prior sigma
+    is_measurement: bool             # True = measures the state; False = a retrieval / model estimate
+
+
+# The observing system, on both axes. Revisit is what the user's point turns on: soil moisture changes
+# in days, so a weekly satellite ALIASES it however fine its pixels; the continuous seismic array and
+# the sub-daily probes are the streams that resolve the events.
+STREAMS: tuple[ObsStream, ...] = (
+    ObsStream("NWIS wells", ("gwl",), 0.1, 30.0, "point", 0.02, True),
+    ObsStream("SNOTEL / SCAN θ", ("soil_moisture",), 0.1, 0.04, "point", 0.03, True),   # hourly
+    ObsStream("USCRN θ", ("soil_moisture",), 0.1, 0.04, "point", 0.03, True),           # hourly
+    ObsStream("Seismic dv/v", ("soil_moisture", "gwl"), 8.0, 0.04, "volume", 0.12, True),  # ~continuous
+    ObsStream("SMAP (retrieval)", ("soil_moisture",), 9.0, 2.5, "satellite", 0.10, False),
+    ObsStream("NISAR (retrieval, future)", ("soil_moisture",), 0.2, 12.0, "satellite", 0.06, False),
+    ObsStream("Sentinel surface water", ("gwl",), 0.1, 6.0, "channel", 0.04, False),    # cloud-limited
+    ObsStream("USGS gauges", ("gwl",), 5.0, 0.01, "flux", 0.05, True),                  # 15-min, basin
+)
+
+
+def effective_observability(spatial_res: ArrayLike, revisit_days: float, state: str) -> NDArray[np.float64]:
+    """Observability of a **dynamic** state: spatial resolution discounted by temporal resolution.
+
+    ``spatial_res * temporal_resolution(revisit, tau_state)``. A stream with perfect coverage but a
+    revisit slower than the state's correlation time is discounted toward zero — the space-time
+    tradeoff, per cell.
+    """
+    return np.asarray(spatial_res, dtype="float64") * temporal_resolution(
+        revisit_days, TEMPORAL_TAU_DAYS[state])
+
+
 def point_footprint(coords_km: NDArray[np.float64], loc_km: ArrayLike,
                     width_km: float = 0.5) -> NDArray[np.float64]:
     """Footprint of a point sensor: a narrow normalised blob at ``loc_km``.
@@ -100,10 +172,14 @@ def satellite_footprints(coords_km: NDArray[np.float64], pixel_km: float,
                          land: ArrayLike | None = None) -> NDArray[np.float64]:
     """Footprints of a gridded satellite product with a ``pixel_km`` pixel over the whole domain.
 
-    A satellite differs from a ground network in one decisive way: it observes **everywhere**, not at a
-    handful of sites. Each pixel is a footprint that averages the state over its cell, so the operator
-    is a tiling of top-hat-like blobs across the domain. Coarser ``pixel_km`` (SMAP, 9 km) gives dense
-    but low-resolution coverage; a fine one (NISAR L-band SAR, ~0.2 km) resolves sub-pixel structure.
+    A satellite differs from a ground network in two decisive ways. It observes **everywhere**, not at a
+    handful of sites -- each pixel is a footprint that averages the state over its cell, so the operator
+    is a tiling of blobs across the domain (SMAP, 9 km: dense but coarse; NISAR L-band SAR, ~0.2 km:
+    fine). But it is also **not a measurement of the state** -- a satellite retrieves soil moisture by
+    inverting L-band brightness temperature or radar backscatter through a retrieval model, so it is a
+    spatially-resolved *estimate* carrying retrieval and vegetation/roughness error. Its noise here is
+    therefore a MODEL error, larger than a probe's instrument error, and it must not be treated as
+    ground truth. What it uniquely provides is coverage, not accuracy.
 
     Returns ``(n_pixels, n_cell)``. ``land`` (an ``(n_cell,)`` mask) drops all-water pixels.
     """

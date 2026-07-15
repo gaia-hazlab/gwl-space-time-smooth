@@ -143,10 +143,13 @@ not.
 Two distributed observations enter the same design and change it qualitatively, because they observe
 where the ground networks cannot — everywhere, rather than at sites.
 
-- **Satellite soil moisture.** **SMAP** (L-band radiometer, 9 km) already provides a domain-wide,
-  moderate-resolution constraint on the vadose store; **NISAR** (L-band SAR, ~0.2 km, planned) would
-  provide a fine one. Because the resolution is a scale-free ratio, a not-yet-flown product can be
-  evaluated for the coverage it *would* provide.
+- **Satellite soil moisture — a retrieval, not a measurement.** **SMAP** (L-band radiometer, 9 km) and
+  the planned **NISAR** (L-band SAR, ~0.2 km) do not *measure* soil moisture; they retrieve it by
+  inverting brightness temperature or radar backscatter through a retrieval model, so each is a
+  spatially-resolved *estimate* carrying retrieval and vegetation/roughness error. What they uniquely
+  provide is **coverage, not accuracy** — a domain-wide constraint where the ground networks are sparse.
+  Because the resolution is a scale-free ratio, a not-yet-flown product can be evaluated for the
+  coverage it *would* provide.
 - **Surface-water extent.** Optical differencing (e.g. Sentinel-2 NDWI) maps inundation, which is the
   **variable source area** — the valley floors and riparian corridors (HAND $\approx 0$) where the
   water table outcrops and quickflow is generated. It is the *spatial* complement to the gauges: a gauge
@@ -166,6 +169,29 @@ satellites blanket the domain at their native resolution, dv/v samples the volum
 surface water traces the channel network. No single stream is sufficient, and the information-gain
 maps show precisely where each one earns its place — which is also the basis for **where a new station,
 or a new mission, would add the most**.
+
+### The temporal axis — coverage is not enough for a fast state
+
+Spatial resolution is only half the design. A state that changes fast is observed well only by a stream
+that **samples** fast. Soil moisture decorrelates in days — a storm wets the ground and it drains within
+a week — so a satellite that revisits weekly **aliases** the very events it exists to capture, however
+fine its pixels. The water table integrates months, so a coarse revisit costs it little. The same sensor
+is therefore worth different amounts for the two states.
+
+For a state with temporal correlation time $\tau$, a stream sampling at interval $\Delta t$ resolves a
+fraction $\exp(-\Delta t / 2\tau)$ of its variability, and a stream's observability of a *dynamic*
+field is the product $R_\text{space}\times R_\text{time}$ (`src/models/observability.py`).
+
+![**The observing system on both axes.** Left: each stream in the spatial-support / revisit-interval
+plane, with retrievals (satellites) as diamonds and measurements as circles. Streams above the
+soil-moisture decorrelation line alias the storm signal. Right: for the *fast* soil-moisture state, the
+temporal resolution discounts the coverage — a weekly satellite's fine pixels fall to a fraction of
+their nominal worth, while the continuous seismic array and the hourly probes keep theirs. **Great
+space is not great time.**](assets/observing_spacetime.png){#fig-spacetime}
+
+This is the quantitative form of "dv/v sees the storm; the water table integrates it": the seismic array
+and the sub-daily in-situ probes carry the *temporal* information a satellite cannot, while the satellite
+carries the *spatial* coverage they cannot. The design is complementary on **both** axes at once.
 
 ## Water-budget evaluation — fluxes and state together
 
