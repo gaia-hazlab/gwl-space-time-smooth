@@ -188,30 +188,40 @@ def satellite_footprints(coords_km: NDArray[np.float64], pixel_km: float,
     """Footprints of a gridded satellite product with a ``pixel_km`` pixel over the whole domain.
 
     A satellite differs from a ground network in two decisive ways. It observes **everywhere**, not at a
-    handful of sites -- each pixel is a footprint that averages the state over its cell, so the operator
-    is a tiling of blobs across the domain (SMAP, 9 km: dense but coarse; NISAR L-band SAR, ~0.2 km:
-    fine). But it is also **not a measurement of the state** -- a satellite retrieves soil moisture by
-    inverting L-band brightness temperature or radar backscatter through a retrieval model, so it is a
-    spatially-resolved *estimate* carrying retrieval and vegetation/roughness error. Its noise here is
-    therefore a MODEL error, larger than a probe's instrument error, and it must not be treated as
-    ground truth. What it uniquely provides is coverage, not accuracy.
+    handful of sites -- each pixel is a footprint that **averages the state uniformly over the cells that
+    fall within it** (a top-hat pixel average, not a Gaussian): assigning every grid cell to the pixel
+    it lands in tiles the domain exactly, so it is robust whether the pixel is coarser than the grid
+    (SMAP, 9 km: many cells per pixel) or finer (NISAR L-band SAR, ~0.2 km: one). But it is also **not a
+    measurement of the state** -- a satellite retrieves soil moisture by inverting L-band brightness
+    temperature or radar backscatter through a retrieval model, so it is a spatially-resolved *estimate*
+    carrying retrieval and vegetation/roughness error. Its noise here is therefore a MODEL error, larger
+    than a probe's instrument error, and it must not be treated as ground truth.
 
-    Returns ``(n_pixels, n_cell)``. ``land`` (an ``(n_cell,)`` mask) drops all-water pixels.
+    ``land`` (an ``(n_cell,)`` mask, 1-D or a raster flattened to match) drops all-water pixels.
+    Returns ``(n_pixels, n_cell)``.
     """
+    if not (np.isfinite(pixel_km) and pixel_km > 0):
+        raise ValueError(f"pixel_km must be a positive finite number, got {pixel_km!r}")
     c = np.asarray(coords_km, dtype="float64")
+    n = c.shape[0]
+    if land is None:
+        keep = np.ones(n, dtype=bool)
+    else:
+        keep = np.asarray(land, dtype=bool).ravel()          # accept a 2-D raster mask, flattened
+        if keep.size != n:
+            raise ValueError(f"land mask has {keep.size} cells but coords_km has {n}")
     x, y = c[:, 0], c[:, 1]
-    # pixel-centre lattice covering the domain
-    cx = np.arange(x.min() + pixel_km / 2, x.max() + pixel_km, pixel_km)
-    cy = np.arange(y.min() + pixel_km / 2, y.max() + pixel_km, pixel_km)
-    keep = np.ones(c.shape[0], dtype=bool) if land is None else np.asarray(land, dtype=bool)
+    # assign each cell to the pixel it falls in, then average uniformly over a pixel's member cells
+    ix = np.floor((x - x.min()) / pixel_km).astype(np.int64)
+    iy = np.floor((y - y.min()) / pixel_km).astype(np.int64)
+    pix = ix * (iy.max() + 1) + iy
     rows = []
-    for px in cx:
-        for py in cy:
-            g = np.exp(-((x - px) ** 2 + (y - py) ** 2) / (2.0 * (pixel_km / 2.0) ** 2)) * keep
-            tot = g.sum()
-            if tot > 1e-9:                                # skip pixels with no land in them
-                rows.append(g / tot)
-    return np.vstack(rows) if rows else np.empty((0, c.shape[0]))
+    for pid in np.unique(pix):
+        g = (pix == pid) & keep
+        tot = int(g.sum())
+        if tot > 0:                                          # skip pixels with no land in them
+            rows.append(g.astype("float64") / tot)
+    return np.vstack(rows) if rows else np.empty((0, n))
 
 
 def channel_footprints(coords_km: NDArray[np.float64], hand_m: ArrayLike,
@@ -224,11 +234,15 @@ def channel_footprints(coords_km: NDArray[np.float64], hand_m: ArrayLike,
     valley floors and riparian corridors — ``HAND <= hand_max_m``. Each becomes a point-like observation
     that pins the shallow water table where the gauges only see the *integrated* discharge.
 
-    Returns ``(n_channel_cells, n_cell)``.
+    ``hand_m`` and ``land`` may be 1-D or a raster flattened to match ``coords_km``; both must have one
+    value per cell. Returns ``(n_channel_cells, n_cell)``.
     """
     c = np.asarray(coords_km, dtype="float64")
+    n = c.shape[0]
     hand = np.asarray(hand_m, dtype="float64").ravel()
     lnd = np.asarray(land, dtype=bool).ravel()
+    if hand.size != n or lnd.size != n:
+        raise ValueError(f"hand_m ({hand.size}) and land ({lnd.size}) must both match n_cells ({n})")
     chan = lnd & np.isfinite(hand) & (hand <= hand_max_m)
     return np.vstack([point_footprint(c, c[i], width_km) for i in np.flatnonzero(chan)]) \
         if chan.any() else np.empty((0, c.shape[0]))

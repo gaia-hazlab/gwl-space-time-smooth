@@ -24,6 +24,14 @@ from src.models.observability import (
 )
 
 
+def _raises(fn, exc=Exception):
+    try:
+        fn()
+    except exc:
+        return True
+    return False
+
+
 def _grid(n=16, span=20.0):
     a = np.linspace(0, span, n)
     xx, yy = np.meshgrid(a, a)
@@ -130,6 +138,25 @@ def test_satellite_footprints_tile_the_domain_and_a_finer_pixel_resolves_more():
     assert res_coarse.min() > res_pts.min()               # no dark corners under a satellite
 
 
+def test_satellite_footprints_validate_inputs_and_average_uniformly():
+    c = _grid(n=12, span=24.0)
+    G = satellite_footprints(c, pixel_km=8.0)
+    for row in G:                                        # top-hat: a pixel averages uniformly
+        nz = row[row > 0]
+        assert np.allclose(nz, nz[0])
+    assert _raises(lambda: satellite_footprints(c, pixel_km=0.0))
+    assert _raises(lambda: satellite_footprints(c, pixel_km=8.0, land=np.ones(len(c) + 3, bool)))
+    land2d = np.ones((12, 12), dtype=bool)               # a 2-D raster mask (flattened) is accepted
+    assert satellite_footprints(c, 8.0, land=land2d).shape[0] > 0
+
+
+def test_channel_footprints_validate_lengths():
+    c = _grid(n=10, span=20.0)
+    hand = np.hypot(c[:, 0] - 10, c[:, 1] - 10)
+    assert _raises(lambda: channel_footprints(c, hand[:-2], np.ones(len(c), bool)))
+    assert _raises(lambda: channel_footprints(c, hand, np.ones(len(c) - 1, bool)))
+
+
 def test_channel_footprints_sit_only_on_low_hand_cells():
     c = _grid(n=20, span=20.0)
     hand = np.hypot(c[:, 0] - 10, c[:, 1] - 10)           # a valley at the centre, ridges at the edge
@@ -169,6 +196,8 @@ if __name__ == "__main__":
     test_more_sensors_never_reduce_resolution_and_no_sensors_is_zero()
     test_marginal_gain_is_where_the_added_sensor_reaches_beyond_the_base()
     test_satellite_footprints_tile_the_domain_and_a_finer_pixel_resolves_more()
+    test_satellite_footprints_validate_inputs_and_average_uniformly()
+    test_channel_footprints_validate_lengths()
     test_channel_footprints_sit_only_on_low_hand_cells()
     test_temporal_resolution_captures_the_space_time_tradeoff()
     test_information_gain_is_monotone_in_variance_reduction()

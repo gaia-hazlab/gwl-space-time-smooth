@@ -86,36 +86,36 @@ def main():
     G_dvv = np.vstack(dvv)
     G_smap = satellite_footprints(coords, 9.0, land)
     G_nisar = satellite_footprints(coords, 3.0, land)                     # ~coarsened NISAR for display
-    G_surf = channel_footprints(coords, hand.values.ravel()[::1] if False else
-                                sub.values.ravel(), land, hand_max_m=3.0)
+    G_surf = channel_footprints(coords, sub.values.ravel(), land, hand_max_m=3.0)
 
     C_gwl = GaussianPrior(1.0, GWL_L_KM).cov(coords)
     C_sm = GaussianPrior(1.0, SM_L_KM).cov(coords)
     m = lambda v: np.where(land, v, np.nan).reshape(shp)                  # noqa: E731
 
-    def stack(gs, ns):
-        G = np.vstack([g for g in gs if g.shape[0]])
-        nv = np.concatenate([np.full(g.shape[0], n) for g, n in zip(gs, ns) if g.shape[0]])
+    def stack(C, gs, ns):
+        nz = [(g, nz_noise) for g, nz_noise in zip(gs, ns) if g.shape[0]]
+        if not nz:                                            # every operator empty -> nothing resolved
+            return np.zeros(len(coords))
+        G = np.vstack([g for g, _ in nz])
+        nv = np.concatenate([np.full(g.shape[0], nz_noise) for g, nz_noise in nz])
         return resolution(C, G, nv)[0]
 
     # SM: cumulative -- SNOTEL, +SMAP, +dv/v, +NISAR(future)
-    C = C_sm
     sm_panels = [
         (resolution(C_sm, G_sno, NOISE["snotel"])[0], "SNOTEL only", "#3BB273"),
-        (stack([G_sno, G_smap], [NOISE["snotel"], NOISE["smap"]]), "+ SMAP  (9 km)", "#3BB273"),
-        (stack([G_sno, G_smap, G_dvv], [NOISE["snotel"], NOISE["smap"], NOISE["dvv_shallow"]]),
+        (stack(C_sm, [G_sno, G_smap], [NOISE["snotel"], NOISE["smap"]]), "+ SMAP  (9 km)", "#3BB273"),
+        (stack(C_sm, [G_sno, G_smap, G_dvv], [NOISE["snotel"], NOISE["smap"], NOISE["dvv_shallow"]]),
          "+ dv/v  (volume)", "#3BB273"),
-        (stack([G_sno, G_smap, G_dvv, G_nisar],
+        (stack(C_sm, [G_sno, G_smap, G_dvv, G_nisar],
                [NOISE["snotel"], NOISE["smap"], NOISE["dvv_shallow"], NOISE["nisar"]]),
          "+ NISAR  (~0.2 km, future)", "#3BB273"),
     ]
-    C = C_gwl
     gwl_panels = [
         (resolution(C_gwl, G_well, NOISE["well"])[0], "Wells only", "#2E86AB"),
-        (stack([G_well, G_dvv], [NOISE["well"], NOISE["dvv_deep"]]), "+ dv/v  (volume)", "#2E86AB"),
-        (stack([G_well, G_dvv, G_surf], [NOISE["well"], NOISE["dvv_deep"], NOISE["surfwater"]]),
+        (stack(C_gwl, [G_well, G_dvv], [NOISE["well"], NOISE["dvv_deep"]]), "+ dv/v  (volume)", "#2E86AB"),
+        (stack(C_gwl, [G_well, G_dvv, G_surf], [NOISE["well"], NOISE["dvv_deep"], NOISE["surfwater"]]),
          "+ surface water  (VSA)", "#2E86AB"),
-        (stack([G_well, G_dvv, G_surf, G_smap],
+        (stack(C_gwl, [G_well, G_dvv, G_surf, G_smap],
                [NOISE["well"], NOISE["dvv_deep"], NOISE["surfwater"], NOISE["smap"]]),
          "+ satellite (indirect)", "#2E86AB"),
     ]

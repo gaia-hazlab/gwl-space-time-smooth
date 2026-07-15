@@ -161,8 +161,7 @@ SNOTEL), volume (dv/v), satellite (SMAP now, NISAR future), and surface water. T
 SNOTEL is a scatter of points; **SMAP fills the whole domain** at moderate resolution; dv/v adds local
 detail; NISAR would approach full resolution. Bottom (groundwater): wells resolve only the lowland;
 dv/v reaches the mountains; **surface-water extent lights up the entire drainage network**, the
-flux-generating variable source area the gauges see only in
-integral.](assets/observing_system.png){#fig-observing-system}
+flux-generating variable source area whose discharge the gauges see only as a basin integral.](assets/observing_system.png){#fig-observing-system}
 
 The observing system is therefore layered by **support**: point sensors anchor specific sites,
 satellites blanket the domain at their native resolution, dv/v samples the volume between stations, and
