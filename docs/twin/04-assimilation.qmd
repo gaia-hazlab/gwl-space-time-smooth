@@ -2,53 +2,108 @@
 title: "4 · Assimilation"
 ---
 
-Assimilation is how sparse-in-space, dense-in-time observations correct the model prior without
-overwriting it away from the data. The estimate reverts to the physical/statistical model
-off-station, and the posterior uncertainty shrinks only where informative sensors constrain it.
+Assimilation is how observations correct the model prior without overwriting it away from the data.
+The estimate reverts to the physical/statistical model off-station, and the posterior uncertainty
+shrinks only where informative sensors constrain it. The difficulty here is not one sensor — it is
+combining **heterogeneous** streams that sample the state at wildly different resolutions in *both*
+space and time, and doing so honestly.
 
-## Precision-weighted point assimilation
+## One state, many observation geometries
+
+Every stream is written as the same object: a **linear functional of the state field**,
+$d_i = g_i^\top m + \varepsilon_i$, where the footprint $g_i$ is a weighting that sums to one so each
+observation is a weighted *average* of the state (`src/models/observability.py`). What differs between
+streams is the *shape* of $g_i$ and the *nature* of $\varepsilon_i$:
+
+| stream | geometry of $g_i$ | $\varepsilon_i$ is |
+|---|---|---|
+| NWIS well | a point (narrow blob) | instrument error |
+| SNOTEL / SCAN / USCRN θ | a point | instrument error |
+| seismic dv/v | a **volume** — the coda sensitivity kernel | processing-ensemble covariance (`codameter`) |
+| SMAP / NISAR | a **satellite pixel** (9 km / ~0.2 km footprint) | **retrieval / model error**, not instrument error |
+| Sentinel surface water | the **channel network** (HAND ≈ 0 cells) | classification error |
+| USGS gauge | a **basin integral** | rating-curve error |
+
+Writing them this way is what makes assimilation across resolutions well-posed: a coarse satellite is
+**not** regridded to 90 m and pretended to be a fine observation. It enters through its own footprint
+operator, so it constrains the *average* of the fine field over its pixel and nothing finer. This is
+the operator form of "upscale-then-compare" ([Evaluation data](02-evaluation-data.qmd)), and it is the
+antidote to *footprint leakage* — treating a downscaled pixel as a native measurement.
+
+::: {.callout-important}
+## A satellite retrieval is not ground truth
+SMAP and NISAR do not *measure* soil moisture; they retrieve it by inverting L-band brightness
+temperature or radar backscatter through a retrieval model. Their $\varepsilon_i$ is therefore a
+**model error** — larger than a probe's, and correlated in ways a point sensor's is not. In the
+assimilation they enter with a correspondingly larger $\sigma_i$ and are trusted for **coverage, not
+accuracy**: they fill the space between the sparse ground stations, they do not anchor it.
+:::
+
+## Reconciling time: fast states, slow sensors
+
+Space is only half of it. The streams sample at intervals spanning three orders of magnitude — a
+continuous seismic array and a 15-minute gauge, an hourly probe, a 2–3 day SMAP revisit, a 12-day
+NISAR repeat, a cloud-limited Sentinel pass — and the two states change at very different rates. Soil
+moisture decorrelates in days; the water table integrates months.
+
+An observation is therefore weighted not only by its precision and its distance, but by its **age
+relative to the state it informs**. A measurement taken $\Delta t$ before the analysis time carries a
+temporal weight $\exp(-\Delta t / 2\tau)$ for a state of correlation time $\tau$: a day-old θ
+observation is nearly current for the slow water table but already stale for fast soil moisture, and a
+week-old satellite retrieval has aliased the very storm it might have caught
+([the space–time design](05-state-evaluation.qmd)). The continuous seismic array and the sub-daily
+probes therefore carry the *timing* of a soil-moisture event, while the satellite carries its *spatial
+extent*; assimilation combines them on the axis each is strong on.
+
+## The precision-weighted update
 
 Each state is a model **prior** (the static-envelope × dynamic-driver field) corrected by an
-observation **update**. Every observation carries its own error $\sigma_i$ — for seismic dv/v this is
-the processing-ensemble data covariance from `codameter`, not a nominal guess — and enters with a
-precision weight that combines an inverse-variance and a distance kernel,
+observation **update**. Each observation enters with a weight combining inverse-variance precision, a
+spatial distance kernel, and the temporal factor above,
 
 $$
-w_i = \frac{\exp\!\big(-d^2 / 2L^2\big)}{\sigma_i^{2}},
+w_i = \frac{\exp\!\big(-d^2 / 2L^2\big)\;\exp\!\big(-\Delta t / 2\tau\big)}{\sigma_i^{2}},
 $$
 
-against the model-prior precision $p_0 = 1/\sigma_{\text{prior}}^2$. The consequences are the ones a
-sparse network demands: the update is dominated by nearby, low-$\sigma$ sensors; it **reverts to the
-model** beyond the correlation length $L$; and the posterior $\sigma$ drops below the prior only near
-informative observations. Near the stations, the update is ~94% wells for groundwater, ~95% seismic
-dv/v for soil moisture, and ~99% seismic for Vs30 — a real per-cell number describing the
-*near-station refinement*, not the field as a whole.
+against the model-prior precision $p_0 = 1/\sigma_{\text{prior}}^2$. The behaviour is the one a sparse,
+heterogeneous network demands: the update is dominated by nearby, low-$\sigma$, recent sensors; it
+**reverts to the model** beyond the correlation length $L$ and beyond the correlation time $\tau$; and
+the posterior $\sigma$ drops below the prior only where an informative observation actually reaches.
+Near the stations the update is ~94% wells for groundwater and ~95% seismic dv/v for soil moisture — a
+*near-station refinement* number, not a claim about the field as a whole. **Where** each stream earns
+that weight, and how much prior variance it removes, is the resolution and information-gain design of
+[the evaluation chapter](05-state-evaluation.qmd).
 
 ## dv/v depth separation into hydrologic states
 
 One seismic measurement feeds two states. The depth-separated $\delta V_S/V_S(z)$ profile
 ([Physics — hydromechanics](03b-physics-hydromechanics.qmd)) is split at the water table: the shallow
-part is converted to a **soil-moisture** change via the vadose sensitivity $S_\theta$, the deep part to
-a **relative water-table** change via $k_{sat}$. Each is then assimilated into the matching
-hydrological state by the precision-weighted fusion above, with its posterior $\sigma$ propagated from
-the inversion covariance.
+part converts to a **soil-moisture** change via the vadose sensitivity $S_\theta$, the deep part to a
+**relative water-table** change via $k_{sat}$. Each is then assimilated into the matching state by the
+weighted fusion above, with its posterior $\sigma$ propagated from the inversion covariance. dv/v is
+the only stream that constrains *both* states and the only *volume* measurement, so it is what ties the
+point networks together between stations.
 
-## The uncertainty budget — static / dynamic / downscaling
+## The uncertainty budget — static / dynamic / downscaling / observability
 
 Every product's uncertainty is decomposed rather than folded into one number:
 
 - **static** — the envelope / random-forest baseline error (pedotransfer, terrain regression);
-- **dynamic** — the driver and kriging error (forcing spread, interpolation variance);
+- **dynamic** — the driver and interpolation error (forcing spread, kriging variance);
 - **downscaling representativeness** — the within-coarse-cell standard deviation introduced when a
-  coarse dynamic driver is expressed on the fine 90 m grid. Bilinear resampling adds no fine-scale
-  information, and this term quantifies exactly that.
+  coarse driver or a coarse retrieval is expressed on the fine 90 m grid. Bilinear resampling adds no
+  fine-scale information, and this term quantifies exactly that.
 
-The three combine in quadrature into a tracked per-cell $\sigma$ that travels with the product.
+The three combine in quadrature into a tracked per-cell $\sigma$ that travels with the product. A
+fourth quantity is reported **separately and never merged in**: the **observability** — whether *any*
+instrument constrains a cell at all ([the sensitivity map](05-state-evaluation.qmd)). A cell can carry
+a confident model prediction and no measurement able to test it; conflating the two would be the most
+misleading error available.
 
 ## Confidence mask and honest masking
 
-A variogram-driven **well-density confidence mask** (not a fixed radius) marks where the network
-genuinely constrains the state. Cells beyond support — the sparse-well fractured hillslopes and
-volcanic uplands where this framework is weakest, and precisely the landslide-relevant terrain — are
-exported as **no-data** rather than a confident-looking mean, so a downstream model never mistakes an
+A variogram-driven **confidence mask** (not a fixed radius) marks where the network genuinely
+constrains the state. Cells beyond support — the sparse-well fractured hillslopes and volcanic uplands
+where this framework is weakest, and precisely the landslide-relevant terrain — are exported as
+**no-data** rather than a confident-looking mean, so a downstream model never mistakes an
 unconstrained prior for an observation.

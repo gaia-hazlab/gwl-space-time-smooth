@@ -14,12 +14,26 @@ Held out of the estimator entirely; the honest test of skill:
 | Dataset | Source & access | Native res | Evaluates |
 |---|---|---|---|
 | SMAP L4 root-zone / L3 | NASA (`earthaccess`) | 9 km | soil moisture (gridded, native-scale) |
+| **ERA5-Land** | ECMWF / CDS | ~9 km, hourly | soil moisture, runoff, **snow (SWE)** — an *independent* forcing+model chain |
+| GRACE / GRACE-FO | NASA JPL (`earthaccess`) | ~300 km | **groundwater storage** anomaly (basin-scale, independent of wells) |
 | NLDAS-2 soil moisture | NASA GES DISC (`earthaccess`) | ~12 km | soil moisture (gridded evaluation) |
-| SNOTEL / USCRN θ (held out) | NRCS AWDB; NOAA NCEI | point | soil-moisture phase (leave-one-station-out) |
-| NWIS wells (held out) | USGS | point | GWL baseline (spatial block-CV) |
+| SNOTEL / SCAN / USCRN θ (held out) | NRCS AWDB; NOAA NCEI | point | soil-moisture phase (leave-one-station-out) |
+| SNOTEL SWE (held out) | NRCS AWDB | point | the snow clock (melt-out timing) |
+| USGS gauges (held out) | USGS NWIS | basin | **fluxes** — baseflow index, runoff coefficient |
+| NWIS wells (held out) | USGS | point | GWL state — amplitude, phase, block-CV baseline |
 
-Gridded satellite layers (SMAP L4, NLDAS) are compared **upscale-then-compare** at native scale
+Gridded layers (SMAP, ERA5-Land, NLDAS, GRACE) are compared **upscale-then-compare** at native scale
 rather than as points, so a coarse product is never mistaken for a fine observation.
+
+**ERA5-Land is the most complete independent cross-check** available here: it carries soil moisture,
+surface + subsurface **runoff**, and **snow water equivalent** on one ~9 km hourly grid, produced by a
+land-surface model (HTESSEL) forced by ERA5 — a *different* forcing and a *different* model family from
+ours. It can therefore test all three faces of the budget at once — the vadose store, the flux
+partition, and the snowmelt clock — where each of our other references tests only one. It is used as an
+**evaluation** dataset and never as forcing, so the independence is preserved
+([the roadmap treats ERA5-Land as evaluation-only](https://github.com/gaia-hazlab/gwl-space-time-smooth)).
+GRACE is the only independent constraint on **groundwater storage** — coarse, but it does not depend on
+the well network at all, so it checks the water-table trend where the wells are absent.
 
 ## Model / reanalysis evaluation datasets
 

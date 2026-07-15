@@ -204,6 +204,7 @@ pinned by a different one ([Physics — Hydrology](03a-physics-hydrology.qmd)):
 | runoff coefficient $Q/P$ | 0.71 | 0.57–0.73 | **independent** — per-basin closure |
 | water-table seasonal amplitude | 1.02 m | 1.06 m | **independent** — 26,816 shallow-well observations |
 | water-table peak month | 5 | 4 | **independent** — same wells |
+| basin runoff / snow (SWE) | — | ERA5-Land | **cross-check** — independent forcing+model, all three faces at once |
 
 Precipitation is averaged over each gauge's **own watershed** (NLDI polygons). The gauged basins are
 Cascade headwater catchments receiving far more orographic precipitation than a domain mean, and
@@ -238,6 +239,10 @@ Two comparisons with very different meanings:
 - Against **MERRA-2** root-zone reanalysis — a *model evaluation dataset* — the model tracks at
   domain-mean **r = 0.85** (bias −0.08 m³ m⁻³, RMSE 0.095). This is **inter-model agreement**, not
   validation.
+- Against **ERA5-Land** — a *different* forcing and land-surface model (HTESSEL/ERA5) — the comparison
+  is genuinely more independent than MERRA-2 or TerraClimate, and it uniquely tests soil moisture,
+  runoff, and snow on the same grid. Where our snowmelt-driven recharge and ERA5-Land's diverge marks
+  a real structural difference worth chasing, not a tuning residual.
 - Against **in-situ SNOTEL** θ held out of the estimator — a *genuinely independent* reference — the
   pooled skill is markedly lower in the sparse Cascade uplands, exactly as an honest independent test
   should read. That gap is diagnostic rather than embarrassing: it localised missing physics.
