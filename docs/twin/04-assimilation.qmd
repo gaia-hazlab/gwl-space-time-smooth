@@ -1,5 +1,5 @@
 ---
-title: "4 · Assimilation"
+title: "6 · Assimilation"
 ---
 
 Assimilation is how observations correct the model prior without overwriting it away from the data.
@@ -55,24 +55,88 @@ week-old satellite retrieval has aliased the very storm it might have caught
 probes therefore carry the *timing* of a soil-moisture event, while the satellite carries its *spatial
 extent*; assimilation combines them on the axis each is strong on.
 
-## The precision-weighted update
+## The estimator: what exactly is minimised
 
-Each state is a model **prior** (the static-envelope × dynamic-driver field) corrected by an
-observation **update**. Each observation enters with a weight combining inverse-variance precision, a
-spatial distance kernel, and the temporal factor above,
+Everything above is the *setup*; this is the equation the twin actually solves. Let $m_b$ be the model
+**prior** — the static-envelope × dynamic-driver field ([Physics — Hydrology](03a-physics-hydrology.qmd))
+— with prior error covariance $B$, and let $d = \{d_i\}$ be the observations, each with its footprint
+operator $g_i$ stacked into $G$ (row $i$ is $g_i^\top$) and observation-error variance in $R$. The
+analysis $m_a$ is the field that minimises the misfit
 
 $$
-w_i = \frac{\exp\!\big(-d^2 / 2L^2\big)\;\exp\!\big(-\Delta t / 2\tau\big)}{\sigma_i^{2}},
+J(m) \;=\; \underbrace{(d - Gm)^\top R^{-1} (d - Gm)}_{\text{data misfit}}
+        \;+\; \underbrace{(m - m_b)^\top B^{-1} (m - m_b)}_{\text{stay near the model}} .
 $$
 
-against the model-prior precision $p_0 = 1/\sigma_{\text{prior}}^2$. The behaviour is the one a sparse,
-heterogeneous network demands: the update is dominated by nearby, low-$\sigma$, recent sensors; it
-**reverts to the model** beyond the correlation length $L$ and beyond the correlation time $\tau$; and
-the posterior $\sigma$ drops below the prior only where an informative observation actually reaches.
-Near the stations the update is ~94% wells for groundwater and ~95% seismic dv/v for soil moisture — a
-*near-station refinement* number, not a claim about the field as a whole. **Where** each stream earns
-that weight, and how much prior variance it removes, is the resolution and information-gain design of
-[the evaluation chapter](05-state-evaluation.qmd).
+The first term is exactly the *data minus modelled-data* the question always comes down to: $Gm$ is
+the model's prediction **of each observation**, and $d - Gm$ is the mismatch, weighted by each datum's
+precision $R^{-1}$. The second term is the price of moving away from the physical prior. For a linear
+$G$ the minimiser is closed-form — the BLUE / Kalman update (`blue_update` in
+`src/models/observability.py`):
+
+$$
+m_a \;=\; m_b + B\,G^\top \big(G B G^\top + R\big)^{-1}\,(d - G m_b),
+\qquad
+C_a \;=\; B - B G^\top \big(G B G^\top + R\big)^{-1} G B .
+$$
+
+Here $d - G m_b$ is the **innovation** — the data minus the model-predicted data — and $C_a$ is the
+posterior covariance whose diagonal is the resolution/information-gain map of
+[the evaluation chapter](05-state-evaluation.qmd). The estimate reverts to $m_b$ where no observation
+reaches, and $C_a$ drops below $B$ only where one does.
+
+### Where heterogeneous resolution enters: $G$ (space) and $R$ (time), never regridding
+
+This is the crux of combining streams that sample the state at three orders of magnitude of resolution.
+The misfit $d - Gm$ is **evaluated in observation space** — each datum is compared to the model
+*at its own support*, so nothing is ever regridded:
+
+- **Space** enters through $g_i$. A satellite datum's row is the top-hat pixel average, so $g_i^\top m$
+  is the fine field *upscaled to that pixel* and the residual is formed at 9 km, not 90 m
+  (upscale-then-compare, by construction — footprint leakage is impossible). A well's row is a point; a
+  dv/v datum's row is a coda kernel over a volume; a gauge's row is a basin integral.
+- **Time** enters through $R$. A datum taken $\Delta t$ before the analysis has its variance inflated
+  by $1/\exp(-\Delta t/\tau)$ — equivalently its precision carries the $\exp(-\Delta t/2\tau)$ weight
+  above — so a week-old satellite retrieval barely moves fast soil moisture ($\tau\!\approx\!5$ d) while
+  a day-old reading is still near-current for the slow water table ($\tau\!\approx\!120$ d).
+
+So the homogenisation is the **forward operator**, not resampling: heterogeneous data are reconciled by
+predicting each one from the common fine state and differencing in its own footprint and at its own
+staleness. A coarse pixel constrains the pixel-average and nothing finer; a stale datum constrains
+little. Nothing in the pipeline ever pretends a downscaled pixel is a native measurement.
+
+### The diagonal read of the same update
+
+The near-station numbers quoted elsewhere are the *local* reading of this estimator: with the
+off-diagonal covariance suppressed, cell $x$'s update reduces to a precision-weighted blend of the
+prior and the observations that reach it, weight
+$w_i = \exp(-d^2/2L^2)\,\exp(-\Delta t/2\tau)/\sigma_i^2$ against the prior precision
+$1/\sigma_{\text{prior}}^2$. That is where "~94% wells for groundwater, ~95% dv/v for soil moisture"
+comes from — a *near-station refinement* fraction, not a claim about the field as a whole. The full
+$C_a$ above is what the design maps in [the evaluation chapter](05-state-evaluation.qmd).
+
+## Worked inversion: dv/v at the stations to a state proxy between them
+
+The estimator is not only a variance calculation — run forward and back, it turns a **measured dv/v at
+the seismic stations into an estimate of the states between them**. The twin does *not* forecast a
+gridded dv/v field; dv/v lives only where there are receivers. What the coda kernels do is carry that
+station information into the intervening volume:
+
+![Forward: the modelled state produces a dv/v at each station (its coda footprint average). Inverse:
+those station dv/v values, run through the same kernels by the BLUE above, reconstruct a soil-moisture
+(shallow band) and water-table (deep band) proxy *between* the stations. The proxy matches the truth
+where the network is dense and reverts to the prior where it is sparse; the error is small wherever the
+coda actually constrains the cell.](assets/dvv_proxy.png)
+
+The **forward** step is $d_i = g_i^\top m$: a synthetic-but-physical dv/v at each station is the
+coda-kernel average of the modelled state, split by band — the shallow band scales with soil moisture
+through $S_\theta$, the deep band with the water table through $k_{sat}$
+([Physics — hydromechanics](03b-physics-hydromechanics.qmd)). The **inverse** step divides out the band
+sensitivity and applies `blue_update` with those same coda footprints as $G$. Because dv/v is the only
+*volume* stream, it is what ties the point wells and probes together in the gaps — the recovered proxy
+correlates with the true field at $r\!\approx\!0.85$ where the network is well-constrained, and honestly
+reverts to the model where it is not. This is the whole chain the twin runs with real measured dv/v in
+place of the synthetic.
 
 ## dv/v depth separation into hydrologic states
 

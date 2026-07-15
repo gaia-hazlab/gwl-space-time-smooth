@@ -273,6 +273,43 @@ def resolution(prior_cov: NDArray[np.float64], G: NDArray[np.float64],
     return res, var_post
 
 
+def blue_update(prior_cov: NDArray[np.float64], G: NDArray[np.float64], d: ArrayLike,
+                noise_var: ArrayLike, prior_mean: ArrayLike = 0.0
+                ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    r"""The analysis MEAN and posterior variance — the estimate itself, not only how well-resolved it is.
+
+    Minimises the misfit
+
+    .. math::  J(m) = (d - Gm)^\top R^{-1} (d - Gm) + (m - m_b)^\top B^{-1} (m - m_b),
+
+    the weighted **data misfit** ``d - Gm`` plus the deviation from the model prior ``m_b``. For a
+    linear operator ``G`` the minimiser is the BLUE / Kalman update
+
+    .. math::  m_a = m_b + B G^\top (G B G^\top + R)^{-1} (d - G m_b),
+
+    where ``d - G m_b`` is the **innovation** — the data minus the *model-predicted* data, evaluated for
+    each datum at ITS OWN support (``G m_b`` upscales the fine prior to the datum's footprint). The
+    heterogeneous resolution of the streams therefore enters only through ``G`` (space) and ``R``
+    (time / error), never by regridding the data.
+
+    ``prior_cov`` is ``B`` (n_cell x n_cell); ``G`` is ``(n_obs, n_cell)``; ``d`` and ``noise_var`` are
+    length ``n_obs``; ``prior_mean`` is ``m_b`` (scalar or n_cell). Returns ``(m_a, var_post)``.
+    """
+    B = np.asarray(prior_cov, dtype="float64")
+    G = np.atleast_2d(np.asarray(G, dtype="float64"))
+    mb = np.broadcast_to(np.asarray(prior_mean, dtype="float64"), (B.shape[0],)).astype("float64")
+    if G.size == 0 or G.shape[0] == 0:
+        return mb.copy(), np.diag(B).copy()
+    d = np.asarray(d, dtype="float64").ravel()
+    nv = np.broadcast_to(np.asarray(noise_var, dtype="float64"), (G.shape[0],))
+    BG = B @ G.T                                     # (n_cell, n_obs)
+    M = G @ BG + np.diag(nv)                          # (n_obs, n_obs)
+    innov = d - G @ mb                               # data minus model-predicted data
+    m_a = mb + BG @ np.linalg.solve(M, innov)
+    var_post = np.diag(B) - np.einsum("ij,ji->i", BG, np.linalg.solve(M, BG.T))
+    return m_a, np.clip(var_post, 0.0, None)
+
+
 def information_gain(var_prior: ArrayLike, var_post: ArrayLike,
                      clip_nats: float = 4.0) -> NDArray[np.float64]:
     r"""Per-cell information gain :math:`\tfrac12\ln(\text{var\_prior}/\text{var\_post})`, in nats.

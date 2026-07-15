@@ -1,5 +1,5 @@
 ---
-title: "1 · Input data"
+title: "2 · Input data"
 ---
 
 Everything that goes *into* the twin is heterogeneous in kind, resolution, and honesty. Only two

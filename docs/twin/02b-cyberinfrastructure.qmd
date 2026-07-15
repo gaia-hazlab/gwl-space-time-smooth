@@ -1,0 +1,67 @@
+---
+title: "3 · Cyberinfrastructure"
+---
+
+The twin is only as good as the data plane that feeds it. The hard part is not any one stream — it is
+that the streams arrive at wildly different native resolutions, cadences, and error models, and must be
+reconciled *without* pretending a coarse product is a fine measurement. This chapter shows that plane
+end to end: how each source is fetched, homogenised, staged, and handed to assimilation.
+
+![The data plane. Sources at their native resolution are fetched by a stream-specific loader, reprojected
+to the frozen 90 m grid, and — critically — kept at their own footprint through a forward operator $g_i$
+rather than regridded. Everything is staged as Zarr in the earth2studio `DataSource` layout on Kopah
+S3, then assimilated by the BLUE at each datum's native support. Evaluation streams enter the same way
+but are held out to score the product, never to force it.](assets/cyberinfra.png)
+
+## Fetch: one loader per stream, offline-safe
+
+Each source has a dedicated loader under `src/data/` (`fetch_prism_daily`, `fetch_usgs_discharge`,
+`fetch_insitu_sm`, `fetch_snotel_swe`, `fetch_gauge_basins`, `fetch_solus_domain`,
+`download_3dep_domain`, `fetch_earth2studio`). Two rules are enforced across all of them:
+
+- **Fail loud, never fabricate.** A loader that cannot reach its provider raises, or falls back to a
+  cached table of the *same* network — it never substitutes a plausible-looking default. The FuXi
+  forcing loader refuses a zero-precipitation field by name and by magnitude
+  ([Appendix A](A-compute-and-deployment.qmd)), because an all-zero PNW wet-season forecast is a bug,
+  not a drought.
+- **Offline fallbacks.** Figures and analyses degrade to cached parquet rather than failing because a
+  provider's DNS is down.
+
+## Homogenise: the forward operator, not regridding
+
+This is the step that makes cross-resolution assimilation well-posed. Every stream is reprojected to
+the single frozen analysis grid (`src/config/domain.py`, EPSG:5070, 90 m), but the *observation* is
+**not** resampled to 90 m. Instead each datum keeps its native footprint as a forward operator $g_i$ —
+a point for a well or probe, a coda-kernel volume for dv/v, a top-hat pixel for a satellite, a basin
+integral for a gauge. The model is then upscaled to the datum through $g_i$ and differenced there
+("upscale-then-compare"). A 9 km retrieval constrains the 9 km average of the fine field and nothing
+finer; footprint leakage is impossible by construction. The full estimator is in
+[Assimilation](04-assimilation.qmd).
+
+## Stage: Zarr on Kopah, in the earth2studio layout
+
+Every homogenised stream is written as Zarr following the `gaia-cli` convention (obstore +
+`zarr_format=3`, `consolidated=False`, ~10 MB chunks) to Kopah S3:
+
+```
+s3://gaia/soil-twin/static/     SVM / Vs30 / SOLUS / terrain
+s3://gaia/soil-twin/forcing/    PRISM daily (observed)
+s3://gaia/soil-twin/forecast/   FuXi initialisations (predicted)
+s3://gaia/soil-twin/obs/        wells, probes, gauges, dv/v
+```
+
+The layout is deliberately `[time, variable, ...]` — the shape of an earth2studio `DataSource`
+(`__call__(time, variable) -> DataArray`). A staged store is therefore one thin adapter away from being
+a drop-in source inside an earth2studio pipeline, so the same tooling that drives the AI weather models
+can drive the twin's forcing, hindcast, and observation streams. The staging layer *is* the twin's data
+plane; earth2studio compatibility keeps it usable from the AI-weather ecosystem rather than siloed
+([Appendix A](A-compute-and-deployment.qmd) has the compute and object-store detail).
+
+## Assimilate and evaluate on the same footing
+
+Assimilation reads the staged stores and applies the BLUE at each datum's native support
+([Assimilation](04-assimilation.qmd)); the product is the 90 m GWL / soil-moisture / Vs30 fields with a
+per-cell $\sigma$. The independent evaluation streams — ERA5-Land, GRACE, held-out SNOTEL/USCRN, the
+gauges — pass through the *identical* fetch → homogenise → stage path, but are withheld from the update:
+they **score** the product at their native resolution ([Evaluation data](02-evaluation-data.qmd)), they
+never force it. Same plumbing, opposite role.
