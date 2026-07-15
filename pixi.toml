@@ -97,20 +97,20 @@ merra2-validate = "python notebooks/validate_merra2.py"
 soil-moisture = "python -m src.models.soil_moisture --output-dir data/processed"
 soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"  # SCAFFOLD (#19)
 # 90 m time-varying products: GWL + θ GIFs and the tracked downscaling uncertainty budget.
-products-90m = "python notebooks/make_products_90m.py"
+products-90m = "python old/notebooks/make_products_90m.py"
 # Forcing-ensemble (TerraClimate vs PRISM) + demonstrative dv/v coupling figures.
-ensemble-dvv = "python notebooks/make_ensemble_dvv_figures.py"
+ensemble-dvv = "python old/notebooks/make_ensemble_dvv_figures.py"
 # === dv/v state module (seismic ambient noise -> depth-separated SM + relative WTD) ===
 # UW + CC station metadata via seisfetch (cheap; add --waveforms for a bounded download).
 seismic = "python -m src.data.fetch_seismic --output data/processed/seismic_stations.parquet"
 # dv/v module figure: stations -> freq/depth kernels -> banded dv/v (UQ, codameter) -> SM & WTD.
-dvv-demo = "python notebooks/make_dvv_figures.py"
+dvv-demo = "python old/notebooks/make_dvv_figures.py"
 # Vs30 near-surface stiffness: Wald-Allen slope proxy (default) / USGS grid / Sanger-Maurer (GAIA).
 vs30 = "python -m src.data.fetch_vs30 --source svm --output data/processed/vs30_90m.tif"
 # AI weather -> rainfall forcing. Needs earth2studio[graphcast] on a Linux+NVIDIA host
 # (jax[cuda13]); will not run on macOS/arm64. Writes data/forecast/graphcast_precip.nc
 ai-precip = "python -m src.data.fetch_earth2studio --start 2024-12-01 --lead-days 15"
-forecast-leadtime = "python notebooks/make_forecast_leadtime.py"
+forecast-leadtime = "python old/notebooks/make_forecast_leadtime.py"
 # stage the 6.2 GB SVM netCDF as chunked Zarr (local, or s3://gaia/... on Kopah)
 stage-svm-zarr = "python -m src.data.stage_svm_zarr"
 # observed daily forcing (gaia prism-stac) + the Dec-2025 hindcast demo
@@ -147,21 +147,21 @@ stage-mvp = "python -m src.data.stage_mvp_window"
 gauges = "python -m src.data.fetch_usgs_discharge --start 2025-09-01 --end 2026-03-31"
 gauge-basins = "python -m src.data.fetch_gauge_basins"
 basin-closure = "python notebooks/close_basin_budget.py"
-hindcast = "python notebooks/make_forecast_leadtime.py --forcing-zarr data/processed/prism_daily_puget.zarr --lead-days 31 --title 'HINDCAST — December 2025, forced by OBSERVED PRISM daily rainfall (90 m Puget/Cascades)' --out figures/demo/hindcast_dec2025.png"
+hindcast = "python old/notebooks/make_forecast_leadtime.py --forcing-zarr data/processed/prism_daily_puget.zarr --lead-days 31 --title 'HINDCAST — December 2025, forced by OBSERVED PRISM daily rainfall (90 m Puget/Cascades)' --out figures/demo/hindcast_dec2025.png"
 # Digital-twin MVP: 2x3 animated GIF (GWL, soil moisture, Vs30 + uncertainty) with dv/v assimilation.
-digital-twin = "python notebooks/make_digital_twin.py"
+digital-twin = "python old/notebooks/make_digital_twin.py"
 # Coupled water budget: recharge + capillary rise (#43), saturation-excess runoff + TOPMODEL (#44).
-water-budget = "python notebooks/make_water_budget_figure.py"
+water-budget = "python old/notebooks/make_water_budget_figure.py"
 # Well hydrostratigraphic screen diagnostic: shallow water-table vs deep confined-outwash (#46).
-well-screen = "python notebooks/make_well_screening_figure.py"
+well-screen = "python old/notebooks/make_well_screening_figure.py"
 # Static-layer catalog figure (real 90 m rasters) for the structural-model chapter.
-static-layers = "python notebooks/make_static_layers_figure.py"
+static-layers = "python old/notebooks/make_static_layers_figure.py"
 # LandLab dynamic export (#64): water table + saturation fraction + recharge -> canonical .asc + COG.
 landlab-export = "python -m src.io.landlab_export"
 # Demo figure of the exported LandLab bundle (fields + per-cell sigma).
-landlab-export-figure = "python notebooks/make_landlab_export_figure.py"
+landlab-export-figure = "python old/notebooks/make_landlab_export_figure.py"
 # Demo: static figures + GIFs + provenance, assembled into the self-contained Quarto page.
-demo = "python notebooks/demo_gwl_sm.py && python notebooks/make_products_90m.py && python notebooks/make_ensemble_dvv_figures.py && python notebooks/build_demo_qmd.py && quarto render docs/gwl_soil_moisture_demo.qmd --to html"
+demo = "python old/notebooks/demo_gwl_sm.py && python old/notebooks/make_products_90m.py && python old/notebooks/make_ensemble_dvv_figures.py && python old/notebooks/build_demo_qmd.py && quarto render old/docs/gwl_soil_moisture_demo.qmd --to html"
 # === Legacy (comparison only) ===
 baseline-legacy = "python -m src.models.interpolate_baseline"
 anomalies-legacy = "python -m src.models.interpolate_anomalies"

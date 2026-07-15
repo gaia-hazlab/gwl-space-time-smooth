@@ -21,7 +21,7 @@ import xarray as xr
 from pyproj import Transformer
 
 PROC = Path("data/processed")
-OUT = Path("docs/gwl_soil_moisture_demo.qmd")
+OUT = Path("old/docs/gwl_soil_moisture_demo.qmd")
 
 # --- Compute headline numbers from the real products ---
 qc = json.loads((PROC / "qc_report.json").read_text())

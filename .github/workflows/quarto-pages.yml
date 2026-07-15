@@ -32,18 +32,9 @@ jobs:
       - name: Install Python dependencies for figures
         run: pip install jupyter matplotlib numpy scipy scikit-learn
 
-      # continue-on-error so a render failure does NOT fail the job: the landing page and the
-      # last-committed report HTML still deploy (the committed docs/gwl_hybrid_framework.html is
-      # tracked, so a fresh render just overwrites it in place when it succeeds).
-      - name: Render Quarto paper (HTML only — PDF skipped; no LaTeX on runner)
-        id: render
-        continue-on-error: true
-        run: quarto render docs/gwl_hybrid_framework.qmd --to html
-
-      # Make a failed render VISIBLE (annotation on the run) instead of silently serving stale HTML.
-      - name: Warn if the report render failed
-        if: steps.render.outcome == 'failure'
-        run: echo "::warning title=Report render failed::Deploying the landing page and the last-committed report.html; the technical report may be stale until the Quarto render is fixed."
+      # The legacy single-file report (old/docs/gwl_hybrid_framework.qmd) is ARCHIVED and no longer
+      # re-rendered on CI: its committed snapshot docs/gwl_hybrid_framework.html is served as-is at
+      # /report.html (see the staging step). The multi-doc site under /twin/ is the primary docs.
 
       # The multi-doc site is the primary documentation (linked chapters). It is a Quarto website
       # project; render it to docs/twin/_site and serve it at /twin/. continue-on-error so a chapter
