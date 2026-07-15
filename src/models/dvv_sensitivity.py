@@ -30,8 +30,19 @@ with :math:`p` the intensity Green's function of the diffusion equation. In 2-D,
     p(r, t) = \\frac{1}{4\\pi D t}\\, e^{-r^2/(4 D t)} .
 
 The kernel is large near both stations and along the path between them, and it broadens with lapse
-time — the coda samples further from the receivers the longer you wait. Summing over all available
-pairs gives the **network sensitivity** :math:`S(x) = \\sum_{\\text{pairs}} K_{\\text{pair}}(x)`.
+time — the coda samples further from the receivers, and deeper, the longer you wait. For dv/v that
+tracks soil moisture and the shallow water table, the informative window is the **early coda** of the
+shallow Rayleigh wavefield; a late window samples too deep.
+
+## Two measurement geometries
+
+**Inter-station** (cross-correlation) sensitivity bridges the two receivers — it is large *along the
+path between* them. **Single-station** (autocorrelation) sensitivity sets :math:`s_1 = s_2`, so it is a
+localised blob *at* the receiver. The two are complementary: combining them lets the between-station
+region be isolated, because the path signal is the part of a pair kernel that the two single-station
+kernels do not already account for. Single-station coda is also available at *every* station, so it
+fills the gaps a sparse pair geometry leaves. The **network sensitivity** sums both,
+:math:`S(x) = \\sum_{\\text{pairs}} K_{\\text{pair}}(x) + \\sum_{\\text{stations}} K_{\\text{auto}}(x)`.
 
 ## From sensitivity to a measurement uncertainty
 
@@ -59,9 +70,16 @@ from numpy.typing import ArrayLike, NDArray
 
 # Diffuse-coda parameters. Both are properties of the medium and the measurement window, not free
 # knobs: D is the diffusivity of the scattered wavefield and t_lapse is the coda window in which dv/v
-# is measured. Longer lapse time -> the coda has sampled further from the receivers.
-DIFFUSIVITY_KM2_S = 20.0     # D; crustal coda, v ~ 2 km/s with a ~20 km transport mean free path
-LAPSE_TIME_S = 30.0          # centre of the coda window used for the stretching measurement
+# is measured. Longer lapse time -> the coda has sampled further from, and deeper below, the receivers.
+#
+# These are NEAR-SURFACE values. dv/v that tracks soil moisture and the shallow water table lives in the
+# EARLY coda of the shallow Rayleigh wavefield: a late/long window samples too deep and too broadly to
+# be informative about the top few hundred metres. Shorter lapse and a shorter mean free path (stronger
+# near-surface scattering) both localise the kernel. They are calibratable from the group velocity and
+# the observed coda decay of the actual measurement band -- these defaults should be replaced with
+# values fitted to the network's own data where available.
+DIFFUSIVITY_KM2_S = 8.0      # D; near-surface coda, v ~ 1.5 km/s with a ~10 km transport mean free path
+LAPSE_TIME_S = 10.0          # centre of the EARLY coda window (near-surface Rayleigh scattering)
 
 
 def _intensity_2d(r_km: ArrayLike, t_s: ArrayLike, d_km2_s: float) -> NDArray[np.float64]:
@@ -110,20 +128,47 @@ def pair_kernel(x_km: NDArray[np.float64], y_km: NDArray[np.float64],
     return k / tot if tot > 0 else k
 
 
+def single_station_kernel(x_km: NDArray[np.float64], y_km: NDArray[np.float64],
+                          s: ArrayLike, t_lapse: float = LAPSE_TIME_S,
+                          d: float = DIFFUSIVITY_KM2_S, n_quad: int = 24) -> NDArray[np.float64]:
+    """Coda sensitivity of a **single-station autocorrelation** — the source and receiver coincide.
+
+    Setting ``s1 = s2 = s`` in the Pacheco–Snieder kernel gives the autocorrelation case: the coda
+    samples the medium **immediately around the one station** and decays outward, so the kernel is a
+    localised blob centred on the receiver rather than a bridge between two.
+
+    This is the complement of :func:`pair_kernel`. An inter-station kernel is sensitive **along the path
+    between** the receivers; a single-station kernel is sensitive **at** each receiver. Having both is
+    what lets the between-station region be isolated: the path signal is the part of the pair
+    sensitivity that the two single-station kernels do *not* already explain. Single-station coda is
+    also available at **every** station, including isolated ones with no usable partner, so it fills the
+    gaps a sparse pair geometry leaves.
+    """
+    return pair_kernel(x_km, y_km, s, s, t_lapse, d, n_quad)
+
+
 def network_sensitivity(x_km: NDArray[np.float64], y_km: NDArray[np.float64],
                         stations_km: ArrayLike, t_lapse: float = LAPSE_TIME_S,
                         d: float = DIFFUSIVITY_KM2_S,
-                        max_pair_km: float | None = None
+                        max_pair_km: float | None = None,
+                        include_single: bool = True
                         ) -> tuple[NDArray[np.float64], int]:
-    """Summed coda sensitivity ``S(x)`` over every station pair.
+    """Summed coda sensitivity ``S(x)`` over the network.
 
     ``stations_km`` is an ``(n, 2)`` array of station positions in km, on the same grid coordinates as
-    ``x_km``/``y_km``. ``max_pair_km`` drops pairs whose separation exceeds the distance over which a
-    usable cross-correlation is realistic; without a limit, distant pairs contribute a broad,
-    near-uniform kernel that overstates coverage.
+    ``x_km``/``y_km``.
 
-    Returns ``(sensitivity_field, n_pairs_used)`` — the field shaped like ``x_km``, and the number of
-    pairs that actually contributed.
+    The total combines two measurement types, which sample different geometry:
+
+    - **inter-station** (cross-correlation) kernels, one per pair — sensitive along the path between the
+      receivers. ``max_pair_km`` drops pairs whose separation exceeds the distance over which a usable
+      cross-correlation is realistic; without a limit, distant pairs contribute a broad, near-uniform
+      kernel that overstates coverage.
+    - **single-station** (autocorrelation) kernels, one per station — sensitive at each receiver, and
+      available everywhere including isolated stations. Included when ``include_single`` is true.
+
+    Returns ``(sensitivity_field, n_contributions)`` — the field shaped like ``x_km``, and the total
+    number of kernels summed (pairs, plus one per station if single-station is included).
     """
     st = np.asarray(stations_km, dtype="float64")
     s = np.zeros_like(x_km, dtype="float64")
@@ -133,6 +178,10 @@ def network_sensitivity(x_km: NDArray[np.float64], y_km: NDArray[np.float64],
             if max_pair_km is not None and np.hypot(*(st[i] - st[j])) > max_pair_km:
                 continue
             s += pair_kernel(x_km, y_km, st[i], st[j], t_lapse, d)
+            n_used += 1
+    if include_single:
+        for k in range(len(st)):
+            s += single_station_kernel(x_km, y_km, st[k], t_lapse, d)
             n_used += 1
     return s, n_used
 
