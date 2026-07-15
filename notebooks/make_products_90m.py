@@ -58,12 +58,12 @@ def _make_gif(stack, template_da, times, cmap, label, title, path, vlims):
     im = ax.imshow(ll0.values, extent=ext, origin="upper", cmap=cmap, vmin=vmin, vmax=vmax,
                    aspect="auto", interpolation="nearest")
     cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03)
-    cb.set_label(label, fontsize=9)
-    ax.set_title(title, fontsize=11, fontweight="bold")
-    txt = ax.text(0.03, 0.96, "", transform=ax.transAxes, fontsize=12, fontweight="bold",
+    cb.set_label(label, fontsize=13)
+    ax.set_title(title, fontsize=15, fontweight="bold")
+    txt = ax.text(0.03, 0.96, "", transform=ax.transAxes, fontsize=15, fontweight="bold",
                   va="top", ha="left", color=INK,
                   bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=GRID, alpha=0.85))
-    ax.tick_params(labelsize=8)
+    ax.tick_params(labelsize=12)
 
     def update(i):
         frame = template_da.copy(data=stack[i]).rio.reproject("EPSG:4326")
@@ -89,9 +89,9 @@ def _budget_figure(theta_da, th_budget, dtw_da, gwl_budget, path):
         v = tot[np.isfinite(tot)]
         im = ax.imshow(ll.values, extent=ext, origin="upper", cmap=cmap,
                        vmax=float(np.nanpercentile(v, 97)), aspect="auto")
-        ax.set_title(f"{name} — total 1σ", fontsize=11, fontweight="bold")
-        ax.tick_params(labelsize=8)
-        cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03); cb.set_label(unit, fontsize=9)
+        ax.set_title(f"{name} — total 1σ", fontsize=15, fontweight="bold")
+        ax.tick_params(labelsize=12)
+        cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03); cb.set_label(unit, fontsize=13)
 
         ax2 = axes[row, 1]
         fr = bud.fractions()
@@ -102,17 +102,17 @@ def _budget_figure(theta_da, th_budget, dtw_da, gwl_budget, path):
             ax2.bar(0, fr[k], bottom=bottom, width=0.5, color=c, label=k.replace("_", " "))
             if fr[k] > 0.04:
                 ax2.text(0, bottom + fr[k] / 2, f"{fr[k]*100:.0f}%", ha="center", va="center",
-                         color="white", fontweight="bold", fontsize=10)
+                         color="white", fontweight="bold", fontsize=13)
             bottom += fr[k]
         ax2.set_ylim(0, 1); ax2.set_xlim(-0.6, 1.4); ax2.set_xticks([])
         ax2.set_ylabel("variance share")
         ax2.set_title(f"{name} — σ² budget\n(median total σ = {np.nanmedian(tot):.3g} {unit})",
-                      fontsize=10.5, fontweight="bold")
-        ax2.legend(fontsize=8, loc="center left", bbox_to_anchor=(0.55, 0.5), frameon=False)
+                      fontsize=13, fontweight="bold")
+        ax2.legend(fontsize=12, loc="center left", bbox_to_anchor=(0.55, 0.5), frameon=False)
         for s in ("top", "right"):
             ax2.spines[s].set_visible(False)
     fig.suptitle("Uncertainty budget — static (fine) ⊕ dynamic (coarse) ⊕ downscaling (representativeness)",
-                 fontsize=13, fontweight="bold", y=0.98)
+                 fontsize=16, fontweight="bold", y=0.98)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor="white")
     plt.close(fig)

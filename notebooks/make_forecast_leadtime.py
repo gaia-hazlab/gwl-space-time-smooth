@@ -152,19 +152,19 @@ def main(argv=None):
     ax[1, 1].plot(lead, 100 * dlo, "s-", color=C, lw=2, label="deep (water table)")
     ax[1, 1].axhline(0, color="#999", lw=0.8)
     ax[1, 1].set_title("dv/v by band — the observable", fontweight="bold")
-    ax[1, 1].set_ylabel("dv/v (%)"); ax[1, 1].legend(fontsize=8, frameon=False)
+    ax[1, 1].set_ylabel("dv/v (%)"); ax[1, 1].legend(fontsize=12, frameon=False)
 
     ax[1, 2].bar(lead - 0.18, rc, width=0.36, color=G, label="recharge")
     ax[1, 2].bar(lead + 0.18, ro, width=0.36, color=R, label="runoff")
     ax[1, 2].set_title("Fluxes", fontweight="bold"); ax[1, 2].set_ylabel("mm / day")
-    ax[1, 2].legend(fontsize=8, frameon=False)
+    ax[1, 2].legend(fontsize=12, frameon=False)
 
     for x in ax.ravel():
         x.set_xlabel("day"); x.grid(alpha=0.25, lw=0.6)
         x.set_xticks(lead[::max(1, n // 8)])
 
     fig.suptitle(a.title or f"Soil-state forecast, lead +1…+{n} days (90 m Puget/Cascades)\n{src}",
-                 fontsize=12, fontweight="bold")
+                 fontsize=15, fontweight="bold")
     out = a.out
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=130, bbox_inches="tight", facecolor="white")

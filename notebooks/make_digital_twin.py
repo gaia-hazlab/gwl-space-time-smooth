@@ -292,7 +292,7 @@ def _build_figure(static, fields, sigmas, means, grid):
             im = ax.imshow(data0, extent=[w, e, s, n], origin="upper", cmap=cmap,
                            vmin=vl[(r, p)][0], vmax=vl[(r, p)][1], interpolation="nearest", aspect="auto")
             ims[(r, c)] = im
-            ax.set_title(tag, fontsize=12, color=INK)
+            ax.set_title(tag, fontsize=15, color=INK)
             ax.set_xlim(w, e); ax.set_ylim(s, n)                # pin frame; don't autoscale to markers
             ax.set_xticks([]); ax.set_yticks([])
             for sp in ax.spines.values():
@@ -300,11 +300,11 @@ def _build_figure(static, fields, sigmas, means, grid):
             if r == 0:                                          # markers + mean insert on the field row
                 _draw_markers(ax, p, seis, wells, snotel)
                 if p in DELTA_PRODUCTS:
-                    mean_txt[p] = ax.text(0.035, 0.04, "", transform=ax.transAxes, fontsize=10.5,
+                    mean_txt[p] = ax.text(0.035, 0.04, "", transform=ax.transAxes, fontsize=13,
                                           color=INK, va="bottom", ha="left",
                                           bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=MUTED, alpha=0.9))
             fig.colorbar(im, ax=ax, shrink=0.82, pad=0.01)
-    date_txt = axes[0, 0].text(0.035, 0.965, "", transform=axes[0, 0].transAxes, fontsize=14,
+    date_txt = axes[0, 0].text(0.035, 0.965, "", transform=axes[0, 0].transAxes, fontsize=16,
                                fontweight="bold", color=INK, va="top", ha="left",
                                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=MUTED, alpha=0.9))
 
@@ -314,10 +314,10 @@ def _build_figure(static, fields, sigmas, means, grid):
             Line2D([0], [0], marker="^", color="none", markerfacecolor=OI["uw"], markeredgecolor="white", markersize=8, label="Seismic UW"),
             Line2D([0], [0], marker="s", color="none", markerfacecolor=OI["cc"], markeredgecolor="white", markersize=7, label="Seismic CC")]
     rs = "Remote sensing: " + " | ".join(f"{n} ({r}, {role})" for n, r, role in REMOTE)
-    fig.legend(handles=sens, loc="lower center", ncol=4, frameon=False, fontsize=10,
+    fig.legend(handles=sens, loc="lower center", ncol=4, frameon=False, fontsize=13,
                bbox_to_anchor=(0.5, -0.02))
     fig.text(0.5, -0.045, rs + "   —   dv/v: synthetic MVP; SNOTEL = soil moisture only (SWE roadmap)",
-             ha="center", fontsize=8.5, color=MUTED)
+             ha="center", fontsize=12, color=MUTED)
     return fig, ims, date_txt, mean_txt, order
 
 
@@ -423,11 +423,11 @@ def make_attribution_figure(grid, static, fields, means, frame, path, L=25_000.0
         labels = [k for k, _ in items]; vals = [float(np.nan_to_num(v)) for _, v in items]
         ypos = np.arange(len(labels))[::-1]
         ax.barh(ypos, vals, color=[FEATURE_COLOR.get(k, "#999999") for k in labels], edgecolor="white")
-        ax.set_yticks(ypos); ax.set_yticklabels(labels, fontsize=9)
-        ax.set_xlim(0, max(vals + [0.01]) * 1.18); ax.set_title(titles[p], fontsize=12.5, color=INK)
-        ax.set_xlabel("feature importance", fontsize=9)
+        ax.set_yticks(ypos); ax.set_yticklabels(labels, fontsize=13)
+        ax.set_xlim(0, max(vals + [0.01]) * 1.18); ax.set_title(titles[p], fontsize=15, color=INK)
+        ax.set_xlabel("feature importance", fontsize=13)
         for yp, v in zip(ypos, vals):
-            ax.text(v + 0.005, yp, f"{v*100:.0f}%", va="center", fontsize=8.5, color=INK)
+            ax.text(v + 0.005, yp, f"{v*100:.0f}%", va="center", fontsize=12, color=INK)
 
         spec = ATTR_SOURCES[p]                                # sensor precision-update share
         sources = {name: (xy[name][0], xy[name][1], sig) for name, sig in spec["streams"].items()}
@@ -441,19 +441,19 @@ def make_attribution_figure(grid, static, fields, means, frame, path, L=25_000.0
             axb.barh(0, shares[name], left=left, color=STREAM_COLOR[name], edgecolor="white")
             if shares[name] > 0.06:
                 axb.text(left + shares[name] / 2, 0, f"{shares[name]*100:.0f}%", ha="center",
-                         va="center", fontsize=9.5, color="white", fontweight="bold")
+                         va="center", fontsize=13, color="white", fontweight="bold")
             left += shares[name]
         axb.set_xlim(0, 1); axb.set_ylim(-0.5, 0.5); axb.set_yticks([])
-        axb.set_xticks([0, 0.5, 1.0]); axb.set_xticklabels(["0", "50", "100%"], fontsize=8.5)
-        axb.set_title("assimilation update — sensor share near stations", fontsize=9.5, color=MUTED)
+        axb.set_xticks([0, 0.5, 1.0]); axb.set_xticklabels(["0", "50", "100%"], fontsize=12)
+        axb.set_title("assimilation update — sensor share near stations", fontsize=13, color=MUTED)
 
     handles = [Patch(facecolor=STREAM_COLOR[k], label=STREAM_LABEL[k])
                for k in ("wells", "snotel", "seismic", "model")]
-    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=10,
+    fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=13,
                bbox_to_anchor=(0.5, -0.02))
     fig.suptitle("Attribution — top: features explaining each state (RF importance); "
                  "bottom: sensor share of the near-station update",
-                 fontsize=12.5, fontweight="bold", color=INK)
+                 fontsize=15, fontweight="bold", color=INK)
     fig.savefig(path, bbox_inches="tight", facecolor="white", dpi=150)
     plt.close(fig)
     return dict(feature_importance=feat_out, sensor_update_share=sensor_out)

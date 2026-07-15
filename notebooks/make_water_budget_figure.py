@@ -72,8 +72,8 @@ def main():
     a.plot(t, wb.recharge_mm[:, 0, 0], color=OI["recharge"], lw=1.4, label="recharge → water table")
     a.plot(t, wb.runoff_mm[:, 0, 0], color=OI["runoff"], lw=1.2, label="sat-excess runoff")
     a.plot(t, wb.cap_rise_mm[:, 0, 0], color=OI["cap"], lw=1.2, ls="--", label="capillary rise ↑")
-    a.set_ylabel("flux (mm / month)"); a.set_title(f"Coupled water-budget fluxes\n({src})", fontsize=11)
-    a.legend(fontsize=7.5, ncol=2); a.grid(color=GRID, lw=0.5)
+    a.set_ylabel("flux (mm / month)"); a.set_title(f"Coupled water-budget fluxes\n({src})", fontsize=15)
+    a.legend(fontsize=12, ncol=2); a.grid(color=GRID, lw=0.5)
 
     # panel 2: theta and water table co-evolving
     a = ax[1]
@@ -83,7 +83,7 @@ def main():
     a2.plot(t, wb.wt_depth_m[:, 0, 0], color=OI["wt"], lw=1.6, label="water-table depth")
     a2.set_ylabel("water-table depth (m)", color=OI["wt"]); a2.tick_params(axis="y", colors=OI["wt"])
     a2.invert_yaxis()                                        # shallower = up
-    a.set_title("θ ↔ water table coupling\n(recharge raises the table)", fontsize=11)
+    a.set_title("θ ↔ water table coupling\n(recharge raises the table)", fontsize=15)
     a.grid(color=GRID, lw=0.5)
 
     # panel 3: TOPMODEL water table over real TWI
@@ -99,14 +99,14 @@ def main():
                       cmap="YlGnBu_r", aspect="auto")
         fig.colorbar(im, ax=a, shrink=0.85, label="water-table depth (m)")
         a.set_title("Subsurface lateral flow (TOPMODEL)\nshallow=blue (valleys), deep=pale (ridges)",
-                    fontsize=11)
+                    fontsize=15)
         a.set_xticks([]); a.set_yticks([])
     except Exception as exc:
         a.text(0.5, 0.5, f"TWI unavailable\n{exc}", ha="center", va="center", transform=a.transAxes)
 
     fig.suptitle("Closing the water budget: vertical recharge + capillary rise (#43) and "
                  "saturation-excess runoff + TOPMODEL lateral flow (#44)",
-                 fontsize=12.5, fontweight="bold", color=INK, y=1.02)
+                 fontsize=15, fontweight="bold", color=INK, y=1.02)
     fig.tight_layout()
     for p in (OUT / "water_budget.png", ASSETS / "water_budget.png"):
         fig.savefig(p, bbox_inches="tight", facecolor="white")

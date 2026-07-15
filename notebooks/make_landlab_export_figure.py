@@ -66,14 +66,14 @@ def main():
         vlo, vhi = (np.nanpercentile(v, 2), np.nanpercentile(v, 98)) if v.size else (0, 1)
 
         im = axes[0, j].imshow(da.values, cmap=cmap, vmin=vlo, vmax=vhi)
-        axes[0, j].set_title(f"{title}\n[{unit}]", fontsize=11)
+        axes[0, j].set_title(f"{title}\n[{unit}]", fontsize=15)
         fig.colorbar(im, ax=axes[0, j], shrink=0.8)
 
         if sig is not None:
             sv = sig.values[np.isfinite(sig.values)]
             im2 = axes[1, j].imshow(sig.values, cmap=scmap,
                                     vmax=np.nanpercentile(sv, 98) if sv.size else 1)
-            axes[1, j].set_title(f"1σ {title.split()[0].lower()}", fontsize=10)
+            axes[1, j].set_title(f"1σ {title.split()[0].lower()}", fontsize=13)
             fig.colorbar(im2, ax=axes[1, j], shrink=0.8)
         else:
             axes[1, j].axis("off")
@@ -81,7 +81,7 @@ def main():
             axes[r, j].set_xticks([]); axes[r, j].set_yticks([])
 
     fig.suptitle("LandLab dynamic export — canonical hydrological fields + per-cell uncertainty "
-                 "(90 m EPSG:5070; masked to the well-supported domain)", fontsize=12)
+                 "(90 m EPSG:5070; masked to the well-supported domain)", fontsize=15)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=130, bbox_inches="tight", facecolor="white")
     logger.info("wrote %s", OUT)

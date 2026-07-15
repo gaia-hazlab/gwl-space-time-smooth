@@ -49,7 +49,7 @@ def main():
                                      color=c, lw=lw, zorder=1, shrinkA=2, shrinkB=2))
 
     def colhead(x, w, t):
-        ax.text(x + w / 2, 95.5, t, ha="center", va="center", fontsize=11, weight="bold", color=INK)
+        ax.text(x + w / 2, 95.5, t, ha="center", va="center", fontsize=15, weight="bold", color=INK)
 
     # ---- column x-anchors ----
     cx = dict(src=1.0, fetch=22.5, homo=42.5, stage=63.0, assim=83.5)
@@ -118,16 +118,16 @@ def main():
     ax.text(cx["homo"] + W["homo"] / 2, 2.5,
             "ERA5-Land / GRACE / SNOTEL / gauges enter the SAME way but are held out — they SCORE the "
             "product, never force it",
-            ha="center", va="center", fontsize=8.2, style="italic", color=ROLE["eval"])
+            ha="center", va="center", fontsize=12, style="italic", color=ROLE["eval"])
 
     # legend of roles
     from matplotlib.patches import Patch
     leg = [Patch(fc="white", ec=ROLE[k], lw=2, label=k) for k in ROLE]
-    ax.legend(handles=leg, loc="lower left", bbox_to_anchor=(0.005, 0.005), ncol=3, fontsize=8,
-              frameon=True, framealpha=.9, title="data role", title_fontsize=8.5)
+    ax.legend(handles=leg, loc="lower left", bbox_to_anchor=(0.005, 0.005), ncol=3, fontsize=12,
+              frameon=True, framealpha=.9, title="data role", title_fontsize=12)
 
     fig.suptitle("The data plane: heterogeneous streams reconciled by forward operators, not regridding",
-                 fontsize=13.5, weight="bold", y=0.995)
+                 fontsize=16, weight="bold", y=0.995)
     OUT.parent.mkdir(parents=True, exist_ok=True); ASSETS.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=125, bbox_inches="tight", facecolor="white")
     shutil.copy(OUT, ASSETS / OUT.name)

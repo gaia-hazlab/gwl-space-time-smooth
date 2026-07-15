@@ -107,34 +107,34 @@ def main():
         cm = plt.get_cmap("RdBu_r").copy(); cm.set_bad("#eef0f3")
 
         ax[r, 0].imshow(m(truth), cmap=cm, **{k: v for k, v in kw.items() if k != "cmap"})
-        ax[r, 0].set_title("True %s anomaly" % state.lower(), fontsize=10.5, fontweight="bold")
+        ax[r, 0].set_title("True %s anomaly" % state.lower(), fontsize=13, fontweight="bold")
 
         ax[r, 1].imshow(m(truth), cmap=plt.get_cmap("Greys"), alpha=.25)
         sc = ax[r, 1].scatter(stx, sty, c=dvv_st, cmap="RdBu_r", s=60, edgecolors="k", linewidths=.4,
                               vmin=-np.percentile(np.abs(dvv_st), 96), vmax=np.percentile(np.abs(dvv_st), 96))
-        ax[r, 1].set_title("Synthetic dv/v AT stations\n(%s)" % band, fontsize=10.5, fontweight="bold")
+        ax[r, 1].set_title("Synthetic dv/v AT stations\n(%s)" % band, fontsize=13, fontweight="bold")
         fig.colorbar(sc, ax=ax[r, 1], shrink=.7, label="dv/v")
 
         im = ax[r, 2].imshow(m(proxy), cmap=cm, **{k: v for k, v in kw.items() if k != "cmap"})
         ax[r, 2].scatter(stx, sty, s=10, c="k", marker="*")
-        ax[r, 2].set_title("Recovered proxy (BLUE)\nbetween stations", fontsize=10.5, fontweight="bold")
+        ax[r, 2].set_title("Recovered proxy (BLUE)\nbetween stations", fontsize=13, fontweight="bold")
         fig.colorbar(im, ax=ax[r, 2], shrink=.7, label="anomaly")
 
         err = np.where(res > 0.1, proxy - truth, np.nan)    # show error only where dv/v constrains it
         ev = np.nanpercentile(np.abs(err), 96) if np.isfinite(err).any() else 1.0
         cm2 = plt.get_cmap("PuOr").copy(); cm2.set_bad("#eef0f3")
         im = ax[r, 3].imshow(m(err), cmap=cm2, vmin=-ev, vmax=ev)
-        ax[r, 3].set_title("Error where constrained\n(proxy − truth)", fontsize=10.5, fontweight="bold")
+        ax[r, 3].set_title("Error where constrained\n(proxy − truth)", fontsize=13, fontweight="bold")
         fig.colorbar(im, ax=ax[r, 3], shrink=.7)
 
         for a in ax[r]:
             a.set_xticks([]); a.set_yticks([])
-        ax[r, 0].set_ylabel(state, fontsize=12, fontweight="bold", color=col, labelpad=8)
+        ax[r, 0].set_ylabel(state, fontsize=15, fontweight="bold", color=col, labelpad=8)
 
     fig.suptitle("dv/v is measured only AT the stations; its coda kernels carry it into the volume "
                  "between them\nForward: state → station dv/v.   Inverse (BLUE through the kernels): "
                  "station dv/v → a soil-moisture & water-table proxy",
-                 fontsize=12.5, fontweight="bold")
+                 fontsize=15, fontweight="bold")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ASSETS.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=120, bbox_inches="tight", facecolor="white")

@@ -60,8 +60,8 @@ def main():
         a.hist(depth[cls == k].clip(upper=200), bins=bins, color=COL[k], alpha=0.8,
                label=f"{LAB[k]} (n={summ[k]['n']})", stacked=False)
     a.axvline(SHALLOW_MAX_M, color=INK, ls="--", lw=1); a.axvline(DEEP_MIN_M, color=INK, ls=":", lw=1)
-    a.set_xlabel("well depth (m)"); a.set_ylabel("wells"); a.legend(fontsize=8)
-    a.set_title("Well-depth screen\n(dashed=30 m, dotted=60 m)", fontsize=11)
+    a.set_xlabel("well depth (m)"); a.set_ylabel("wells"); a.legend(fontsize=12)
+    a.set_title("Well-depth screen\n(dashed=30 m, dotted=60 m)", fontsize=15)
 
     # 2: DTW vs depth (mixing)
     a = ax[1]
@@ -71,20 +71,20 @@ def main():
     a.set_xlim(0, 200); a.set_ylim(0, min(120, float(np.nanpercentile(dtw, 98))))
     a.set_xlabel("well depth (m)"); a.set_ylabel("median DTW (m)")
     a.set_title(f"DTW mixing: shallow median {summ['shallow_watertable']['median_dtw_m']:.0f} m "
-                f"vs confined {summ['deep_confined']['median_dtw_m']:.0f} m", fontsize=10)
-    a.legend(fontsize=8); a.grid(color=GRID, lw=0.5)
+                f"vs confined {summ['deep_confined']['median_dtw_m']:.0f} m", fontsize=13)
+    a.legend(fontsize=12); a.grid(color=GRID, lw=0.5)
 
     # 3: map
     a = ax[2]
     for k in ("deep_confined", "ambiguous", "shallow_watertable"):
         m = cls == k
         a.scatter(d.lon[m], d.lat[m], s=12, c=COL[k], alpha=0.7, linewidths=0, label=LAB[k])
-    a.set_xlabel("longitude"); a.set_ylabel("latitude"); a.legend(fontsize=8, loc="lower left")
-    a.set_title("Well population by hydro class", fontsize=11); a.grid(color=GRID, lw=0.5)
+    a.set_xlabel("longitude"); a.set_ylabel("latitude"); a.legend(fontsize=12, loc="lower left")
+    a.set_title("Well population by hydro class", fontsize=15); a.grid(color=GRID, lw=0.5)
 
     fig.suptitle("HAND predicts only the shallow unconfined water table — screen the confined "
                  "glacial-outwash wells out of the DTW target (#46)",
-                 fontsize=12, fontweight="bold", color=INK, y=1.03)
+                 fontsize=15, fontweight="bold", color=INK, y=1.03)
     fig.tight_layout()
     for p in (OUT / "well_screening.png", ASSETS / "well_screening.png"):
         fig.savefig(p, bbox_inches="tight", facecolor="white")

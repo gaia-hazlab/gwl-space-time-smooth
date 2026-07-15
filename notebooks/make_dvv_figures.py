@@ -69,7 +69,7 @@ def panel_stations(ax):
         inv = fetch_inventory(PUGET_CASCADES_BBOX)
     except Exception as exc:
         ax.text(0.5, 0.5, f"inventory unavailable\n{exc}", ha="center", va="center",
-                transform=ax.transAxes, fontsize=8); return 0
+                transform=ax.transAxes, fontsize=12); return 0
     w, s, e, n = PUGET_CASCADES_BBOX
     for net, col, mk in (("UW", OI["uw"], "^"), ("CC", OI["cc"], "s")):
         sub = inv[inv.network == net]
@@ -78,7 +78,7 @@ def panel_stations(ax):
     ax.set_xlim(w, e); ax.set_ylim(s, n)
     ax.set_xlabel("longitude"); ax.set_ylabel("latitude")
     ax.set_title("UW + CC stations (seisfetch inventory)")
-    ax.legend(fontsize=8, loc="lower left", framealpha=0.9)
+    ax.legend(fontsize=12, loc="lower left", framealpha=0.9)
     ax.grid(color=GRID, lw=0.5)
     return len(inv)
 
@@ -93,12 +93,12 @@ def panel_kernels(ax, ens, prof):
         ax.plot(g, z, color=plt.cm.viridis(bi / (len(fcs) - 1)), lw=1.6,
                 label=f"{fc:.2f} Hz")
     ax.axhline(WATER_TABLE_KM, color=INK, ls="--", lw=1.2)
-    ax.text(0.98, WATER_TABLE_KM, " water table", color=INK, fontsize=7.5, va="bottom", ha="right",
+    ax.text(0.98, WATER_TABLE_KM, " water table", color=INK, fontsize=12, va="bottom", ha="right",
             transform=ax.get_yaxis_transform())
     ax.set_ylim(1.2, 0.0)          # shallow at top
     ax.set_xlabel("normalized sensitivity |K(z)|"); ax.set_ylabel("depth (km)")
     ax.set_title("Frequency -> depth kernels (L = Vs/3f)")
-    ax.legend(fontsize=7.5, title="band", title_fontsize=7.5)
+    ax.legend(fontsize=12, title="band", title_fontsize=12)
     return K
 
 
@@ -115,7 +115,7 @@ def panel_banded_dvv(ax, banded, ens, dvv_bands):
         ax.plot(banded.times, imposed, color=col, lw=0.9, ls=":")
     ax.set_xlabel("epoch (day)"); ax.set_ylabel("dv/v (%)")
     ax.set_title("Banded dv/v with processing-ensemble UQ (dotted = imposed)")
-    ax.legend(fontsize=7, ncol=2)
+    ax.legend(fontsize=12, ncol=2)
     ax.grid(color=GRID, lw=0.5)
 
 
@@ -129,9 +129,9 @@ def panel_separation(ax, ens, prof, epoch):
     ax.fill_between([m.min() - 0.05, m.max() + 0.05], 0, WATER_TABLE_KM,
                     color=OI["sm"], alpha=0.10)
     # axis is depth-inverted (0 km at top): shallow SM near top, deep WTD below.
-    ax.text(0.02, 0.93, "soil moisture\n(vadose, shallow)", color=OI["sm"], fontsize=8,
+    ax.text(0.02, 0.93, "soil moisture\n(vadose, shallow)", color=OI["sm"], fontsize=12,
             transform=ax.transAxes, va="top", fontweight="bold")
-    ax.text(0.02, 0.45, "relative WTD\n(saturated, deep)", color=OI["wtd"], fontsize=8,
+    ax.text(0.02, 0.45, "relative WTD\n(saturated, deep)", color=OI["wtd"], fontsize=12,
             transform=ax.transAxes, va="top", fontweight="bold")
     ax.set_ylim(1.0, 0.0)
     ax.set_xlabel("dVs/Vs (%)"); ax.set_ylabel("depth (km)")
@@ -193,10 +193,10 @@ def make_assimilation_figure(ens):
                       vmin=(-vmax if vmax else None), vmax=vmax, aspect="auto")
         a.scatter(xx, yy, s=10, c="k", alpha=0.5, marker="o", linewidths=0)
         fig.colorbar(im, ax=a, shrink=0.8)
-        a.set_title(title, fontsize=10); a.set_xticks([]); a.set_yticks([])
+        a.set_title(title, fontsize=13); a.set_xticks([]); a.set_yticks([])
     fig.suptitle("dv/v as a new assimilated observation: depth-separated relative water table and "
                  "soil moisture folded into the state models (precision-weighted, uncertainty-aware)",
-                 fontsize=12, fontweight="bold", y=0.99)
+                 fontsize=15, fontweight="bold", y=0.99)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     for p in (OUT / "dvv_assimilation.png", ASSETS / "dvv_assimilation.png"):
         fig.savefig(p, bbox_inches="tight", facecolor="white")
@@ -218,7 +218,7 @@ def main():
     part = panel_separation(ax[1, 1], ens, prof, epoch=len(t) - 1)
 
     fig.suptitle("dv/v module: ambient-noise correlation -> uncertainty-aware, depth-separated "
-                 "soil moisture & relative water table", fontsize=13, fontweight="bold", y=0.995)
+                 "soil moisture & relative water table", fontsize=16, fontweight="bold", y=0.995)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
     for p in (OUT / "dvv_module.png", ASSETS / "dvv_module.png"):
         fig.savefig(p, bbox_inches="tight", facecolor="white")

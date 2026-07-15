@@ -85,12 +85,12 @@ def main():
         vlo, vhi = (np.percentile(v, 2), np.percentile(v, 98)) if v.size else (0, 1)
         cm = plt.get_cmap(cmap).copy(); cm.set_bad("#eeeef2")
         im = ax.imshow(arr, cmap=cm, vmin=vlo, vmax=vhi)
-        ax.set_title(f"{title}  [{unit}]", fontsize=11, fontweight="bold", pad=3)
+        ax.set_title(f"{title}  [{unit}]", fontsize=15, fontweight="bold", pad=3)
         fig.colorbar(im, ax=ax, shrink=0.72)
         ax.set_xticks([]); ax.set_yticks([])
 
     fig.suptitle("Static-layer catalog — real 90 m data (Puget Sound / Cascades), EPSG:5070",
-                 fontsize=13, fontweight="bold")
+                 fontsize=16, fontweight="bold")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=130, bbox_inches="tight", facecolor="white")
     logger.info("wrote %s", OUT)

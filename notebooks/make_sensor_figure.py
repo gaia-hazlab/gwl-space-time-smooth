@@ -118,7 +118,7 @@ def main():
     ax[0].scatter(sx, sy, s=48, c="#E84855", marker="*",
                   label=f"Seismic UW/CC ({len(sx)})  — dv/v", edgecolors="k", linewidths=.4, zorder=5)
     ax[0].set_title("Ground sensors over the twin", fontweight="bold")
-    ax[0].legend(fontsize=7.5, loc="lower left", framealpha=.92)
+    ax[0].legend(fontsize=12, loc="lower left", framealpha=.92)
     ax[0].set_xticks([]); ax[0].set_yticks([])
 
     stx = (st_km[:, 0] * 1000 - x0) / (DOMAIN.res_m * STEP)
@@ -159,7 +159,7 @@ def main():
                  "BETWEEN receivers, single-station samples AT each one; combined, they separate the two\n"
                  "The twin evaluates dv/v at every cell as a FORWARD prediction; "
                  "this is where a measurement can test it  (early coda, lapse %.0f s)" % LAPSE_TIME_S,
-                 fontsize=12, fontweight="bold")
+                 fontsize=15, fontweight="bold")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ASSETS.mkdir(parents=True, exist_ok=True)

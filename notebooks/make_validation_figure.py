@@ -63,15 +63,15 @@ def main():
     ax[0].bar(x - wd / 2, mod, wd, color=C_M, label="model (calibrated)")
     ax[0].bar(x + wd / 2, obsv, wd, color=C_O, label="OBSERVED")
     for i, (a, b) in enumerate(zip(mod, obsv)):
-        ax[0].text(i - wd / 2, a + .02, "%.2f" % a, ha="center", fontsize=9, fontweight="bold")
-        ax[0].text(i + wd / 2, b + .02, "%.2f" % b, ha="center", fontsize=9)
+        ax[0].text(i - wd / 2, a + .02, "%.2f" % a, ha="center", fontsize=13, fontweight="bold")
+        ax[0].text(i + wd / 2, b + .02, "%.2f" % b, ha="center", fontsize=13)
     ax[0].set_xticks(x)
-    ax[0].set_xticklabels(names, fontsize=9)
+    ax[0].set_xticklabels(names, fontsize=13)
     ax[0].set_title("Calibrated against gauges AND wells", fontweight="bold")
-    ax[0].legend(fontsize=8, frameon=False)
+    ax[0].legend(fontsize=12, frameon=False)
     ax[0].set_ylim(0, 1.35)
     ax[0].text(.5, -.28, "gauges → fluxes    wells → state", transform=ax[0].transAxes,
-               ha="center", fontsize=8, style="italic", color="#555")
+               ha="center", fontsize=12, style="italic", color="#555")
 
     order = [9, 10, 11, 12, 1, 2, 3, 4, 5, 6]
     lab = ["S", "O", "N", "D", "J", "F", "M", "A", "M", "J"]
@@ -81,12 +81,12 @@ def main():
     ax[1].plot(range(10), mm, "o-", color=C_M, lw=2, label="model")
     ax[1].plot(range(10), oo, "s--", color=C_O, lw=2, label="observed wells (26,816 obs)")
     ax[1].axvline(7, color="#bbb", lw=1, ls=":")
-    ax[1].text(7.05, ax[1].get_ylim()[1] * .8, "April\n(snowmelt peak)", fontsize=8, color="#555")
+    ax[1].text(7.05, ax[1].get_ylim()[1] * .8, "April\n(snowmelt peak)", fontsize=12, color="#555")
     ax[1].set_xticks(range(10))
     ax[1].set_xticklabels(lab)
     ax[1].set_ylabel("water-table anomaly (m)")
     ax[1].set_title("Seasonal cycle — the snowmelt clock", fontweight="bold")
-    ax[1].legend(fontsize=8, frameon=False)
+    ax[1].legend(fontsize=12, frameon=False)
     ax[1].grid(alpha=.25)
 
     lbls = ["runoff", "interflow", "baseflow\n(→rivers)", "recharge\n(retained)"]
@@ -94,9 +94,9 @@ def main():
     cols = ["#E84855", "#F6AE2D", "#2E86AB", "#3BB273"]
     ax[2].barh(range(4), vals, color=cols)
     for i, v in enumerate(vals):
-        ax[2].text(v + 12, i, "%.0f mm" % v, va="center", fontsize=9)
+        ax[2].text(v + 12, i, "%.0f mm" % v, va="center", fontsize=13)
     ax[2].set_yticks(range(4))
-    ax[2].set_yticklabels(lbls, fontsize=9)
+    ax[2].set_yticklabels(lbls, fontsize=13)
     ax[2].invert_yaxis()
     ax[2].set_xlabel("mm over the wet season (P = %.0f mm)" % Ptot)
     ax[2].set_title("Where the water goes", fontweight="bold")
@@ -104,7 +104,7 @@ def main():
 
     fig.suptitle("GAIA Digital Twin of Soil — the water budget closes against observations\n"
                  "Ka=%.0f · S_y=%.2f · R_ref=%.1f mm/d   (each pinned by a DIFFERENT observation)"
-                 % (K_ANISO, SPECIFIC_YIELD, RECHARGE_REF_MM_DAY), fontsize=12, fontweight="bold")
+                 % (K_ANISO, SPECIFIC_YIELD, RECHARGE_REF_MM_DAY), fontsize=15, fontweight="bold")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ASSETS.mkdir(parents=True, exist_ok=True)      # fresh clone has no assets dir; copy would raise

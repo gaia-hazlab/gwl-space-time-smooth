@@ -52,8 +52,14 @@ for short-lead forecasting.
 :::
 
 ![**The twin over a wet season** (western Cascades, 90 m, daily), driven by observed PRISM daily
-rainfall. Soil moisture and the shallow dv/v band track individual storms; the water table integrates
-them.](assets/twin_wetseason.gif){#fig-twin}
+rainfall and corrected each frame by the BLUE assimilation of [chapter 6](04-assimilation.qmd). Soil
+moisture and the shallow dv/v band track individual storms; the water table integrates them. The
+water-table panel is pulled toward the in-domain NWIS wells (red circles) — using their observed
+*seasonal climatology*, since no well inside this mountainous domain reported in 2025–26 — and toward a
+synthetic deep-band dv/v at the seismic stations. Because that dv/v is derived from the model state, its
+update is a self-consistency check that recovers the model near the stations; the independent
+information comes from the wells' seasonal signal. A live-window assimilation awaits either wells
+reporting inside the domain or processed (non-synthetic) dv/v.](assets/twin_wetseason.gif){#fig-twin}
 
 ## Forecast horizon and skill
 

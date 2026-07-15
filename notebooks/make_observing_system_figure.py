@@ -127,16 +127,16 @@ def main():
             a = ax[r, cc]
             cm = plt.get_cmap("viridis").copy(); cm.set_bad("#eef0f3")
             im = a.imshow(m(field), cmap=cm, vmin=0, vmax=1)
-            a.set_title(title, fontsize=10.5, fontweight="bold")
+            a.set_title(title, fontsize=13, fontweight="bold")
             fig.colorbar(im, ax=a, shrink=.72, label="resolution")
             a.set_xticks([]); a.set_yticks([])
-        ax[r, 0].set_ylabel(state, fontsize=12, fontweight="bold",
+        ax[r, 0].set_ylabel(state, fontsize=15, fontweight="bold",
                             color=panels[0][2], labelpad=8)
 
     fig.suptitle("The full observing system — resolution of the state as each network is added\n"
                  "point (wells, SNOTEL) · volume (dv/v) · satellite (SMAP now, NISAR future) · "
                  "surface water (variable source area)",
-                 fontsize=13, fontweight="bold")
+                 fontsize=16, fontweight="bold")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ASSETS.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=120, bbox_inches="tight", facecolor="white")

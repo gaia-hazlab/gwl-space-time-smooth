@@ -43,9 +43,9 @@ def _map(ax, da_ll, cmap, title, label, vmin=None, vmax=None):
     x, y = da_ll.x.values, da_ll.y.values
     im = ax.imshow(da_ll.values, extent=[x.min(), x.max(), y.min(), y.max()], origin="upper",
                    cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto")
-    ax.set_title(title, fontsize=10.5); ax.tick_params(labelsize=8)
-    cb = ax.figure.colorbar(im, ax=ax, fraction=0.046, pad=0.03); cb.set_label(label, fontsize=8.5)
-    cb.ax.tick_params(labelsize=8)
+    ax.set_title(title, fontsize=13); ax.tick_params(labelsize=12)
+    cb = ax.figure.colorbar(im, ax=ax, fraction=0.046, pad=0.03); cb.set_label(label, fontsize=12)
+    cb.ax.tick_params(labelsize=12)
 
 
 def fig_forcing_ensemble(env, tc, prism):
@@ -63,8 +63,8 @@ def fig_forcing_ensemble(env, tc, prism):
     ax.plot(t, prm, color=OI["prism"], lw=0.5, alpha=0.35)
     ax.plot(t, roll(tcm), color=OI["tc"], lw=2, label="TerraClimate forcing (reanalysis)")
     ax.plot(t, roll(prm), color=OI["prism"], lw=2, label="PRISM forcing (observations)")
-    ax.set_title(f"Same bucket, two independent forcings  (r = {r:.2f})", fontsize=10.5)
-    ax.set_ylabel("domain-mean θ (m³/m³)"); ax.legend(fontsize=7.5, loc="upper right"); ax.grid(alpha=0.3)
+    ax.set_title(f"Same bucket, two independent forcings  (r = {r:.2f})", fontsize=13)
+    ax.set_ylabel("domain-mean θ (m³/m³)"); ax.legend(fontsize=12, loc="upper right"); ax.grid(alpha=0.3)
 
     sig = env["theta_fc"].copy(data=sig_forcing).rio.write_crs("EPSG:5070").rio.reproject("EPSG:4326")
     ax2 = fig.add_subplot(gs[0, 1])
@@ -76,14 +76,14 @@ def fig_forcing_ensemble(env, tc, prism):
              "downscaling": 0.011, "forcing\n(TC/PRISM)": float(np.nanmedian(sig_forcing))}
     ax3.bar(range(len(comps)), list(comps.values()),
             color=[OI["tc"], OI["prism"], OI["vermillion"], OI["green"]])
-    ax3.set_xticks(range(len(comps))); ax3.set_xticklabels(list(comps), fontsize=7.5)
-    ax3.set_ylabel("median 1σ (m³/m³)"); ax3.set_title("θ uncertainty components\n(forcing now explicit)", fontsize=10.5)
+    ax3.set_xticks(range(len(comps))); ax3.set_xticklabels(list(comps), fontsize=12)
+    ax3.set_ylabel("median 1σ (m³/m³)"); ax3.set_title("θ uncertainty components\n(forcing now explicit)", fontsize=13)
     ax3.grid(axis="x", visible=False)
     for s in ("top", "right"):
         ax3.spines[s].set_visible(False)
 
     fig.suptitle("Soil-moisture forcing ensemble — swappable, observation vs reanalysis forcing (UQ)",
-                 fontsize=13, fontweight="bold", y=1.02)
+                 fontsize=16, fontweight="bold", y=1.02)
     fig.savefig(OUT / "forcing_ensemble.png", bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print("wrote", OUT / "forcing_ensemble.png")
@@ -140,7 +140,7 @@ def fig_dvv_coupling(env, tc):
     axg.scatter(xg, yg, s=2, alpha=0.2, color=OI["tc"])
     axg.plot([xg.min(), xg.max()], [xg.min(), xg.max()], "k--", lw=1)
     axg.set_xlabel("modelled DTW anomaly (m)"); axg.set_ylabel("dv/v-derived (m)")
-    axg.set_title(f"GWL recovered from dv/v  (r = {np.corrcoef(xg, yg)[0,1]:.2f})", fontsize=10.5)
+    axg.set_title(f"GWL recovered from dv/v  (r = {np.corrcoef(xg, yg)[0,1]:.2f})", fontsize=13)
     axg.grid(alpha=0.3)
 
     oks = np.isfinite(theta) & np.isfinite(theta_rec)
@@ -149,20 +149,20 @@ def fig_dvv_coupling(env, tc):
     axs.scatter(xs, ys, s=2, alpha=0.2, color=OI["green"])
     axs.plot([xs.min(), xs.max()], [xs.min(), xs.max()], "k--", lw=1)
     axs.set_xlabel("modelled θ (m³/m³)"); axs.set_ylabel("dv/v-derived θ")
-    axs.set_title(f"Soil moisture recovered from dv/v  (r = {np.corrcoef(xs, ys)[0,1]:.2f})", fontsize=10.5)
+    axs.set_title(f"Soil moisture recovered from dv/v  (r = {np.corrcoef(xs, ys)[0,1]:.2f})", fontsize=13)
     axs.grid(alpha=0.3)
 
     axt = fig.add_subplot(gs[1, 2]); axt.axis("off")
-    axt.text(0.0, 0.95, "dv/v → GWL & SM (frequency bands)", fontsize=11, fontweight="bold", va="top")
+    axt.text(0.0, 0.95, "dv/v → GWL & SM (frequency bands)", fontsize=15, fontweight="bold", va="top")
     axt.text(0.0, 0.80, "Low band  (deep, saturated):\n  (dv/v) = −S_sk·β·B·Δh  →  water table\n\n"
              "High band (shallow, vadose):\n  V_s=√(G/ρ_b), G∝P_e^(1/3)  →  θ\n\n"
              "Superposition: Δv_obs ≈ Δv_sat + Δv_vad\n"
              "Depth kernel:  Δv ≈ ∫ K(z) Δv(z) dz\n\n"
              "Demonstrative closed loop on modelled\nstates; real dv/v via ambient noise\n(codameter), parameters pending\nborehole calibration.",
-             fontsize=8.5, va="top", color=INK, family="DejaVu Sans")
+             fontsize=12, va="top", color=INK, family="DejaVu Sans")
 
     fig.suptitle("dv/v coupling (demonstrative) — one observable derives both subsurface states",
-                 fontsize=13, fontweight="bold", y=0.98)
+                 fontsize=16, fontweight="bold", y=0.98)
     fig.savefig(OUT / "dvv_coupling.png", bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print("wrote", OUT / "dvv_coupling.png")
