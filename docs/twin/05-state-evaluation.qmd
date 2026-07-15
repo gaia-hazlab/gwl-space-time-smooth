@@ -89,6 +89,55 @@ right instrument for short-lead, event-scale validation of the moisture state; t
 the right instruments for the cumulative antecedent state and the flux partition.
 :::
 
+## Observability: resolution and information gain
+
+The sensitivity map says *where an instrument responds*. The design question is sharper: **how much
+does each network actually reduce the uncertainty of the state, and where?** This is a linear-Gaussian
+inverse problem (`src/models/observability.py`). The state — a GWL anomaly, or a soil-moisture anomaly
+— has a Gaussian prior of correlation length $L$ (the model's own error covariance), and each sensor
+is a linear functional of it: a **point** operator for a well or a SNOTEL site, and a **footprint**
+operator — the coda kernel — for dv/v. The two states are observed by different instruments:
+
+$$\text{GWL} \;\leftarrow\; \text{wells (point)} + \text{dv/v deep band (volume)},
+\qquad
+\text{SM} \;\leftarrow\; \text{SNOTEL (point)} + \text{dv/v shallow band (volume)}.$$
+
+From the Gaussian posterior covariance $C_\text{post} = C - CG^\top(GCG^\top + C_d)^{-1}GC$ we read,
+per cell, the **resolution** $R = 1 - C_\text{post}/C \in [0,1]$ (the fraction of prior variance the
+network removes), the **information gain** $\tfrac12\ln(C/C_\text{post})$ in nats, and the **marginal
+gain** of one network beyond another, $R(A\cup B) - R(B)$.
+
+![**Observability of the twin.** Rows: GWL (top), soil moisture (bottom). Columns: the point network
+alone; dv/v alone; **the resolution dv/v adds beyond the point network**; and the total information
+gain. The point sensors resolve their own neighbourhoods — wells the lowland, SNOTEL a set of isolated
+blobs — and leave the space between them unobserved. dv/v, a *volume* measurement, fills that space,
+and the third column shows it contributes most **exactly where the point sensors cannot reach**: the
+mountain headwaters for GWL, and the whole between-station field for soil
+moisture.](assets/observability.png){#fig-observability}
+
+Three results the maps make concrete:
+
+- **Soil moisture is almost unobserved off-station.** SNOTEL is a handful of points; between them the
+  prior is unconstrained. dv/v is the *only* network that resolves the soil-moisture field over an
+  area, which is the quantitative form of the earlier statement that dv/v *complements* the point
+  sensors rather than duplicating them.
+- **dv/v extends GWL observation into the ungauged mountains.** Wells sit in the lowland; the marginal-
+  gain panel shows dv/v adding resolution precisely in the headwater terrain where wells are absent and
+  where the baseline water table is an extrapolation ([the applicability-domain caveat above]).
+- **The design is legible.** Because resolution is a scale-free ratio, these maps depend only on the
+  correlation length and the instrument noise-to-prior ratios — not on the absolute prior variance — so
+  they read as *where each network is worth its cost*, and where a new station would add the most.
+
+::: {.callout-note}
+## What is prior, and what is calibratable
+The correlation lengths ($L_\text{GWL} > L_\text{SM}$, since the water table varies more smoothly than
+soil moisture) and the per-instrument noise are physical inputs, not fits: the deep dv/v band is a
+weaker, noisier handle on the water table than a well, and the shallow band a moderate handle on
+moisture. Together with the coda parameters ([the sensitivity section above]) they should be set from
+the network's measured performance; the maps' *pattern* is robust to them, the absolute resolution is
+not.
+:::
+
 ## Water-budget evaluation — fluxes and state together
 
 The calibrated budget is scored against both observation classes simultaneously, with each parameter
