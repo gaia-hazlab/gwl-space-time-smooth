@@ -17,6 +17,7 @@ from src.models.dvv_sensitivity import (
     network_sensitivity,
     pair_kernel,
     sensitivity_to_sigma,
+    single_station_kernel,
 )
 
 
@@ -70,15 +71,36 @@ def test_longer_lapse_time_broadens_the_kernel():
     assert spread(60.0) > spread(15.0)
 
 
-def test_network_sensitivity_uses_every_pair_when_unlimited():
+def test_network_sensitivity_counts_pairs_and_single_stations():
     x, y = _grid()
     st = np.array([[-10.0, 0.0], [10.0, 0.0], [0.0, 12.0], [4.0, -6.0]])
-    s, n = network_sensitivity(x, y, st)
-    assert n == len(st) * (len(st) - 1) // 2                 # 4 stations -> 6 pairs
+    m = len(st)
+    # pairs only
+    _, n_pairs = network_sensitivity(x, y, st, include_single=False)
+    assert n_pairs == m * (m - 1) // 2                       # 4 stations -> 6 pairs
+    # default adds one single-station (autocorrelation) kernel per station
+    s, n_all = network_sensitivity(x, y, st)
+    assert n_all == m * (m - 1) // 2 + m                     # 6 pairs + 4 autos
     assert np.all(s >= 0.0) and np.all(np.isfinite(s))
-    # a separation limit must DROP pairs, never silently keep them
-    _, n_lim = network_sensitivity(x, y, st, max_pair_km=15.0)
-    assert n_lim < n
+    # a separation limit must DROP pairs, never silently keep them (single-station is unaffected)
+    _, n_lim = network_sensitivity(x, y, st, max_pair_km=15.0, include_single=False)
+    assert n_lim < n_pairs
+
+
+def test_single_station_kernel_is_peaked_at_the_receiver():
+    # An autocorrelation samples the medium AT the station, not between two -- the kernel maximum must
+    # sit on the receiver, and its mass must be more localised than an inter-station kernel.
+    x, y = _grid()
+    s0 = (6.0, -4.0)
+    k = single_station_kernel(x, y, s0)
+    assert np.all(k >= 0.0)
+    iy, ix = np.unravel_index(int(np.argmax(k)), k.shape)
+    assert abs(x[iy, ix] - s0[0]) < 2.0 and abs(y[iy, ix] - s0[1]) < 2.0
+    # more concentrated than a 20 km-separated PAIR kernel (same total weight, smaller spread)
+    r_auto = np.hypot(x - s0[0], y - s0[1])
+    kp = pair_kernel(x, y, (-10.0, 0.0), (10.0, 0.0))
+    r_pair = np.hypot(x, y)
+    assert (k * r_auto).sum() < (kp * r_pair).sum()
 
 
 def test_sigma_is_infinite_where_there_is_no_sensitivity():
@@ -101,7 +123,8 @@ if __name__ == "__main__":
     test_pair_kernel_is_symmetric_under_swapping_the_stations()
     test_sensitivity_is_concentrated_near_the_stations_not_far_away()
     test_longer_lapse_time_broadens_the_kernel()
-    test_network_sensitivity_uses_every_pair_when_unlimited()
+    test_network_sensitivity_counts_pairs_and_single_stations()
+    test_single_station_kernel_is_peaked_at_the_receiver()
     test_sigma_is_infinite_where_there_is_no_sensitivity()
     test_defaults_are_physical()
     print("all dv/v sensitivity tests passed")

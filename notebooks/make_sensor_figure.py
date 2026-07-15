@@ -36,7 +36,9 @@ def main():
     from src.models.dvv_sensitivity import (
         LAPSE_TIME_S,
         network_sensitivity,
+        pair_kernel,
         sensitivity_to_sigma,
+        single_station_kernel,
     )
 
     hand = rxr.open_rasterio(PROC / "terrain_hand_domain_90m.tif", masked=True).squeeze("band", drop=True)
@@ -87,13 +89,18 @@ def main():
     # --- coda sensitivity on a coarse grid -------------------------------------------------------
     sub = hand.isel(y=slice(None, None, STEP), x=slice(None, None, STEP))
     gx, gy = np.meshgrid(sub.x.values / 1000.0, sub.y.values / 1000.0)
-    sens, n_pairs = network_sensitivity(gx, gy, st_km, max_pair_km=60.0)
-    sigma = sensitivity_to_sigma(sens)
+    pair_s, n_pairs = network_sensitivity(gx, gy, st_km, max_pair_km=40.0, include_single=False)
+    single_s = np.zeros_like(gx)
+    for sxy in st_km:
+        single_s += single_station_kernel(gx, gy, sxy)
+    combined = pair_s + single_s
+    sigma = sensitivity_to_sigma(combined)
     land = np.isfinite(sub.values)
-    sens = np.where(land, sens, np.nan)
+    pair_s = np.where(land, pair_s, np.nan)
+    single_s = np.where(land, single_s, np.nan)
     sigma = np.where(land, sigma, np.nan)
 
-    fig, ax = plt.subplots(1, 3, figsize=(16.5, 5.6), constrained_layout=True)
+    fig, ax = plt.subplots(1, 4, figsize=(21.0, 5.6), constrained_layout=True)
 
     # 1. the networks
     bg = np.where(np.isfinite(hand.values), hand.values, np.nan)
@@ -115,37 +122,51 @@ def main():
     ax[0].legend(fontsize=7.5, loc="lower left", framealpha=.92)
     ax[0].set_xticks([]); ax[0].set_yticks([])
 
-    # 2. coda sensitivity
-    v = sens[np.isfinite(sens) & (sens > 0)]
-    im = ax[1].imshow(sens, cmap="magma", norm=LogNorm(vmin=np.percentile(v, 25), vmax=v.max()))
-    ax[1].scatter((st_km[:, 0] * 1000 - x0) / (DOMAIN.res_m * STEP),
-                  (y1 - st_km[:, 1] * 1000) / (DOMAIN.res_m * STEP),
-                  s=26, c="w", marker="*", edgecolors="k", linewidths=.4)
-    ax[1].set_title("dv/v coda sensitivity  $S(x)$\n%d station pairs, lapse %.0f s"
-                    % (n_pairs, LAPSE_TIME_S), fontweight="bold")
-    fig.colorbar(im, ax=ax[1], shrink=.8, label="relative sensitivity (log)")
+    stx = (st_km[:, 0] * 1000 - x0) / (DOMAIN.res_m * STEP)
+    sty = (y1 - st_km[:, 1] * 1000) / (DOMAIN.res_m * STEP)
+
+    def _stations(a):
+        a.scatter(stx, sty, s=22, c="w", marker="*", edgecolors="k", linewidths=.4)
+
+    # 2. inter-station (cross-correlation): sensitive ALONG THE PATH between receivers
+    v = pair_s[np.isfinite(pair_s) & (pair_s > 0)]
+    im = ax[1].imshow(pair_s, cmap="magma", norm=LogNorm(vmin=np.percentile(v, 25), vmax=v.max()))
+    _stations(ax[1])
+    ax[1].set_title("Inter-station  (cross-corr.)\n%d pairs — path between stations" % n_pairs,
+                    fontweight="bold")
+    fig.colorbar(im, ax=ax[1], shrink=.8, label="sensitivity (log)")
     ax[1].set_xticks([]); ax[1].set_yticks([])
 
-    # 3. the uncertainty that follows from it
-    sg = np.where(np.isfinite(sigma), sigma, np.nan)
-    cm = plt.get_cmap("viridis_r").copy(); cm.set_bad("#eef0f3")
-    im = ax[2].imshow(np.clip(sg, 1, 12), cmap=cm, vmin=1, vmax=12)
-    ax[2].set_title("dv/v measurement uncertainty  $\\sigma \\propto S^{-1/2}$\n"
-                    "(× the best-observed cell)", fontweight="bold")
-    fig.colorbar(im, ax=ax[2], shrink=.8, label="relative σ")
+    # 3. single-station (autocorrelation): sensitive AT each receiver, everywhere a station sits
+    v = single_s[np.isfinite(single_s) & (single_s > 0)]
+    im = ax[2].imshow(single_s, cmap="magma", norm=LogNorm(vmin=np.percentile(v, 25), vmax=v.max()))
+    _stations(ax[2])
+    ax[2].set_title("Single-station  (autocorr.)\n%d stations — at each receiver" % len(st_km),
+                    fontweight="bold")
+    fig.colorbar(im, ax=ax[2], shrink=.8, label="sensitivity (log)")
     ax[2].set_xticks([]); ax[2].set_yticks([])
 
-    fig.suptitle("dv/v is measured over a VOLUME between stations, not at a cell — "
-                 "so it constrains the twin only where the coda samples\n"
+    # 4. the combined uncertainty
+    sg = np.where(np.isfinite(sigma), sigma, np.nan)
+    cm = plt.get_cmap("viridis_r").copy(); cm.set_bad("#eef0f3")
+    im = ax[3].imshow(np.clip(sg, 1, 12), cmap=cm, vmin=1, vmax=12)
+    _stations(ax[3])
+    ax[3].set_title("dv/v measurement uncertainty  $\\sigma \\propto S^{-1/2}$\n"
+                    "combined, × the best-observed cell", fontweight="bold")
+    fig.colorbar(im, ax=ax[3], shrink=.8, label="relative σ")
+    ax[3].set_xticks([]); ax[3].set_yticks([])
+
+    fig.suptitle("dv/v is measured over a VOLUME, not at a cell — inter-station samples the path "
+                 "BETWEEN receivers, single-station samples AT each one; combined, they separate the two\n"
                  "The twin evaluates dv/v at every cell as a FORWARD prediction; "
-                 "this is where a measurement can test it",
+                 "this is where a measurement can test it  (early coda, lapse %.0f s)" % LAPSE_TIME_S,
                  fontsize=12, fontweight="bold")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ASSETS.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=125, bbox_inches="tight", facecolor="white")
     shutil.copy(OUT, ASSETS / OUT.name)
-    print("wrote %s  (%d pairs, %d seismic stations in domain)" % (OUT, n_pairs, len(sx)))
+    print("wrote %s  (%d pairs + %d single-station, %d seismic stations)" % (OUT, n_pairs, len(st_km), len(sx)))
 
 
 if __name__ == "__main__":
