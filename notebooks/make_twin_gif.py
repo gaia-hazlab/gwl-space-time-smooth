@@ -5,15 +5,17 @@ Run: ``pixi run twin-gif``
 The animation is the forward soil-state model (`forecast_soil_state` under PRISM rainfall) CORRECTED
 each frame by a BLUE assimilation (`src/models/observability.blue_update`):
 
-- the **water table** is pulled toward the in-domain NWIS wells' observed SEASONAL CLIMATOLOGY (the
-  typical depth-to-water for that calendar month, across 2000-2026 -- the wells inside this mountainous
-  domain have no live 2025-26 readings), plus a synthetic deep-band dv/v at the seismic stations;
-- **soil moisture** is updated by a synthetic shallow-band dv/v.
+- the **water table** is pulled toward the LIVE in-domain NWIS wells (download_nwis_domain: the wells
+  that report a depth-to-water in the current month), falling back to each site's own seasonal
+  climatology where it did not report that month, plus a synthetic deep-band dv/v at the seismic
+  stations;
+- **soil moisture** is pulled toward the LIVE in-domain SNOTEL theta (fetch_insitu_sm), assimilated as
+  an anomaly about each station's window mean, plus a synthetic shallow-band dv/v.
 
-The dv/v is synthetic and derived from the model state, so its update is a self-consistency check that
-recovers the model near the stations and adds no independent information -- the real information comes
-from the wells' seasonal signal. Both facts are stated on the figure. To keep the covariance tractable
-the update runs on a coarse grid and its (smooth) correction is interpolated back to the 90 m display.
+The wells and SNOTEL are real, independent measurements. The dv/v is synthetic and derived from the
+model state, so its update is a self-consistency check that adds no independent information; that is
+stated on the figure. To keep the covariance tractable the update runs on a coarse grid (wells averaged
+to one datum per cell) and its smooth correction is interpolated back to the 90 m display.
 """
 from __future__ import annotations
 
@@ -47,6 +49,7 @@ SIG_SM, L_SM = 0.03, 8.0            # soil-moisture prior
 WELL_VAR = 0.15 ** 2               # NWIS reading error (m), squared
 DVV_RISE_VAR = 0.40 ** 2           # synthetic deep dv/v as a rise datum: deliberately loose
 DVV_TH_VAR = 0.02 ** 2             # synthetic shallow dv/v as a theta datum
+SM_VAR = 0.03 ** 2                 # SNOTEL theta reading error (m3/m3), squared
 SEED = 11
 
 
@@ -118,27 +121,46 @@ def main():
                 Gs.append(normalise_footprint(pair_kernel(gx, gy, st_km[i], st_km[j])))
     Gs = np.vstack(Gs)
 
-    # NWIS wells. The wells INSIDE this mountainous domain have no 2025-26 readings (the wells that do
-    # are in the Puget lowlands, outside the domain), so there is no *live* in-domain water-table
-    # observation for this window. What the in-domain wells do give is their observed SEASONAL
-    # CLIMATOLOGY: for each site, the typical monthly depth-to-water across all years of record. The
-    # rise anomaly for calendar month m is (site all-year mean) - (site month-m mean); shallower-than-
-    # usual months read as a positive rise. This is real, in-domain data and constrains the seasonal
-    # amplitude and phase of the water table -- it is NOT the specific 2025-26 values, and is labelled
-    # as climatology on the figure.
-    allw = pd.read_parquet(PROC / "nwis_gwlevels_monthly.parquet")
+    # NWIS wells -- LIVE in-domain readings (download_nwis_domain) preferred; each site's own seasonal
+    # climatology is the fallback so the network stays dense between the currently-reporting wells. The
+    # rise anomaly is (site all-year mean depth) - (this month's depth); a shallower-than-usual water
+    # table reads as a positive rise.
+    dom = PROC / "nwis_gwlevels_domain_monthly.parquet"
+    allw = pd.read_parquet(dom if dom.exists() else PROC / "nwis_gwlevels_monthly.parquet")
     wxm_a, wym_a = tf.transform(allw.lon.values, allw.lat.values)
     allw = allw[(wxm_a >= x0) & (wxm_a <= x1) & (wym_a >= y0) & (wym_a <= y1)].copy()
     site_mean = allw.groupby("site_no").dtw_m.mean()
-    clim = (allw.groupby(["site_no", "month"]).dtw_m.mean().rename("month_dtw").reset_index())
-    clim["rise_obs"] = clim.site_no.map(site_mean) - clim.month_dtw
-    pos = (allw.drop_duplicates("site_no").set_index("site_no")[["lon", "lat"]])
+    live = {(t.site_no, int(t.year), int(t.month)): t.dtw_m for t in allw.itertuples()}
+    climo = allw.groupby(["site_no", "month"]).dtw_m.mean()          # (site, month) -> mean depth
+    pos = allw.drop_duplicates("site_no").set_index("site_no")[["lon", "lat"]]
     wxm, wym = tf.transform(pos.lon.values, pos.lat.values)
     pos = pos.assign(xkm=wxm / 1000.0, ykm=wym / 1000.0)
-    # one point footprint per in-domain well, cached (positions fixed; the monthly value varies)
-    Gw_all = {sid: normalise_footprint(point_footprint(coords, (r.xkm, r.ykm)))
-              for sid, r in pos.iterrows()}
-    clim_by_month = {m: g for m, g in clim.groupby("month")}          # month -> rows(site_no, rise_obs)
+    well_sites = list(pos.index)
+    # map each well to its nearest coarse cell; ONE footprint per occupied cell keeps the BLUE solve
+    # tractable when ~1500 wells fall on a ~1900-cell grid (within-cell wells are averaged).
+    well_cell = {sid: int(np.argmin((coords[:, 0] - r.xkm) ** 2 + (coords[:, 1] - r.ykm) ** 2))
+                 for sid, r in pos.iterrows()}
+    Gcell = {c: normalise_footprint(point_footprint(coords, tuple(coords[c])))
+             for c in set(well_cell.values())}
+
+    # SNOTEL/SCAN theta -- LIVE in-domain root-zone soil moisture (fetch_insitu_sm). Assimilated as an
+    # ANOMALY about each station's own window mean, so a sensor-vs-model absolute offset cannot yank the
+    # field into bullseyes; only the temporal signal is injected.
+    smz = PROC / "insitu_sm_daily.zarr"
+    sm_theta = Gsm = sm_times = None
+    sm_mean = []
+    if smz.exists():
+        smds = xr.open_zarr(smz)
+        sxm2, sym2 = tf.transform(smds.lon.values, smds.lat.values)
+        insm = (sxm2 >= x0) & (sxm2 <= x1) & (sym2 >= y0) & (sym2 <= y1)
+        if insm.any():
+            sm_theta = smds.isel(station=np.where(insm)[0])
+            sm_km = np.column_stack([sxm2[insm] / 1000.0, sym2[insm] / 1000.0])
+            Gsm = [normalise_footprint(point_footprint(coords, tuple(p))) for p in sm_km]
+            sm_cell = [int(np.argmin((coords[:, 0] - p[0]) ** 2 + (coords[:, 1] - p[1]) ** 2))
+                       for p in sm_km]
+            sm_times = pd.to_datetime(sm_theta.time.values)
+            sm_mean = [float(np.nanmean(sm_theta.theta.isel(station=j).values)) for j in range(len(Gsm))]
 
     rng = np.random.default_rng(SEED)
 
@@ -149,39 +171,58 @@ def main():
         return np.nan_to_num(fine)
 
     def assimilate(k):
-        """Return (theta_field, rise_field) at frame k: forward model + BLUE correction."""
+        """Return (theta, rise, n_live_wells, n_well_cells, n_sm) at frame k: forward + BLUE."""
         theta_f = fx.theta[k]
         rise_f = d0 - fx.wt_depth_m[k]
         theta_c = np.nan_to_num(theta_f[cslice]).ravel()
         rise_c = np.nan_to_num(rise_f[cslice]).ravel()
+        mth = pd.Timestamp(times[k]); yr, mo = mth.year, mth.month
 
-        # water table: in-domain well seasonal climatology (this calendar month) + synthetic deep dv/v
-        mth = pd.Timestamp(times[k])
-        wk = clim_by_month.get(mth.month, clim.iloc[:0])
+        # --- water table: wells (live this year-month where reporting, else climatology), by cell -----
+        cell_rise, n_live = {}, 0
+        for sid in well_sites:
+            v = live.get((sid, yr, mo))
+            n_live += v is not None
+            if v is None:
+                v = climo.get((sid, mo))
+            if v is None:
+                continue
+            cell_rise.setdefault(well_cell[sid], []).append(site_mean[sid] - v)
         Grows, d, nv = [], [], []
-        for _, r in wk.iterrows():
-            Grows.append(Gw_all[r.site_no]); d.append(r.rise_obs); nv.append(WELL_VAR)
+        for c, rs in cell_rise.items():
+            Grows.append(Gcell[c]); d.append(float(np.mean(rs))); nv.append(WELL_VAR)
         d_dvv = K_SAT * (Gs @ rise_c) + np.sqrt(DVV_RISE_VAR) * K_SAT * rng.standard_normal(len(Gs))
         for i in range(len(Gs)):
             Grows.append(Gs[i]); d.append(d_dvv[i] / K_SAT); nv.append(DVV_RISE_VAR)
         m_a, _ = blue_update(B_gwl, np.vstack(Grows), np.array(d), np.array(nv), prior_mean=rise_c)
         rise_out = rise_f + upsample((m_a - rise_c).reshape(cshape))
 
-        # soil moisture: synthetic shallow dv/v only (self-consistency; ~no independent information)
+        # --- soil moisture: real SNOTEL theta (nearest day, as an anomaly) + synthetic shallow dv/v ---
+        Grows, d, nv, n_sm = [], [], [], 0
+        if sm_theta is not None:
+            di = int(np.argmin(np.abs((sm_times - mth).days)))
+            if abs(int((sm_times[di] - mth).days)) <= 7:
+                th = sm_theta.theta.isel(time=di).values
+                for j, tv in enumerate(th):
+                    if np.isfinite(tv) and np.isfinite(sm_mean[j]):
+                        Grows.append(Gsm[j]); d.append(theta_c[sm_cell[j]] + (tv - sm_mean[j]))
+                        nv.append(SM_VAR); n_sm += 1
         d_th = S_THETA * (Gs @ theta_c) + np.sqrt(DVV_TH_VAR) * abs(S_THETA) * rng.standard_normal(len(Gs))
-        m_a, _ = blue_update(B_sm, Gs, d_th / S_THETA, np.full(len(Gs), DVV_TH_VAR), prior_mean=theta_c)
+        for i in range(len(Gs)):
+            Grows.append(Gs[i]); d.append(d_th[i] / S_THETA); nv.append(DVV_TH_VAR)
+        m_a, _ = blue_update(B_sm, np.vstack(Grows), np.array(d), np.array(nv), prior_mean=theta_c)
         theta_out = theta_f + upsample((m_a - theta_c).reshape(cshape))
-        return msk(theta_out), msk(rise_out), int(wk.site_no.nunique())
+        return msk(theta_out), msk(rise_out), int(n_live), len(cell_rise), n_sm
 
     idx = np.arange(0, len(times), CADENCE)
-    theta_st, rise_st, nwell_st = [], [], []
+    theta_st, rise_st, nlive_st, nsm_st = [], [], [], []
     for k in idx:
-        th, ri, nw = assimilate(k)
-        theta_st.append(th); rise_st.append(ri); nwell_st.append(nw)
+        th, ri, nlive, ncell, nsm = assimilate(k)
+        theta_st.append(th); rise_st.append(ri); nlive_st.append(nlive); nsm_st.append(nsm)
     stacks = [
-        (np.stack(theta_st), "Soil moisture θ  (dv/v-assimilated)", "YlGnBu", "m³ m⁻³"),
-        (np.stack(rise_st), "Water table rise  (wells + dv/v)", "Blues", "m above baseline"),
-        (np.stack([msk(100 * fx.dvv_high[i]) for i in idx]), "dv/v  (shallow band, forward)", "RdBu", "%"),
+        (np.stack(theta_st), "Soil moisture θ", "YlGnBu", "m³ m⁻³"),
+        (np.stack(rise_st), "Water table rise", "Blues", "m above baseline"),
+        (np.stack([msk(100 * fx.dvv_high[i]) for i in idx]), "dv/v  (shallow)", "RdBu", "%"),
     ]
     pr_series = np.array([np.nanmean(precip[i][land]) for i in range(len(times))])
 
@@ -190,8 +231,11 @@ def main():
         return (xm - x0) / (DOMAIN.res_m * STEP), (y1 - ym) / (DOMAIN.res_m * STEP)
     wpx, wpy = px(wxm, wym)
     spx, spy = px(sxm[ins], sym[ins])
+    if sm_theta is not None:
+        smx0, smy0 = tf.transform(sm_theta.lon.values, sm_theta.lat.values)
+        smpx, smpy = px(smx0, smy0)
 
-    fig, ax = plt.subplots(1, 4, figsize=(17.0, 5.0), constrained_layout=True,
+    fig, ax = plt.subplots(1, 4, figsize=(18.0, 5.2), constrained_layout=True,
                            gridspec_kw={"width_ratios": [1, 1, 1, 1.15]})
     ims = []
     for a, (data, title, cmap, unit) in zip(ax[:3], stacks):
@@ -206,7 +250,11 @@ def main():
         a.set_xticks([]); a.set_yticks([])
         cb = fig.colorbar(im, ax=a, shrink=.78)
         cb.ax.tick_params(labelsize=15)
-    ax[0].scatter(spx, spy, s=16, c="k", marker="*", linewidths=0, alpha=.65)
+    ax[0].scatter(spx, spy, s=16, c="k", marker="*", linewidths=0, alpha=.5)
+    if sm_theta is not None:
+        ax[0].scatter(smpx, smpy, s=130, c="#E84855", marker="^", edgecolors="k", linewidths=1.0,
+                      zorder=5, label="SNOTEL θ")
+        ax[0].legend(loc="lower left", fontsize=12, framealpha=.9)
     ax[1].scatter(wpx, wpy, s=20, facecolors="none", edgecolors="#B00020", linewidths=.9)
     ax[2].scatter(spx, spy, s=16, c="k", marker="*", linewidths=0, alpha=.65)
 
@@ -224,8 +272,8 @@ def main():
         cursor.set_xdata([times[idx[k]]] * 2)
         title.set_text(
             "GAIA Digital Twin of Soil — wet season 2025–26, western Cascades (90 m)   ·   %s\n"
-            "%d in-domain wells assimilated (seasonal climatology, 2000–2026) · dv/v synthetic"
-            % (pd.Timestamp(times[idx[k]]).strftime("%d %b %Y"), nwell_st[k]))
+            "%d NWIS wells live this month (climatology elsewhere) · %d SNOTEL θ live · dv/v synthetic"
+            % (pd.Timestamp(times[idx[k]]).strftime("%d %b %Y"), nlive_st[k], nsm_st[k]))
         return ims + [cursor, title]
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -233,8 +281,8 @@ def main():
     FuncAnimation(fig, update, frames=len(idx), blit=False).save(
         OUT, writer=PillowWriter(fps=5), dpi=90)
     shutil.copy(OUT, ASSETS / OUT.name)
-    print("wrote %s (%d frames; wells/month range %d-%d)"
-          % (OUT, len(idx), min(nwell_st), max(nwell_st)))
+    print("wrote %s (%d frames; live wells/frame %d-%d; SNOTEL θ/frame %d-%d)"
+          % (OUT, len(idx), min(nlive_st), max(nlive_st), min(nsm_st), max(nsm_st)))
 
 
 if __name__ == "__main__":

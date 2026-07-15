@@ -87,9 +87,11 @@ def fetch_insitu_sm(start, end, bbox=None, out="data/processed/insitu_sm_daily.z
     meta = st.set_index("triplet").loc[frame.columns]
     ds = xr.Dataset(
         {"theta": (("time", "station"), frame.values.astype("float32"))},
-        coords={"time": frame.index.values, "station": frame.columns.values,
-                "lat": ("station", meta.lat.values), "lon": ("station", meta.lon.values),
-                "network": ("station", meta.network.values)},
+        coords={"time": frame.index.values,
+                "station": np.asarray(frame.columns, dtype=object),
+                "lat": ("station", meta.lat.to_numpy(dtype="float64")),
+                "lon": ("station", meta.lon.to_numpy(dtype="float64")),
+                "network": ("station", np.asarray(meta.network.astype(str), dtype=object))},
     )
     ds["theta"].attrs.update(units="m3/m3", long_name="root-zone volumetric soil moisture")
     ds.attrs.update(source="USDA AWDB (SNOTEL/SCAN), element SMS", cadence="hourly->daily",
