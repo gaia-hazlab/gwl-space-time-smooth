@@ -37,6 +37,24 @@ def test_footprints_sum_to_one():
     assert abs(normalise_footprint(raw).sum() - 1.0) < 1e-9
 
 
+def test_point_footprint_never_returns_an_all_zero_row():
+    # underflow (width far below the cell size) or a location far outside the grid must still place
+    # unit mass on the nearest cell, so a point sensor is never silently dropped from the design.
+    c = _grid(n=10, span=20.0)
+    tiny = point_footprint(c, (10.0, 10.0), width_km=1e-6)
+    assert abs(tiny.sum() - 1.0) < 1e-9 and (tiny > 0).sum() == 1
+    outside = point_footprint(c, (500.0, 500.0), width_km=0.5)
+    assert abs(outside.sum() - 1.0) < 1e-9                # mass on the nearest in-grid cell
+    assert int(np.argmax(outside)) == int(np.argmin(np.sum((c - [500.0, 500.0]) ** 2, axis=1)))
+
+
+def test_normalise_footprint_null_observation_is_all_zeros():
+    # a footprint with NO grid support is a null observation -> all zeros, treated by resolution() as
+    # observing nothing (not a silent 1/0 or an unnormalised row).
+    assert np.all(normalise_footprint(np.zeros(9)) == 0.0)
+    assert np.all(normalise_footprint(np.full(9, np.nan)) == 0.0)
+
+
 def test_resolution_is_a_fraction_in_the_unit_interval():
     c = _grid()
     C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)

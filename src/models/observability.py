@@ -117,7 +117,7 @@ class ObsStream:
     support_km: float                # spatial footprint (point ~ 0.1; SMAP 9; NISAR 0.2; dv/v ~ path)
     revisit_days: float              # sampling interval (0 = continuous)
     kind: str                        # "point" | "volume" | "satellite" | "channel"
-    noise: float                     # observation error relative to the prior sigma
+    noise: float                     # observation-error VARIANCE (sigma_d^2), in units of the prior variance
     is_measurement: bool             # True = measures the state; False = a retrieval / model estimate
 
 
@@ -152,20 +152,35 @@ def point_footprint(coords_km: NDArray[np.float64], loc_km: ArrayLike,
     """Footprint of a point sensor: a narrow normalised blob at ``loc_km``.
 
     A finite width (rather than a hard one-hot) keeps the operator stable on a coarse grid and encodes
-    the small but non-zero support of a real point measurement. Sums to 1.
+    the small but non-zero support of a real point measurement. **Always sums to 1**: if the Gaussian
+    underflows to zero everywhere (a width far below the cell size, or a location outside the grid),
+    the unit mass is placed on the nearest cell rather than returning an all-zero row, so a point
+    sensor is never silently dropped from the design.
     """
     c = np.asarray(coords_km, dtype="float64")
     loc = np.asarray(loc_km, dtype="float64")
-    g = np.exp(-np.sum((c - loc) ** 2, axis=-1) / (2.0 * width_km ** 2))
+    d2 = np.sum((c - loc) ** 2, axis=-1)
+    g = np.exp(-d2 / (2.0 * width_km ** 2))
     tot = g.sum()
-    return g / tot if tot > 0 else g
+    if tot > 0:
+        return g / tot
+    out = np.zeros(c.shape[0], dtype="float64")          # underflow: one-hot on the nearest cell
+    out[int(np.argmin(d2))] = 1.0
+    return out
 
 
 def normalise_footprint(g: ArrayLike) -> NDArray[np.float64]:
-    """Normalise a footprint (e.g. a coda kernel sampled on the grid) to sum to 1."""
+    """Normalise a footprint (e.g. a coda kernel sampled on the grid) to sum to 1.
+
+    A footprint with **no support on the grid** — all-zero or all-NaN, e.g. a kernel that falls
+    entirely outside the domain — has nothing to normalise and is returned as **all zeros**: a *null
+    observation* that contributes no constraint. That is the intended semantics (``resolution`` treats
+    such a row as observing nothing), not a silent failure; unlike a point sensor, a footprint that
+    genuinely misses the grid has no natural cell to fall back to.
+    """
     g = np.asarray(g, dtype="float64").ravel()
     tot = np.nansum(g)
-    return np.nan_to_num(g / tot) if tot > 0 else np.nan_to_num(g)
+    return np.nan_to_num(g / tot) if tot > 0 else np.zeros_like(g)
 
 
 def satellite_footprints(coords_km: NDArray[np.float64], pixel_km: float,

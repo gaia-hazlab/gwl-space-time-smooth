@@ -123,7 +123,7 @@ Three results the maps make concrete:
   sensors rather than duplicating them.
 - **dv/v extends GWL observation into the ungauged mountains.** Wells sit in the lowland; the marginal-
   gain panel shows dv/v adding resolution precisely in the headwater terrain where wells are absent and
-  where the baseline water table is an extrapolation ([the applicability-domain caveat above]).
+  where the baseline water table is an extrapolation (the applicability-domain caveat below).
 - **The design is legible.** Because resolution is a scale-free ratio, these maps depend only on the
   correlation length and the instrument noise-to-prior ratios — not on the absolute prior variance — so
   they read as *where each network is worth its cost*, and where a new station would add the most.
@@ -133,7 +133,7 @@ Three results the maps make concrete:
 The correlation lengths ($L_\text{GWL} > L_\text{SM}$, since the water table varies more smoothly than
 soil moisture) and the per-instrument noise are physical inputs, not fits: the deep dv/v band is a
 weaker, noisier handle on the water table than a well, and the shallow band a moderate handle on
-moisture. Together with the coda parameters ([the sensitivity section above]) they should be set from
+moisture. Together with the coda parameters (the sensitivity section above) they should be set from
 the network's measured performance; the maps' *pattern* is robust to them, the absolute resolution is
 not.
 :::
