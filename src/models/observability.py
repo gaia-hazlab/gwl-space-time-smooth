@@ -96,6 +96,53 @@ def normalise_footprint(g: ArrayLike) -> NDArray[np.float64]:
     return np.nan_to_num(g / tot) if tot > 0 else np.nan_to_num(g)
 
 
+def satellite_footprints(coords_km: NDArray[np.float64], pixel_km: float,
+                         land: ArrayLike | None = None) -> NDArray[np.float64]:
+    """Footprints of a gridded satellite product with a ``pixel_km`` pixel over the whole domain.
+
+    A satellite differs from a ground network in one decisive way: it observes **everywhere**, not at a
+    handful of sites. Each pixel is a footprint that averages the state over its cell, so the operator
+    is a tiling of top-hat-like blobs across the domain. Coarser ``pixel_km`` (SMAP, 9 km) gives dense
+    but low-resolution coverage; a fine one (NISAR L-band SAR, ~0.2 km) resolves sub-pixel structure.
+
+    Returns ``(n_pixels, n_cell)``. ``land`` (an ``(n_cell,)`` mask) drops all-water pixels.
+    """
+    c = np.asarray(coords_km, dtype="float64")
+    x, y = c[:, 0], c[:, 1]
+    # pixel-centre lattice covering the domain
+    cx = np.arange(x.min() + pixel_km / 2, x.max() + pixel_km, pixel_km)
+    cy = np.arange(y.min() + pixel_km / 2, y.max() + pixel_km, pixel_km)
+    keep = np.ones(c.shape[0], dtype=bool) if land is None else np.asarray(land, dtype=bool)
+    rows = []
+    for px in cx:
+        for py in cy:
+            g = np.exp(-((x - px) ** 2 + (y - py) ** 2) / (2.0 * (pixel_km / 2.0) ** 2)) * keep
+            tot = g.sum()
+            if tot > 1e-9:                                # skip pixels with no land in them
+                rows.append(g / tot)
+    return np.vstack(rows) if rows else np.empty((0, c.shape[0]))
+
+
+def channel_footprints(coords_km: NDArray[np.float64], hand_m: ArrayLike,
+                       land: ArrayLike, hand_max_m: float = 2.0,
+                       width_km: float = 0.5) -> NDArray[np.float64]:
+    """Footprints of a **surface-water** observation, on the cells where the water table can outcrop.
+
+    Surface-water extent (from optical differencing, e.g. Sentinel-2 NDWI) observes the *variable source
+    area*: where the water table reaches the surface and quickflow is generated. Those cells are the
+    valley floors and riparian corridors — ``HAND <= hand_max_m``. Each becomes a point-like observation
+    that pins the shallow water table where the gauges only see the *integrated* discharge.
+
+    Returns ``(n_channel_cells, n_cell)``.
+    """
+    c = np.asarray(coords_km, dtype="float64")
+    hand = np.asarray(hand_m, dtype="float64").ravel()
+    lnd = np.asarray(land, dtype=bool).ravel()
+    chan = lnd & np.isfinite(hand) & (hand <= hand_max_m)
+    return np.vstack([point_footprint(c, c[i], width_km) for i in np.flatnonzero(chan)]) \
+        if chan.any() else np.empty((0, c.shape[0]))
+
+
 def resolution(prior_cov: NDArray[np.float64], G: NDArray[np.float64],
                noise_var: ArrayLike) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     r"""Per-cell resolution and posterior variance for observations ``G`` with noise ``noise_var``.

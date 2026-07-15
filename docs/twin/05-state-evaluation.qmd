@@ -138,6 +138,35 @@ the network's measured performance; the maps' *pattern* is robust to them, the a
 not.
 :::
 
+### Satellite and surface-water streams
+
+Two distributed observations enter the same design and change it qualitatively, because they observe
+where the ground networks cannot — everywhere, rather than at sites.
+
+- **Satellite soil moisture.** **SMAP** (L-band radiometer, 9 km) already provides a domain-wide,
+  moderate-resolution constraint on the vadose store; **NISAR** (L-band SAR, ~0.2 km, planned) would
+  provide a fine one. Because the resolution is a scale-free ratio, a not-yet-flown product can be
+  evaluated for the coverage it *would* provide.
+- **Surface-water extent.** Optical differencing (e.g. Sentinel-2 NDWI) maps inundation, which is the
+  **variable source area** — the valley floors and riparian corridors (HAND $\approx 0$) where the
+  water table outcrops and quickflow is generated. It is the *spatial* complement to the gauges: a gauge
+  measures the basin-integrated discharge, surface-water extent shows *where* that discharge is
+  generated, and it pins the shallow water table along the drainage network.
+
+![**The full observing system.** Resolution of the state as each network is added — point (wells,
+SNOTEL), volume (dv/v), satellite (SMAP now, NISAR future), and surface water. Top (soil moisture):
+SNOTEL is a scatter of points; **SMAP fills the whole domain** at moderate resolution; dv/v adds local
+detail; NISAR would approach full resolution. Bottom (groundwater): wells resolve only the lowland;
+dv/v reaches the mountains; **surface-water extent lights up the entire drainage network**, the
+flux-generating variable source area the gauges see only in
+integral.](assets/observing_system.png){#fig-observing-system}
+
+The observing system is therefore layered by **support**: point sensors anchor specific sites,
+satellites blanket the domain at their native resolution, dv/v samples the volume between stations, and
+surface water traces the channel network. No single stream is sufficient, and the information-gain
+maps show precisely where each one earns its place — which is also the basis for **where a new station,
+or a new mission, would add the most**.
+
 ## Water-budget evaluation — fluxes and state together
 
 The calibrated budget is scored against both observation classes simultaneously, with each parameter
