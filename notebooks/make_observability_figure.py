@@ -30,11 +30,14 @@ ASSETS = Path("docs/twin/assets")
 OUT = Path("figures/demo/observability.png")
 STEP = 22                       # coarse grid for the covariance solve (resolution maps are smooth)
 
-# prior correlation lengths and instrument noise (relative to the prior sigma; resolution is scale-free)
+# Prior correlation lengths, and per-instrument observation-error VARIANCES sigma_d^2 (NOT std) in
+# units of the prior VARIANCE -- this is what resolution(..., noise_var=...) expects. The prior sigma
+# is 1.0 below, so prior variance is 1.0 and these read directly as noise-to-prior-variance ratios;
+# resolution is scale-free, so only that ratio matters. Larger = a noisier / less-trusted stream:
+# deep dv/v (0.25) is a weaker handle on the water table than a well (0.02); shallow dv/v (0.12) a
+# moderate handle on moisture vs a probe (0.03).
 GWL_L_KM, SM_L_KM = 6.0, 3.0    # GWL varies more smoothly than soil moisture
 NOISE = dict(well=0.02, snotel=0.03, dvv_deep=0.25, dvv_shallow=0.12)
-#            deep dv/v is a weaker, noisier handle on the water table than a well;
-#            shallow dv/v is a moderate handle on moisture. Both are volume, not point.
 
 
 def main():
@@ -44,11 +47,7 @@ def main():
     except Exception:
         pass
     from src.config.domain import DOMAIN
-    from src.models.dvv_sensitivity import (
-        network_sensitivity,
-        pair_kernel,
-        single_station_kernel,
-    )
+    from src.models.dvv_sensitivity import pair_kernel, single_station_kernel
     from src.models.observability import (
         GaussianPrior,
         information_gain,
@@ -74,10 +73,10 @@ def main():
 
     wells = pd.read_parquet(PROC / "nwis_sites_clean.parquet")
     seis = pd.read_parquet("data/cache/seismic/inventory_UW-CC.parquet")
-    sm_par = PROC / "snotel_swe_daily.parquet"
-    snotel = pd.read_parquet(sm_par)
-    if "lat" not in snotel.columns:
-        snotel = pd.read_parquet(PROC / "snotel_soil_moisture_monthly.parquet")
+    swe, sm = PROC / "snotel_swe_daily.parquet", PROC / "snotel_soil_moisture_monthly.parquet"
+    snotel = pd.read_parquet(swe) if swe.exists() else pd.DataFrame()
+    if "lat" not in snotel.columns and sm.exists():        # offline-safe: SWE table may lack coords
+        snotel = pd.read_parquet(sm)
 
     well_km = stations_km(wells.lon, wells.lat)
     sno_km = stations_km(snotel.drop_duplicates("triplet").lon, snotel.drop_duplicates("triplet").lat)
@@ -107,7 +106,9 @@ def main():
 
     C_gwl = GaussianPrior(1.0, GWL_L_KM).cov(coords)
     C_sm = GaussianPrior(1.0, SM_L_KM).cov(coords)
-    vp = np.ones(len(coords))
+    # prior variance PER STATE, from the covariance diagonal -- so information_gain stays correct if a
+    # prior sigma is ever changed, rather than silently assuming sigma=1 for both.
+    vp_gwl, vp_sm = np.diag(C_gwl).copy(), np.diag(C_sm).copy()
 
     # GWL: wells + deep dv/v
     res_well, _ = resolution(C_gwl, G_well, NOISE["well"])
@@ -116,7 +117,7 @@ def main():
     both_G = np.vstack([G_well, G_dvv])
     nv_G = np.concatenate([np.full(len(G_well), NOISE["well"]), np.full(len(G_dvv), NOISE["dvv_deep"])])
     _, vpost_G = resolution(C_gwl, both_G, nv_G)
-    ig_G = information_gain(vp, vpost_G)
+    ig_G = information_gain(vp_gwl, vpost_G)
 
     # SM: SNOTEL + shallow dv/v
     res_sno, _ = resolution(C_sm, G_sno, NOISE["snotel"])
@@ -125,7 +126,7 @@ def main():
     both_S = np.vstack([G_sno, G_dvv])
     nv_S = np.concatenate([np.full(len(G_sno), NOISE["snotel"]), np.full(len(G_dvv), NOISE["dvv_shallow"])])
     _, vpost_S = resolution(C_sm, both_S, nv_S)
-    ig_S = information_gain(vp, vpost_S)
+    ig_S = information_gain(vp_sm, vpost_S)
 
     fig, ax = plt.subplots(2, 4, figsize=(19.5, 9.6), constrained_layout=True)
     RES = dict(cmap="viridis", vmin=0, vmax=1)
