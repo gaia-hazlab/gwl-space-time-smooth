@@ -36,7 +36,6 @@ def main():
     from src.models.dvv_sensitivity import (
         LAPSE_TIME_S,
         network_sensitivity,
-        pair_kernel,
         sensitivity_to_sigma,
         single_station_kernel,
     )
