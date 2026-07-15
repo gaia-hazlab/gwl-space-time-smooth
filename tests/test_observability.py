@@ -13,11 +13,13 @@ import numpy as np
 
 from src.models.observability import (
     GaussianPrior,
+    channel_footprints,
     information_gain,
     marginal_resolution,
     normalise_footprint,
     point_footprint,
     resolution,
+    satellite_footprints,
 )
 
 
@@ -92,6 +94,34 @@ def test_marginal_gain_is_where_the_added_sensor_reaches_beyond_the_base():
     assert mg[far].mean() > mg[near_base].mean()         # it adds most where the base cannot reach
 
 
+def test_satellite_footprints_tile_the_domain_and_a_finer_pixel_resolves_more():
+    c = _grid(n=24, span=30.0)
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    coarse = satellite_footprints(c, pixel_km=9.0)        # SMAP-like
+    fine = satellite_footprints(c, pixel_km=2.0)          # NISAR-like
+    assert coarse.shape[0] > 4 and fine.shape[0] > coarse.shape[0]   # a satellite covers EVERYWHERE
+    for G in (coarse, fine):
+        assert np.allclose(G.sum(axis=1), 1.0)            # every footprint is an averaging operator
+    res_coarse, _ = resolution(C, coarse, 0.05)
+    res_fine, _ = resolution(C, fine, 0.05)
+    assert res_fine.mean() > res_coarse.mean()            # finer pixels resolve more of the field
+    # and a satellite (everywhere) resolves the field more UNIFORMLY than a few points
+    pts = np.vstack([point_footprint(c, loc) for loc in [(5, 5), (25, 25)]])
+    res_pts, _ = resolution(C, pts, 0.05)
+    assert res_coarse.min() > res_pts.min()               # no dark corners under a satellite
+
+
+def test_channel_footprints_sit_only_on_low_hand_cells():
+    c = _grid(n=20, span=20.0)
+    hand = np.hypot(c[:, 0] - 10, c[:, 1] - 10)           # a valley at the centre, ridges at the edge
+    land = np.ones(len(c), dtype=bool)
+    G = channel_footprints(c, hand, land, hand_max_m=2.0)
+    assert G.shape[0] >= 1
+    # each surface-water observation must be centred on a low-HAND (valley) cell
+    peak_cells = G.argmax(axis=1)
+    assert np.all(hand[peak_cells] <= 2.0 + 1e-9)
+
+
 def test_information_gain_is_monotone_in_variance_reduction():
     vp = np.array([1.0, 1.0, 1.0])
     vq = np.array([1.0, 0.5, 0.1])                        # increasing reduction
@@ -106,5 +136,7 @@ if __name__ == "__main__":
     test_lower_noise_gives_more_resolution()
     test_more_sensors_never_reduce_resolution_and_no_sensors_is_zero()
     test_marginal_gain_is_where_the_added_sensor_reaches_beyond_the_base()
+    test_satellite_footprints_tile_the_domain_and_a_finer_pixel_resolves_more()
+    test_channel_footprints_sit_only_on_low_hand_cells()
     test_information_gain_is_monotone_in_variance_reduction()
     print("all observability tests passed")
