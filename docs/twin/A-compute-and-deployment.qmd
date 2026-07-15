@@ -105,6 +105,16 @@ shape of the travel-time integral that defines Vs30.
   Dask-backed variables must keep the caller's chunking.
 :::
 
+### earth2studio interoperability
+
+Every stream is staged as Zarr with a **time-and-variable** layout, which is deliberately the shape of
+an earth2studio `DataSource`: its contract is `__call__(time, variable) -> xarray.DataArray` with
+`[time, variable, ...]` dimensions and datetime/string coordinates. A staged forcing or observation
+store is therefore one thin adapter away from being a drop-in data source inside an earth2studio
+pipeline — the FuXi forcing, the PRISM hindcast forcing, and the in-situ observation streams can all be
+consumed by the same tooling that drives the AI weather models. The staging layer is the twin's data
+plane; earth2studio compatibility keeps it usable from the AI-weather ecosystem rather than siloed.
+
 ## Observed forcing and the analysis window
 
 `src/data/fetch_prism_daily.py` reads the `gaia-hazlab/prism-stac` catalog via `odc.stac`, falling back

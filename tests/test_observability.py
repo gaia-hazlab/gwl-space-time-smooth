@@ -20,6 +20,7 @@ from src.models.observability import (
     point_footprint,
     resolution,
     satellite_footprints,
+    temporal_resolution,
 )
 
 
@@ -122,6 +123,19 @@ def test_channel_footprints_sit_only_on_low_hand_cells():
     assert np.all(hand[peak_cells] <= 2.0 + 1e-9)
 
 
+def test_temporal_resolution_captures_the_space_time_tradeoff():
+    tau = 5.0                                            # soil moisture: fast (days)
+    # a continuous stream resolves ~everything; a weekly one aliases a fast state
+    assert temporal_resolution(0.0, tau) == 1.0
+    assert temporal_resolution(1.0, tau) > temporal_resolution(7.0, tau)
+    assert temporal_resolution(30.0, tau) < 0.1          # monthly revisit vs a 5-day state -> aliased
+    # the SAME revisit resolves a SLOW state far better than a fast one
+    sat_revisit = 7.0
+    assert temporal_resolution(sat_revisit, 120.0) > temporal_resolution(sat_revisit, 5.0)
+    assert np.all((temporal_resolution([0.0, 3.0, 12.0], tau) >= 0) &
+                  (temporal_resolution([0.0, 3.0, 12.0], tau) <= 1))
+
+
 def test_information_gain_is_monotone_in_variance_reduction():
     vp = np.array([1.0, 1.0, 1.0])
     vq = np.array([1.0, 0.5, 0.1])                        # increasing reduction
@@ -138,5 +152,6 @@ if __name__ == "__main__":
     test_marginal_gain_is_where_the_added_sensor_reaches_beyond_the_base()
     test_satellite_footprints_tile_the_domain_and_a_finer_pixel_resolves_more()
     test_channel_footprints_sit_only_on_low_hand_cells()
+    test_temporal_resolution_captures_the_space_time_tradeoff()
     test_information_gain_is_monotone_in_variance_reduction()
     print("all observability tests passed")
