@@ -37,13 +37,15 @@ website:
             href: 03a-physics-hydrology.qmd
           - text: "5 · Physics — Hydromechanics"
             href: 03b-physics-hydromechanics.qmd
-          - text: "6 · Assimilation"
+          - text: "6 · Memory & disturbance"
+            href: 03c-memory-disturbance.qmd
+          - text: "7 · Assimilation"
             href: 04-assimilation.qmd
-          - text: "7 · Evaluation of the soil state"
+          - text: "8 · Evaluation of the soil state"
             href: 05-state-evaluation.qmd
-          - text: "8 · Forecast"
+          - text: "9 · Forecast"
             href: 06-forecast.qmd
-          - text: "9 · Hazard integration"
+          - text: "10 · Hazard integration"
             href: 07-hazard-integration.qmd
 
       - section: "Reference"

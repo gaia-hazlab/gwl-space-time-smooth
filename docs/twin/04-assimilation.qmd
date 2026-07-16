@@ -1,5 +1,5 @@
 ---
-title: "6 · Assimilation"
+title: "7 · Assimilation"
 ---
 
 Assimilation is how observations correct the model prior without overwriting it away from the data.

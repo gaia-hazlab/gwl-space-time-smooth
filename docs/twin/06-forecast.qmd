@@ -1,5 +1,5 @@
 ---
-title: "8 · Forecast of the soil state"
+title: "9 · Forecast of the soil state"
 ---
 
 The twin is driven forward from a rainfall forecast to produce the **antecedent hydromechanical
@@ -52,7 +52,7 @@ for short-lead forecasting.
 :::
 
 ![**The twin over a wet season** (western Cascades, 90 m, daily), driven by observed PRISM daily
-rainfall and corrected each frame by the BLUE assimilation of [chapter 6](04-assimilation.qmd). Soil
+rainfall and corrected each frame by the BLUE assimilation of [chapter 7](04-assimilation.qmd). Soil
 moisture and the shallow dv/v band track individual storms; the water table integrates them. Two
 **live, independent** measurement streams drive the correction: the water-table panel is pulled toward
 the in-domain NWIS wells (red circles) that report a depth-to-water that month — up to 91 in the winter
