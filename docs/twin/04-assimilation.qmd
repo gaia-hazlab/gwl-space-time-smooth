@@ -96,8 +96,9 @@ The misfit $d - Gm$ is **evaluated in observation space** — each datum is comp
   (upscale-then-compare, by construction — footprint leakage is impossible). A well's row is a point; a
   dv/v datum's row is a coda kernel over a volume; a gauge's row is a basin integral.
 - **Time** enters through $R$. A datum taken $\Delta t$ before the analysis has its variance inflated
-  by $1/\exp(-\Delta t/\tau)$ — equivalently its precision carries the $\exp(-\Delta t/2\tau)$ weight
-  above — so a week-old satellite retrieval barely moves fast soil moisture ($\tau\!\approx\!5$ d) while
+  by $1/\exp(-\Delta t/2\tau)$ — equivalently its precision carries the $\exp(-\Delta t/2\tau)$ weight
+  above, matching `temporal_resolution()` — so a week-old satellite retrieval barely moves fast soil
+  moisture ($\tau\!\approx\!5$ d) while
   a day-old reading is still near-current for the slow water table ($\tau\!\approx\!120$ d).
 
 So the homogenisation is the **forward operator**, not resampling: heterogeneous data are reconciled by

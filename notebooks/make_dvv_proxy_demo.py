@@ -40,7 +40,7 @@ def main():
     except Exception:
         pass
     from src.config.domain import DOMAIN
-    from src.models.dvv_sensitivity import network_sensitivity, pair_kernel, single_station_kernel
+    from src.models.dvv_sensitivity import pair_kernel, single_station_kernel
     from src.models.observability import GaussianPrior, blue_update, normalise_footprint, resolution
 
     hand = rxr.open_rasterio(PROC / "terrain_hand_domain_90m.tif", masked=True).squeeze("band", drop=True)
@@ -77,13 +77,15 @@ def main():
     G = np.vstack(foot)                                    # (n_obs, n_cell), each row a coda footprint
 
     tsm = np.nan_to_num(truth_sm); tgwl = np.nan_to_num(truth_gwl)
-    noise = 0.12                                           # dv/v measurement+processing error (rel.)
-    # forward: each footprint sees a coda-weighted average of the true state -> synthetic dv/v
-    dvv_shallow = S_THETA * (G @ tsm) + noise * rng.standard_normal(G.shape[0])
-    dvv_deep = K_SAT * (G @ tgwl) + noise * K_SAT * rng.standard_normal(G.shape[0])
+    noise = 0.12                                           # measurement+processing error, in STATE units
+    # forward: each footprint sees a coda-weighted average of the true state -> synthetic dv/v. The
+    # measurement noise is |sensitivity|*noise in dv/v units, so dividing the datum by the sensitivity
+    # below leaves a state-equivalent noise of exactly `noise` for BOTH bands (robust to S_THETA/K_SAT).
+    dvv_shallow = S_THETA * (G @ tsm) + abs(S_THETA) * noise * rng.standard_normal(G.shape[0])
+    dvv_deep = K_SAT * (G @ tgwl) + abs(K_SAT) * noise * rng.standard_normal(G.shape[0])
     # inverse: divide out the band sensitivity -> a state-equivalent datum, then BLUE through the kernels
-    sm_proxy, _ = blue_update(B_sm, G, dvv_shallow / S_THETA, noise_var=(noise) ** 2)
-    gwl_proxy, _ = blue_update(B_gwl, G, dvv_deep / K_SAT, noise_var=(noise) ** 2)
+    sm_proxy, _ = blue_update(B_sm, G, dvv_shallow / S_THETA, noise_var=noise ** 2)
+    gwl_proxy, _ = blue_update(B_gwl, G, dvv_deep / K_SAT, noise_var=noise ** 2)
     res_sm, _ = resolution(B_sm, G, noise ** 2)
     res_gwl, _ = resolution(B_gwl, G, noise ** 2)
 
