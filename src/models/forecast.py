@@ -133,7 +133,7 @@ def liquid_input(forcing, ddf_mm_c_day=DDF_MM_C_DAY, t_snow_hi=T_SNOW_HI,
 
 def forecast_soil_state(forcing, theta_wp, theta_fc, theta_sat, vs30_base, wt_depth0_m,
                         sand_pct=None, clay_pct=None, root_depth_m=1.0, slope_tan=None,
-                        **budget_kw):
+                        hysteresis=True, **budget_kw):
     """Drive the coupled water budget from a rainfall forecast and map it onto Vs30.
 
     ``theta_*`` and ``vs30_base`` / ``wt_depth0_m`` are the static envelope + baseline state on the
@@ -164,7 +164,14 @@ def forecast_soil_state(forcing, theta_wp, theta_fc, theta_sat, vs30_base, wt_de
     dtw_anom = wb.wt_depth_m - wt_ref                          # +ve = table deeper than baseline
 
     d = forward_dvv(dtw_anom, wb.theta, theta_ref, env)
-    dvv_low, dvv_high = d["dvv_low"], d["dvv_high"]
+    dvv_low = d["dvv_low"]
+    if hysteresis:
+        # carry the wetting/drying reversal memory along the INTEGRATED θ trajectory (#120): the same θ
+        # reached by drying vs wetting yields a different vadose velocity, so dv/v is path-dependent.
+        from src.models.hysteresis import vadose_dvv_hysteretic
+        dvv_high = vadose_dvv_hysteretic(wb.theta, env).astype("float32")
+    else:
+        dvv_high = d["dvv_high"]
 
     # first-order travel-time weighting of the top 30 m: the vadose root zone carries d/30 of the
     # column, the saturated material below carries the rest.
