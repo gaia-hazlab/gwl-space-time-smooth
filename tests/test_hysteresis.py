@@ -73,10 +73,49 @@ def test_reversal_resets_the_memory_anchor():
     assert flips >= 2, "at least two reversals expected on a wet-dry-wet path"
 
 
+def test_trajectory_field_carries_memory_over_the_integrated_path():
+    # The vectorised stepper the water budget uses: a wet-then-dry path must give DIFFERENT suction at
+    # the same Se depending on which limb it is on — path memory, carried per cell.
+    from src.models.hysteresis import hysteretic_suction_field
+    se = _wet_then_dry()[:, None]                     # (T, 1 cell)
+    h = hysteretic_suction_field(se, ALPHA_D, N, start="wetting")
+    half = len(se) // 2
+    i = int(np.argmin(np.abs(se[:half, 0] - 0.55)))
+    j = half + int(np.argmin(np.abs(se[half:, 0] - 0.55)))
+    assert h[j, 0] > h[i, 0] + 1e-3
+    # vectorises over cells independently: one cell wets-then-dries, the other dries-then-wets, so at
+    # a given time they sit on opposite limbs and their suctions differ.
+    c0 = np.concatenate([np.linspace(0.30, 0.85, 40), np.linspace(0.85, 0.30, 40)])
+    c1 = np.concatenate([np.linspace(0.85, 0.30, 40), np.linspace(0.30, 0.85, 40)])
+    two = np.stack([c0, c1], axis=1)                  # (T, 2)
+    hh = hysteretic_suction_field(two, ALPHA_D, N, start="drying")
+    assert hh.shape == two.shape and np.nanmax(np.abs(hh[:, 0] - hh[:, 1])) > 1e-3
+
+
+def test_forecast_dvv_is_path_dependent_when_hysteresis_on():
+    # End-to-end: through forecast_soil_state, hysteresis makes the vadose dv/v differ from the
+    # single-valued map on a wet-then-dry storm (same water budget, different observable).
+    from src.models.forecast import ForecastForcing, forecast_soil_state
+    n = 80
+    rain = np.zeros(n); rain[5:25] = 12.0             # a storm: wet up then dry out
+    t = np.arange("2025-11-01", np.datetime64("2025-11-01") + n, dtype="datetime64[D]")
+    kw = dict(theta_wp=0.10, theta_fc=0.28, theta_sat=0.42, vs30_base=350.0, wt_depth0_m=5.0,
+              root_depth_m=1.0)
+    f = ForecastForcing(times=t, precip_mm=rain, pet_mm=np.full(n, 1.5), dt_days=1.0, source="test")
+    hy = forecast_soil_state(f, hysteresis=True, **kw)
+    sv = forecast_soil_state(f, hysteresis=False, **kw)
+    assert hy.dvv_high.shape == sv.dvv_high.shape
+    assert np.nanmax(np.abs(hy.dvv_high - sv.dvv_high)) > 1e-4, "hysteresis must change the vadose dv/v"
+    # sanity preserved: vadose band still dominates the saturated band
+    assert np.abs(hy.dvv_high).max() > 5.0 * np.abs(hy.dvv_low).max()
+
+
 if __name__ == "__main__":
     test_drying_bound_holds_more_suction_than_wetting_at_equal_saturation()
     test_the_loop_opens_on_a_wet_then_dry_path()
     test_velocity_shows_the_same_loop_the_observable()
     test_no_hysteresis_when_ratio_is_one()
     test_reversal_resets_the_memory_anchor()
+    test_trajectory_field_carries_memory_over_the_integrated_path()
+    test_forecast_dvv_is_path_dependent_when_hysteresis_on()
     print("all hysteresis tests passed")

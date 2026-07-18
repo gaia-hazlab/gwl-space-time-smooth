@@ -25,7 +25,15 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from src.models.dvv_coupling import G_REF, N_EXP, P_REF, RHO_GRAIN, RHO_W, SIGMA0
+from src.models.dvv_coupling import (
+    G_REF,
+    N_EXP,
+    P_REF,
+    RHO_GRAIN,
+    RHO_W,
+    SIGMA0,
+    CouplingEnvelope,
+)
 
 WETTING_RATIO = 2.0        # alpha_w / alpha_d: wetting air-entry scale (Kool-Parker default ~2)
 _SE_LO, _SE_HI = 1e-3, 1.0 - 1e-6
@@ -89,15 +97,75 @@ def hysteretic_suction(se_path: ArrayLike, alpha_d: float, n: float,
             d = cur
         if d != cur:                                  # reversal: re-anchor at the previous point
             se_r, h_r, cur = float(se[i - 1]), float(h[i - 1]), d
-        if cur == "d":                                # heading to the drying bound as Se falls
-            g = np.clip(se[i] / se_r, 0.0, 1.0)
-            hi = hd(se[i]) + (h_r - hd(se_r)) * g
-        else:                                         # heading to the wetting bound as Se rises
-            g = np.clip((1.0 - se[i]) / max(1.0 - se_r, 1e-9), 0.0, 1.0)
-            hi = hw(se[i]) + (h_r - hw(se_r)) * g
-        h[i] = float(np.clip(hi, hw(se[i]), hd(se[i])))
+        # interpolate in the NORMALISED position lambda in [0,1] between the wetting (0) and drying (1)
+        # bounds. lambda_r locates the reversal in the gap; it decays toward the target bound as Se
+        # moves, which keeps the curve within the bounds by construction (no clipping / overshoot).
+        hdr, hwr = float(hd(se_r)), float(hw(se_r))
+        lam_r = float(np.clip((h_r - hwr) / max(hdr - hwr, 1e-12), 0.0, 1.0))
+        if cur == "d":                                # -> drying bound (lambda -> 1) as Se falls
+            lam = 1.0 - (1.0 - lam_r) * float(np.clip(se[i] / se_r, 0.0, 1.0))
+        else:                                         # -> wetting bound (lambda -> 0) as Se rises
+            lam = lam_r * float(np.clip((1.0 - se[i]) / max(1.0 - se_r, 1e-9), 0.0, 1.0))
+        h[i] = float(hw(se[i]) + lam * (hd(se[i]) - hw(se[i])))
         states.append(ScanState(se_r, h_r, cur))
     return h, states
+
+
+def hysteretic_suction_field(se: ArrayLike, alpha_d: ArrayLike, n: ArrayLike,
+                             wetting_ratio: float = WETTING_RATIO, start: str = "drying"
+                             ) -> NDArray[np.float64]:
+    """Vectorised trajectory version of :func:`hysteretic_suction` — the form the integrator needs.
+
+    ``se`` is ``(T, ...)`` with time on axis 0 and any grid shape after it; ``alpha_d`` and ``n`` are
+    scalars or per-cell arrays broadcasting against ``se[t]``. The reversal-point memory is carried
+    **per cell** across the time loop, so a cell that reaches a given saturation by drying gets a
+    different suction than one that reaches it by wetting. Returns suction shaped like ``se``.
+    """
+    se = np.clip(np.asarray(se, dtype="float64"), _SE_LO, _SE_HI)
+    alpha_d = np.asarray(alpha_d, dtype="float64")
+    n = np.asarray(n, dtype="float64")
+    alpha_w = wetting_ratio * alpha_d
+    hd = lambda s: vg_suction(s, alpha_d, n)          # noqa: E731
+    hw = lambda s: vg_suction(s, alpha_w, n)          # noqa: E731
+
+    h = np.empty_like(se)
+    cur = np.full(se.shape[1:], 1 if start == "drying" else -1, dtype="int8")   # +1 dry, -1 wet
+    se_r = se[0].copy()
+    h_r = np.where(cur == 1, hd(se[0]), hw(se[0]))
+    h[0] = h_r
+    for t in range(1, se.shape[0]):
+        d = np.where(se[t] < se[t - 1] - 1e-12, 1,
+                     np.where(se[t] > se[t - 1] + 1e-12, -1, cur)).astype("int8")
+        rev = d != cur
+        se_r = np.where(rev, se[t - 1], se_r)
+        h_r = np.where(rev, h[t - 1], h_r)
+        cur = d
+        hdr, hwr = hd(se_r), hw(se_r)
+        lam_r = np.clip((h_r - hwr) / np.maximum(hdr - hwr, 1e-12), 0.0, 1.0)
+        lam_dry = 1.0 - (1.0 - lam_r) * np.clip(se[t] / se_r, 0.0, 1.0)
+        lam_wet = lam_r * np.clip((1.0 - se[t]) / np.maximum(1.0 - se_r, 1e-9), 0.0, 1.0)
+        lam = np.where(cur == 1, lam_dry, lam_wet)
+        h[t] = hw(se[t]) + lam * (hd(se[t]) - hw(se[t]))
+    return h
+
+
+def vadose_dvv_hysteretic(theta_traj: ArrayLike, env: CouplingEnvelope,
+                          wetting_ratio: float = WETTING_RATIO, start: str = "drying"
+                          ) -> NDArray[np.float64]:
+    """Vadose-band dv/v along a moisture trajectory, WITH hysteresis memory.
+
+    Drop-in replacement for the ``dvv_high`` that ``dvv_coupling.forward_dvv`` computes single-valued:
+    ``dvv_high[t] = (V_s^{hyst}(t) - V_s^{hyst}(0)) / V_s^{hyst}(0)``, where the velocity is evaluated on
+    the hysteretic suction carried along the integrated trajectory. ``theta_traj`` is ``(T, ...)``.
+    """
+    theta = np.asarray(theta_traj, dtype="float64")
+    theta_r = np.asarray(env.theta_wp, dtype="float64")
+    phi = np.asarray(env.theta_sat, dtype="float64")
+    se = np.clip((theta - theta_r) / np.maximum(phi - theta_r, 1e-6), _SE_LO, _SE_HI)
+    suction = hysteretic_suction_field(se, env.vg_alpha, env.vg_n, wetting_ratio, start)
+    vs = vs_from_suction(theta, se, suction, phi)                 # (T, ...)
+    vs0 = vs[0]
+    return ((vs - vs0) / np.where(vs0 > 0, vs0, np.nan))
 
 
 def vs_from_suction(theta: ArrayLike, se: ArrayLike, suction_kpa: ArrayLike,
