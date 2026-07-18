@@ -103,6 +103,31 @@ SVM is 200 m native; on the 90 m grid it is an upsample carrying no new informat
 **coarsest static layer** and the binding constraint on liquefaction. Paused by user until the
 water-budget work lands. [#81–#86](../../issues/81)
 
+### v0.6 — Memory & disturbance ([milestone](../../milestone/5)) ← **STARTED**
+
+The soil state is **memoryless exactly where the interesting physics lives.** Two processes are absent:
+**(1) capillary hysteresis** — the retention curve is single-valued, so drying and wetting are
+reciprocal when they are not (the source of soil-moisture memory, [Shi et al. 2026 *Science*,
+agroseismology](https://doi.org/10.1126/science.aec0970) — the Denolle-lab DAS paper); **(2)
+landscape disturbance** — earthquakes/liquefaction, landslides, wildfire, and **farming (tillage)**
+alter the hydromechanical response over weeks-to-years, and today they appear only as downstream
+hazard *consumers*, never as inputs that perturb the soil state. **dv/v is the shared observable**, so
+the real problem is **attribution** across three timescales.
+
+| issue | what |
+|---|---|
+| [#119](../../issues/119) | **[epic]** Soil-state memory and landscape disturbance |
+| [#120](../../issues/120) | Capillary hysteresis (Kool–Parker scanning curves) — [doi:10.1029/WR023i001p00105](https://doi.org/10.1029/WR023i001p00105) |
+| [#121](../../issues/121) | Coseismic damage + **log-linear healing** dv/v state — [Illien 2025](https://doi.org/10.1038/s41467-025-57151-8), [Wang 2021](https://doi.org/10.1038/s41467-021-21418-7) |
+| [#122](../../issues/122) | Surface disturbance: wildfire / **agricultural** / landslide |
+| [#123](../../issues/123) | dv/v **attribution** — augment the BLUE (generalize [Illien 2022](https://doi.org/10.1029/2021JB023402)) |
+| [#124](../../issues/124) | Disturbance event catalog on the data plane (ShakeMap, MTBS, landslide, liquefaction) |
+| [#125](../../issues/125) | Report chapter: Memory & disturbance |
+
+**Multi-scale principle:** each process is a state variable with its **own relaxation timescale**
+(operator-split); disturbances are **patchy fields at native scale** reprojected through the existing
+forward-operator data plane. The timescale + footprint separation is what makes attribution possible.
+
 ---
 
 ## Open physics debts (blocking the water table)

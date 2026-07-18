@@ -66,14 +66,14 @@ def main():
         cm = plt.get_cmap(cmap).copy()
         cm.set_bad("#eef0f3")
         im = ax.imshow(arr, cmap=cm, vmin=lo, vmax=hi)
-        ax.set_title(f"{title}  [{unit}]", fontsize=11, fontweight="bold", pad=3)
+        ax.set_title(f"{title}  [{unit}]", fontsize=15, fontweight="bold", pad=3)
         fig.colorbar(im, ax=ax, shrink=0.7)
         ax.set_xticks([])
         ax.set_yticks([])
 
     fig.suptitle("Static layers — western Cascades domain, 90 m, EPSG:5070 (2.96 M cells)\n"
                  "Puyallup & Nisqually headwaters · all 8 gauged basins inside",
-                 fontsize=13, fontweight="bold")
+                 fontsize=16, fontweight="bold")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ASSETS.mkdir(parents=True, exist_ok=True)      # a fresh clone has no assets dir; copy would raise

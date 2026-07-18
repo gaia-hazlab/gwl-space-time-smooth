@@ -1,0 +1,123 @@
+---
+title: "6 · Memory & disturbance"
+---
+
+The soil state carries **memory**: what it does next depends not only on today's forcing but on the
+path it took to get here. Two forms of that memory are physically real, are what the seismic signal is
+most sensitive to, and are **absent from the state as currently integrated**. This chapter sets out the
+physics, why the present model cannot represent it, and how the twin incorporates it — with the
+observation that the same measurement, **dv/v, sees all of it**, which turns the problem into one of
+*attribution*.
+
+## Where the state is memoryless
+
+The [hydrology](03a-physics-hydrology.qmd) integrates two reservoirs — root-zone storage and
+water-table head — so the state *does* carry cumulative-forcing memory. But two path dependencies are
+missing:
+
+- **The retention curve is single-valued.** One $\theta_{wp}/\theta_{fc}/\theta_{sat}$ envelope governs
+  both drying and wetting, so a given storage always maps to the same suction and the same stiffness. In
+  real soil it does not: the suction needed to *drain* a pore is larger than the suction at which it
+  *fills*, so water content plotted against matric potential traces a **loop, not a line**.
+- **The moisture-to-velocity map is instantaneous and elastic.** The petrophysics of
+  [hydromechanics](03b-physics-hydromechanics.qmd) converts the *current* moisture and water table to
+  $V_s$ and dv/v with no rate term and no damage term. That chapter already writes the missing physics —
+  the dynamic-capillarity term $\tau(S_w)\,\partial_t S_w$ whose coefficient differs between wetting and
+  drying — and notes that the coded $\delta v/v = S_\theta\,\Delta\theta$ is only its local
+  linearization.
+
+There is also **no disturbance state at all**. Earthquakes, liquefaction, landslides, and wildfire
+appear in the twin only as *downstream hazard consumers* of the water table and $V_s$ — never as inputs
+that change the soil itself.
+
+## Capillary hysteresis: drying is not wetting
+
+Hysteresis in the water-retention curve is a principal source of **soil-moisture memory**: the same
+moisture content sits at a different suction, and therefore a different effective stress and stiffness,
+depending on whether the soil is on a drying or a wetting path. The implementable representation is the
+**Kool–Parker scanning-curve model** [@koolparker1987], which scales the secondary and higher-order
+scanning curves off the main drying and wetting limbs and carries a single extra state — the **last
+reversal point** — so the retention relation "remembers" where the last wetting or drying began.
+
+![Capillary hysteresis, implemented (`src/models/hysteresis.py`). **Left:** a seasonal moisture path
+traces a *loop* between the main drying and wetting curves, not a single line; a mid-summer storm opens
+an inner **scanning loop** — the soil's memory of that reversal. **Right:** the same path in the twin's
+observable, $V_s(\theta)$, through the identical Hertz–Mindlin map used elsewhere: at equal moisture the
+**drying limb is stiffer** (higher velocity, higher dv/v) than the wetting limb, and both depart from
+the single-valued curve the current model assumes.](assets/hysteresis_loop.png){#fig-hysteresis}
+
+::: {.callout-note}
+## Agroseismology: reading the hysteretic state seismically
+[@shi2026agroseismology] (a Denolle-lab *Science* study) applies distributed acoustic sensing to an
+experimental farm and inverts seismic velocity for soil saturation through a **physics-based
+hydromechanical model** — the same effective-stress / Hertz–Mindlin family the twin uses. It also shows
+the second theme of this chapter directly: **tillage and compaction are a disturbance** that disrupts
+the capillary pore network, slows drainage, and increases evaporation — a change in the hydromechanical
+response that the velocity field registers. Hysteresis and disturbance are the two faces of soil memory,
+and dv/v is sensitive to both.
+:::
+
+## Landscape disturbance: a step change, then a slow recovery
+
+Disturbances perturb the soil's hydraulic and mechanical properties abruptly and then **recover over
+weeks to years** — a memory the state must carry as an evolving variable, not a permanent edit.
+
+| disturbance | what it changes | recovery timescale |
+|---|---|---|
+| **earthquake / liquefaction** | near-surface velocity drops; pore structure and pressure disturbed | **log-linear, days → years** [@illien2025recovery; @wang2021healing] |
+| **wildfire** | hydrophobic layer → infiltration and $K_s$ fall, runoff rises | ~2–4 (up to ~6) years |
+| **agricultural (tillage)** | capillary connectivity disrupted → slower drainage | season → years [@shi2026agroseismology] |
+| **landslide / ground failure** | remolding, cohesion loss | months → years |
+
+The coseismic case is the best characterised. After shaking, the near-surface velocity drops and then
+**heals log-linearly in time** — "slow dynamics" — and the recovery *rate* appears to be an intrinsic
+property of the substrate rather than of the shaking intensity [@illien2025recovery; @wang2021healing].
+Crucially for a twin that also tracks water, [@illien2022gorkha] showed that the post-Gorkha dv/v signal
+is a **superposition of transient damage and groundwater drainage**, and separated the two — which is
+exactly the problem the twin faces in reverse.
+
+The twin represents each disturbance as an **event that sets a memory state** — a velocity deficit $D$
+for coseismic damage, a property perturbation $\Phi$ (hydrophobicity, $K_s$ multiplier, cohesion) for
+surface disturbances — which then **relaxes on that process's own timescale**. The forward velocity
+becomes $\delta v/v = \text{elastic}(\theta, h) + D$, and the water budget's infiltration and retention
+terms carry the $\Phi$ perturbation.
+
+## Multi-scale: a timescale per process, a footprint per event
+
+The processes span orders of magnitude in *both* space and time, and the design turns that into an
+advantage rather than a difficulty.
+
+- **Time.** Each memory is a state variable with its **own relaxation constant** — storm-scale for
+  hysteresis, log-linear over years for coseismic healing, multi-year for fire — advanced by
+  operator-splitting: the fast hysteresis inside the water-budget step, the slow damage and disturbance
+  as an outer relaxation.
+- **Space.** Disturbances are **patchy and defined at their native scale**: shaking from USGS ShakeMap
+  (~km), burn severity from MTBS (30 m), landslide inventory polygons, liquefaction susceptibility
+  derived from the $V_s30$ layer the twin already carries. Each enters as an **event field** reprojected
+  through the forward-operator [data plane](02b-cyberinfrastructure.qmd) — native resolution, no
+  regridding, sub-grid susceptibility fractions.
+
+## Attribution is the goal
+
+Because dv/v responds to hydrology, coseismic damage, *and* surface disturbance at once, a measured
+change is ambiguous — and the twin's job is to **partition it**. This is where the memory states earn
+their place in the [assimilation](04-assimilation.qmd): the control vector is **augmented** with the
+damage state $D$ and the disturbance perturbation $\Phi$, the coda kernels
+([evaluation](05-state-evaluation.qmd)) supply the **spatial** footprint that distinguishes where a
+change originates, and the **distinct relaxation timescales** supply the temporal discriminant that
+separates a seasonal-elastic hydrology signal from a log-healing damage signal from a multi-year fire
+signal. The BLUE innovation then divides a dv/v anomaly among the three. It is the generalisation of the
+damage-versus-drainage decomposition [@illien2022gorkha] to a full state estimator, and it is the
+reason the twin instruments the subsurface with seismic velocity in the first place.
+
+## Status
+
+The **capillary-hysteresis model is implemented and tested** (`src/models/hysteresis.py`,
+`tests/test_hysteresis.py`) — the loop in @fig-hysteresis is its output, coupled to the twin's own
+Hertz–Mindlin velocity map. What remains for hysteresis is to route it through the water budget's
+retention branch so the *integrated* state carries the reversal-point memory. The other pieces — the
+instantaneous petrophysical map's damage term, and any carried disturbance variable — are the identified
+hooks and are not yet built. The build order — hysteresis (started), then coseismic damage-and-healing,
+then the surface-disturbance classes, then the augmented-attribution assimilation, fed by a disturbance
+event catalog on the data plane — is tracked under the **memory-and-disturbance epic** and its
+sub-issues in the [roadmap](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/119).

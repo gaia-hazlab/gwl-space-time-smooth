@@ -44,11 +44,24 @@ def register_inter(fonts_dir: Path | str = _FONTS_DIR, fallback: str = "DejaVu S
     else:
         logger.warning("Inter TTFs not found in %s; falling back to %s", fonts_dir, fallback)
 
+    # Publication baseline. These are sized for a figure that lands on a single conference slide or a
+    # manuscript column and is still legible -- deliberately large. Any text a figure does not pin
+    # explicitly inherits these; figures should avoid hard-coding sizes below ~11.
     mpl.rcParams.update({
         "font.family": "sans-serif",
         "font.sans-serif": [family, fallback, "DejaVu Sans"],
         "font.size": size,
+        "axes.titlesize": size + 3,
         "axes.titleweight": "bold",
         "axes.titlecolor": "#1a1a2e",
+        "axes.labelsize": size + 1,
+        "xtick.labelsize": size,
+        "ytick.labelsize": size,
+        "legend.fontsize": size,
+        "legend.title_fontsize": size,
+        "figure.titlesize": size + 6,
+        "figure.titleweight": "bold",
+        "axes.linewidth": 1.1,
+        "lines.linewidth": 2.0,
     })
     return family

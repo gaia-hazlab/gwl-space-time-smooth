@@ -18,6 +18,7 @@ from src.models.observability import (
     marginal_resolution,
     normalise_footprint,
     point_footprint,
+    blue_update,
     resolution,
     satellite_footprints,
     temporal_resolution,
@@ -181,6 +182,28 @@ def test_temporal_resolution_captures_the_space_time_tradeoff():
                   (temporal_resolution([0.0, 3.0, 12.0], tau) <= 1))
 
 
+def test_blue_update_recovers_a_smooth_truth_and_reverts_off_support():
+    # A smooth "truth" sampled at two points must be recovered NEAR the sensors and REVERT TO THE PRIOR
+    # MEAN (0) far from them -- this is the estimator the whole framework rests on.
+    c = _grid(n=25, span=40.0)
+    truth = np.sin(c[:, 0] / 8.0) * np.cos(c[:, 1] / 8.0)      # a smooth field
+    B = GaussianPrior(sigma=1.0, length_km=6.0).cov(c)
+    locs = [(10.0, 10.0), (30.0, 30.0)]
+    G = np.vstack([point_footprint(c, p) for p in locs])
+    d = np.array([truth[int(np.argmin(np.sum((c - p) ** 2, 1)))] for p in locs])
+    m_a, vpost = blue_update(B, G, d, noise_var=1e-3)
+    # near a sensor the analysis matches the truth; far away it reverts to the prior mean 0
+    for p, di in zip(locs, d):
+        near = np.argmin(np.sum((c - p) ** 2, 1))
+        assert abs(m_a[near] - di) < 0.15
+    far = np.argmin(np.sum((c - [40.0, 0.0]) ** 2, 1))         # a corner with no nearby sensor
+    assert abs(m_a[far]) < abs(truth[far]) + 0.3 and abs(m_a[far]) < 0.4
+    assert np.all(vpost <= np.diag(B) + 1e-9)
+    # a nonzero prior mean is honoured (empty obs -> exactly the prior mean)
+    m0, _ = blue_update(B, np.empty((0, len(c))), np.array([]), 1e-3, prior_mean=2.5)
+    assert np.allclose(m0, 2.5)
+
+
 def test_information_gain_is_monotone_in_variance_reduction():
     vp = np.array([1.0, 1.0, 1.0])
     vq = np.array([1.0, 0.5, 0.1])                        # increasing reduction
@@ -200,5 +223,6 @@ if __name__ == "__main__":
     test_channel_footprints_validate_lengths()
     test_channel_footprints_sit_only_on_low_hand_cells()
     test_temporal_resolution_captures_the_space_time_tradeoff()
+    test_blue_update_recovers_a_smooth_truth_and_reverts_off_support()
     test_information_gain_is_monotone_in_variance_reduction()
     print("all observability tests passed")

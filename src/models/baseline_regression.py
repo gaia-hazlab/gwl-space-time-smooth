@@ -3,7 +3,7 @@
 Replaces the LightGBM + conformal variant (and the legacy GStatSim co-kriging MM1
 in src/models/interpolate_baseline.py).
 
-Design (mirrors docs/gwl_hybrid_framework.qmd, Stage 1):
+Design (mirrors old/docs/gwl_hybrid_framework.qmd, Stage 1):
   * Trains **directly on NWIS well observations** — the wells anchor the model.
   * Predictors are **physically meaningful** DataHub covariates only; absolute
     coordinates (easting/northing) are deliberately excluded, because coordinate

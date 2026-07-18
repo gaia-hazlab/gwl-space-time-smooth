@@ -56,12 +56,12 @@ def main():
         mk = "o" if s.is_measurement else "D"                 # diamond = retrieval / model estimate
         a.scatter(s.support_km * fx, rev, s=190, c=KIND_C[s.kind], marker=mk,
                   edgecolors="k", linewidths=.7, zorder=3)
-        a.annotate(s.name, (s.support_km * fx, rev), fontsize=8, ha=ha, va=va,
+        a.annotate(s.name, (s.support_km * fx, rev), fontsize=12, ha=ha, va=va,
                    xytext=(0, dy), textcoords="offset points", zorder=4)
     # the soil-moisture "must sample faster than this" line: revisit = tau_SM
     a.axhline(TEMPORAL_TAU_DAYS["soil_moisture"], color="#3BB273", ls="--", lw=1.3)
     a.text(0.11, TEMPORAL_TAU_DAYS["soil_moisture"] * 1.15, "soil-moisture decorrelation (~5 d):\n"
-           "streams above this ALIAS the storm signal", color="#3BB273", fontsize=8.5)
+           "streams above this ALIAS the storm signal", color="#3BB273", fontsize=12)
     a.axhspan(TEMPORAL_TAU_DAYS["soil_moisture"], 30, color="#3BB273", alpha=.05)
     a.set_xscale("log"); a.set_yscale("log")
     a.set_xlabel("spatial support  (km)  →  coarser"); a.set_ylabel("revisit interval  (days)  →  slower")
@@ -71,7 +71,7 @@ def main():
     leg = [Line2D([], [], marker="o", ls="", mfc="w", mec="k", label="measurement"),
            Line2D([], [], marker="D", ls="", mfc="w", mec="k", label="retrieval / model estimate")]
     leg += [Line2D([], [], marker="s", ls="", mfc=c, mec="k", label=k) for k, c in KIND_C.items()]
-    a.legend(handles=leg, fontsize=7.5, loc="center", bbox_to_anchor=(0.60, 0.40),
+    a.legend(handles=leg, fontsize=12, loc="center", bbox_to_anchor=(0.60, 0.40),
              ncol=2, framealpha=.96)
     a.grid(alpha=.25, which="both")
 
@@ -86,18 +86,18 @@ def main():
     b.barh(y, temporal, color=[KIND_C[s.kind] for s in sm],
            label="× temporal resolution (fast state)")
     for i, s in enumerate(sm):
-        b.text(temporal[i] + .02, i, "%.2f" % temporal[i], va="center", fontsize=9)
-    b.set_yticks(y); b.set_yticklabels(names, fontsize=9); b.invert_yaxis()
+        b.text(temporal[i] + .02, i, "%.2f" % temporal[i], va="center", fontsize=13)
+    b.set_yticks(y); b.set_yticklabels(names, fontsize=13); b.invert_yaxis()
     b.set_xlim(0, 1.25); b.set_xlabel("temporal resolution of soil moisture (fraction)")
     b.set_title("Why coverage is not enough for a FAST state", fontweight="bold")
     b.text(0.5, -0.16, "A weekly satellite's fine pixels are discounted to near zero for soil moisture;\n"
            "the continuous seismic array and hourly probes keep their temporal information.",
-           transform=b.transAxes, ha="center", fontsize=8, style="italic", color="#555")
+           transform=b.transAxes, ha="center", fontsize=12, style="italic", color="#555")
 
     fig.suptitle("Observing-system design — spatial coverage AND temporal revisit\n"
                  "Satellites are RETRIEVALS (model estimates), fine in space but coarse in time; "
                  "ground/seismic streams are sparse in space but continuous in time",
-                 fontsize=12.5, fontweight="bold")
+                 fontsize=15, fontweight="bold")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     (assets := Path("docs/twin/assets")).mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=125, bbox_inches="tight", facecolor="white")

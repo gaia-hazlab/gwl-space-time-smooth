@@ -27,9 +27,10 @@ Everything is served from one landing page (self-contained HTML — no build nee
 | **[Audit & roadmap](https://gaia-hazlab.github.io/gwl-space-time-smooth/gwl_audit_framework.html)** | Project audit + status: what has shipped, current priorities, forecast path |
 | **[Full report (archived)](https://gaia-hazlab.github.io/gwl-space-time-smooth/report.html)** | The original single-file technical report, superseded by the chapter docs |
 
-The chapter documentation is a Quarto **website** under `docs/twin/` (built to `/twin/`); the archived
-report source is `docs/gwl_hybrid_framework.qmd`; the demo and audit are pre-rendered self-contained
-HTML committed under `docs/`.
+The chapter documentation is a Quarto **website** under `docs/twin/` (built to `/twin/`) and is the
+primary deliverable. The legacy single-file report and pilot demo (sources archived under `old/docs/`)
+plus their figure generators and the exploratory notebooks live under [`old/`](old/); their
+pre-rendered self-contained HTML remains committed under `docs/` and served from the landing page.
 
 > **Core philosophy**: Real wells first. HAND-based terrain physics second. Climate
 > response functions third. Never trust a gridded product until validated against
@@ -329,7 +330,7 @@ pixi run prism && pixi run ensemble-dvv
 pixi run snotel && pixi run snotel-validate   # → snotel_soil_moisture_monthly.parquet, snotel_validation.{json,png}
 
 # 4. Assemble the self-contained demo page (static figures + GIFs + provenance → Quarto HTML).
-pixi run demo                  # → docs/gwl_soil_moisture_demo.html  (also re-runs 1-panel figures)
+pixi run demo                  # → old/docs/gwl_soil_moisture_demo.html  (legacy pilot demo; archived)
 
 # soil mechanics (full coupling) is still a scaffold — exits with a message:
 pixi run soil-mechanics        # SCAFFOLD (#19)
@@ -512,7 +513,7 @@ envelope as a covariate. Everything downstream (soil moisture 90 m, LandLab expo
 - **Tests**: each module has a standalone test (`tests/test_<module>.py`) that also runs as
   `pixi run python -m tests.test_<module>`. Add one with your change.
 - **Citations**: every DOI in `docs/references.bib` is Crossref-verified — never add an unverified DOI.
-- **PRs**: small and focused; the report (`docs/gwl_hybrid_framework.qmd`) and this README are the
+- **PRs**: small and focused; the chapter docs (`docs/twin/`) and this README are the
   source of truth for the approach — update them when the physics/data/interface changes.
 
 See the report's **Scientific & Data Grounds** for the equations each seam implements, and

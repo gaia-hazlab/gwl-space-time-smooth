@@ -31,17 +31,21 @@ website:
             href: 00-structural-model.qmd
           - text: "2 · Input data"
             href: 01-input-data.qmd
-          - text: "3 · Physics — Hydrology"
+          - text: "3 · Cyberinfrastructure"
+            href: 02b-cyberinfrastructure.qmd
+          - text: "4 · Physics — Hydrology"
             href: 03a-physics-hydrology.qmd
-          - text: "4 · Physics — Hydromechanics"
+          - text: "5 · Physics — Hydromechanics"
             href: 03b-physics-hydromechanics.qmd
-          - text: "5 · Assimilation"
+          - text: "6 · Memory & disturbance"
+            href: 03c-memory-disturbance.qmd
+          - text: "7 · Assimilation"
             href: 04-assimilation.qmd
-          - text: "6 · Evaluation of the soil state"
+          - text: "8 · Evaluation of the soil state"
             href: 05-state-evaluation.qmd
-          - text: "7 · Forecast"
+          - text: "9 · Forecast"
             href: 06-forecast.qmd
-          - text: "8 · Hazard integration"
+          - text: "10 · Hazard integration"
             href: 07-hazard-integration.qmd
 
       - section: "Reference"

@@ -145,15 +145,15 @@ def main():
             a = ax[r, cc]
             cm = plt.get_cmap(kw["cmap"]).copy(); cm.set_bad("#eef0f3")
             im = a.imshow(masked(field), cmap=cm, vmin=kw["vmin"], vmax=kw["vmax"])
-            a.set_title(title, fontsize=10.5, fontweight="bold")
+            a.set_title(title, fontsize=13, fontweight="bold")
             fig.colorbar(im, ax=a, shrink=.72)
             a.set_xticks([]); a.set_yticks([])
-        ax[r, 0].set_ylabel(state, fontsize=12, fontweight="bold", color=col, labelpad=8)
+        ax[r, 0].set_ylabel(state, fontsize=15, fontweight="bold", color=col, labelpad=8)
 
     fig.suptitle("Observability of the twin — resolution and information gain by sensor network\n"
                  "GWL: wells (point) + dv/v deep band (volume)      "
                  "SM: SNOTEL (point) + dv/v shallow band (volume)",
-                 fontsize=13, fontweight="bold")
+                 fontsize=16, fontweight="bold")
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     ASSETS.mkdir(parents=True, exist_ok=True)
