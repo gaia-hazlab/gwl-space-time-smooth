@@ -27,6 +27,8 @@ import pandas as pd
 import requests
 from pyproj import Transformer
 
+from src.data.download_nwis import _get_with_backoff   # shared retry/backoff for 429/503/timeouts
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -50,8 +52,7 @@ def _fetch_bbox(bbox: str, start: str, api_key: str | None) -> list[dict]:
     with requests.Session() as sess:
         sess.headers.update({"Accept": "application/geo+json"})
         while url is not None:
-            r = sess.get(url, params=p, timeout=(10, 90))
-            r.raise_for_status()
+            r = _get_with_backoff(sess, url, p)   # retries 429/503/timeouts, raises other 4xx/5xx
             j = r.json()
             feats.extend(j.get("features", []))
             url, p = None, None

@@ -301,13 +301,21 @@ def blue_update(prior_cov: NDArray[np.float64], G: NDArray[np.float64], d: Array
     if G.size == 0 or G.shape[0] == 0:
         return mb.copy(), np.diag(B).copy()
     d = np.asarray(d, dtype="float64").ravel()
-    nv = np.broadcast_to(np.asarray(noise_var, dtype="float64"), (G.shape[0],))
+    if d.size != G.shape[0]:                          # guard against silent broadcasting of a bad d
+        raise ValueError(f"d has length {d.size}, expected n_obs={G.shape[0]}")
+    nv = np.asarray(noise_var, dtype="float64")
+    if nv.ndim != 0 and nv.size != G.shape[0]:
+        raise ValueError(f"noise_var must be scalar or length n_obs={G.shape[0]}, got {nv.size}")
+    nv = np.broadcast_to(nv, (G.shape[0],))
     BG = B @ G.T                                     # (n_cell, n_obs)
     M = G @ BG + np.diag(nv)                          # (n_obs, n_obs)
     innov = d - G @ mb                               # data minus model-predicted data
     m_a = mb + BG @ np.linalg.solve(M, innov)
-    var_post = np.diag(B) - np.einsum("ij,ji->i", BG, np.linalg.solve(M, BG.T))
-    return m_a, np.clip(var_post, 0.0, None)
+    var_prior = np.diag(B)
+    reduction = np.einsum("ij,ji->i", BG, np.linalg.solve(M, BG.T))   # diag(BG M^-1 BG^T)
+    reduction = np.clip(reduction, 0.0, var_prior)   # numerical guard: 0 <= reduction <= prior
+    var_post = var_prior - reduction
+    return m_a, var_post
 
 
 def information_gain(var_prior: ArrayLike, var_post: ArrayLike,
