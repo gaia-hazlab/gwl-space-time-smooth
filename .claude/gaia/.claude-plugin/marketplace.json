@@ -1,0 +1,15 @@
+{
+  "name": "gaia",
+  "owner": {
+    "name": "Denolle Group, University of Washington"
+  },
+  "plugins": [
+    {
+      "name": "gaia",
+      "source": "./plugins/gaia",
+      "description": "13 Earth-science research subagents + the /gaia:ground-rules command (Denolle group, roster v0.5).",
+      "version": "0.5.0",
+      "category": "research"
+    }
+  ]
+}

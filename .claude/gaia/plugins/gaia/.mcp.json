@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "literature": {
+      "command": "uv",
+      "args": ["run", "--script", "${CLAUDE_PLUGIN_ROOT}/mcp/servers/gaia_literature.py"]
+    },
+    "seismo": {
+      "command": "uv",
+      "args": ["run", "--script", "${CLAUDE_PLUGIN_ROOT}/mcp/servers/gaia_seismo.py"]
+    }
+  }
+}

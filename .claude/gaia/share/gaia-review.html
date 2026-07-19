@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gaia — Denolle Group Research Agents · Design & Review</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --ink:#e8eaed; --mut:#9aa3b2;
+    --line:#2a2f3a; --accent:#4ea1ff;
+    --kept:#3fb950; --reframed:#4ea1ff; --adapted:#e3a008; --new:#a371f7; --consolidated:#1f9e8f;
+    --keep:#2ea043; --merge:#bb8009; --cutd:#da3633;
+    --green:#3fb950; --blue:#4ea1ff; --purple:#a371f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent)}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 24px 90px}
+  header.top{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:8px}
+  h1{font-size:30px;margin:0 0 4px;letter-spacing:.5px}
+  h1 .brand{color:var(--accent)}
+  .sub{color:var(--mut);margin:6px 0 0}
+  .pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--line);color:var(--mut);vertical-align:middle}
+  h2{font-size:21px;margin:36px 0 12px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  h3{font-size:13px;margin:16px 0 6px;color:var(--mut);text-transform:uppercase;letter-spacing:.7px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+  .muted{color:var(--mut)}
+  ul{margin:8px 0;padding-left:20px} li{margin:4px 0}
+  code{background:#0b0d11;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:13px}
+  blockquote{margin:10px 0;padding:10px 14px;border-left:3px solid var(--accent);background:var(--panel2);border-radius:0 8px 8px 0}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--mut)}
+  .lead{font-size:16px}
+
+  .toolbar{position:sticky;top:0;z-index:5;background:rgba(15,17,21,.93);backdrop-filter:blur(6px);
+    border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:14px 0 22px;display:flex;
+    flex-wrap:wrap;gap:10px;align-items:center}
+  .toolbar input[type=text]{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:7px 10px;font-size:14px}
+  .counts{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .chip{font-size:12px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--mut)}
+  .chip b{color:var(--ink)}
+  button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    border-radius:7px;padding:7px 12px;font-size:13px}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#08213f;font-weight:600}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  @media(max-width:860px){.grid,.cols,.cols3{grid-template-columns:1fr}}
+  .agent{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px}
+  .agent.hidden{display:none}
+  .agent h4{margin:0;font-size:16px}
+  .agent .was{font-size:12px;color:var(--mut)}
+  .badges{display:flex;gap:6px;flex-wrap:wrap}
+  .b{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+  .b.status{color:#08213f}
+  .s-kept{background:var(--kept)} .s-reframed{background:var(--reframed)}
+  .s-adapted{background:var(--adapted)} .s-new{background:var(--new)} .s-consolidated{background:var(--consolidated)}
+  .b.meta{background:var(--panel2);color:var(--mut);border:1px solid var(--line);font-weight:500}
+  .role{font-size:14px;color:var(--ink);font-weight:600}
+  .detail{font-size:13px;color:var(--mut);margin:-2px 0 2px}
+  .decide{display:flex;gap:6px;margin-top:4px}
+  .decide label{flex:1;text-align:center;font-size:12px;padding:6px 4px;border:1px solid var(--line);
+    border-radius:7px;cursor:pointer;color:var(--mut);user-select:none}
+  .decide input{display:none}
+  .decide label.keep:has(input:checked){border-color:var(--keep);background:rgba(46,160,67,.12)}
+  .decide label.keep input:checked ~ span{color:var(--keep);font-weight:700}
+  .decide label.merge:has(input:checked){border-color:var(--merge);background:rgba(187,128,9,.12)}
+  .decide label.merge input:checked ~ span{color:var(--merge);font-weight:700}
+  .decide label.cut:has(input:checked){border-color:var(--cutd);background:rgba(218,54,51,.12)}
+  .decide label.cut input:checked ~ span{color:var(--cutd);font-weight:700}
+  .agent textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:7px;padding:7px 9px;font:13px/1.5 inherit;resize:vertical;min-height:36px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin:6px 0 0}
+
+  .opens{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .open{border-radius:10px;padding:13px;border:1px solid var(--line)}
+  .open.data{border-color:rgba(63,185,80,.5)} .open.soft{border-color:rgba(78,161,255,.5)} .open.know{border-color:rgba(163,113,247,.5)}
+  .open b{display:block;margin-bottom:3px}
+  .prosbox{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .pros h3{color:var(--green)} .cons h3{color:#e3a008}
+
+  .disc{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+  .disc p{margin:0 0 6px}
+
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:20;padding:24px}
+  .modal.open{display:flex}
+  .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:820px;width:100%;padding:18px;max-height:86vh;overflow:auto}
+  .modal textarea{width:100%;min-height:320px;background:#0b0d11;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:12px;font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace}
+  @media print{.toolbar,.decide,.agent textarea,.modal,.no-print{display:none!important}
+    body{background:#fff;color:#000} .card,.agent,.disc,.open{border-color:#ccc}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1><span class="brand">GAIA</span> — Denolle Group Research Agents <span class="pill">roster v0.5 · 13 agents · private</span></h1>
+  <p class="sub lead">A coordinated family of <b>domain-expert agent personas, designed by the scientist</b>, that move a single research project from idea to impact — built on the Olympus governance pattern, renamed to plain research functions, and grounded in the group's three pillars and 8-stage workflow.</p>
+  <p class="sub">This page is both the <b>design rationale</b> and a <b>working review board</b>: read the thinking, then mark each agent <span style="color:var(--keep)">Keep</span> / <span style="color:var(--merge)">Merge</span> / <span style="color:var(--cutd)">Cut</span>, leave notes, and <b>Export feedback</b> for the group.</p>
+</header>
+
+<h2>Why build this</h2>
+<p>A single research project spans literature → ideation → data → method → implementation → results → interpretation → future work. No one person — and no single AI pass — does all eight well. A whole-project skim misses what a focused expert catches, and the maker is a poor judge of their own work. So Gaia splits the work into <b>specialists grounded in the group's own best-practice standards</b>, coordinated by one orchestrator, and <b>checked by an independent auditor and a human</b> at every consequential step. It scales the scientist's scrutiny; it does not replace their judgment.</p>
+<p class="muted">Lineage: distilled from the Olympus multi-agent system (a private postdoc extraction) and the Earth-science audit, then rebuilt around research instead of software delivery. The valuable inheritance is the <b>governance pattern</b> — separation of powers — not the original roster.</p>
+
+<h2>Design philosophy</h2>
+<p class="muted" style="margin-top:0">The scientist sets the <b>Scientific Vision</b>; the agents orchestrate, synthesize, and generate under it. Three Opens feed every agent:</p>
+<div class="opens">
+  <div class="open data"><b style="color:var(--green)">⛁ Open Data</b><span class="muted">Accessible, transparent, reproducible datasets — ingested and QC'd, never silently cleaned.</span></div>
+  <div class="open soft"><b style="color:var(--blue)">&lt;/&gt; Open Software</b><span class="muted">Modular, extensible agents for scientific tasks — swap or improve one without touching the others.</span></div>
+  <div class="open know"><b style="color:var(--purple)">▤ Open Knowledge</b><span class="muted">Scientific literature + numerical methods — the evidence base each persona reasons from.</span></div>
+</div>
+<div class="cols" style="margin-top:14px">
+  <div class="card">
+    <h3>Separation of powers (the rigor foundation)</h3>
+    <ul>
+      <li><b>One hub.</b> The Orchestrator assigns and synthesizes; peers don't call peers.</li>
+      <li><b>An independent Auditor.</b> Read-only; the maker is never the sole judge of the make, and the Orchestrator can't ship past a Critical finding by fiat.</li>
+      <li><b>Human gates.</b> Submission, data/code release, field commitments, large compute — a human decides.</li>
+      <li><b>Design-review first.</b> Plans are audited before resources are spent.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Personas + model tiering</h3>
+    <ul>
+      <li><b>Designed by the scientist.</b> Each persona encodes <i>our</i> rigor standards for its slice — not a generic assistant.</li>
+      <li><b>Right model for the weight.</b> Opus for judgment, Sonnet for building, Haiku for mechanical work — matching the agent to the cost of being wrong.</li>
+      <li><b>Honest by construction.</b> Capture failures, name uncertainty, disclose AI use, never overclaim.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Merged vs. many smaller agents</h2>
+<p class="muted" style="margin-top:0">The recurring tension (the roster has gone 16 → 10 → 13 → 12 → 13). Neither extreme wins. The test: <b>"would two different people own this in a well-run lab — and do they need to check each other?"</b></p>
+<div class="prosbox">
+  <div class="card pros">
+    <h3>↳ Split into smaller agents</h3>
+    <p class="muted" style="margin:0 0 6px"><b>Do it when:</b> independence is required (maker ≠ judge), the cognitive frame differs (derive vs. implement vs. wrangle data), or model tiers differ (mechanical → Haiku).</p>
+    <p style="margin:0"><b style="color:var(--green)">Pros:</b> focused context, cheap per-task tiering, discrete auditable reports, swap one without breaking others.<br>
+    <b style="color:#e3a008">Cons:</b> orchestration overhead, context lost across handoffs, boundary disputes, over-fragmentation (a role too small doesn't earn its keep).</p>
+  </div>
+  <div class="card cons">
+    <h3>⤳ Merge into a broader agent</h3>
+    <p class="muted" style="margin:0 0 6px"><b>Do it when:</b> it's genuinely one person's job — a scientist who both writes and engineers code; testing + debugging by one second-pair-of-eyes; the rigor critiques under one judge.</p>
+    <p style="margin:0"><b style="color:var(--green)">Pros:</b> no handoff friction, one context, simpler mental model, cheaper orchestration.<br>
+    <b style="color:#e3a008">Cons:</b> diluted focus, lost independence, can't tier per sub-task, one opaque step, a regression in one faculty risks the others.</p>
+  </div>
+</div>
+<blockquote><b>Gaia's rule:</b> keep the <b>separation-of-powers</b> splits (design / build / judge) no matter what — that's the rigor foundation. Merge only <i>within</i> a side when the work is one craft and splitting adds only handoffs. So: Coder + RSE merged; Test + Debug merged; UQ/V&V/Novelty critiques merged into the Auditor — but Coder, Auditor, and Debugger & Tester stay separate, always.</blockquote>
+
+<h2>The 8-stage research workflow</h2>
+<p class="muted" style="margin-top:0">Every project moves through these stages; here are the lead agents at each. Cross-cutting throughout: <b>Orchestrator</b> (coordination), <b>Auditor</b> (review), <b>Lab Notebook</b> (chronicle), <b>Provenance Keeper</b> (versioning + AI-use logging).</p>
+<table id="workflow"><thead><tr><th style="width:34px">#</th><th>Stage</th><th>Lead agent(s)</th></tr></thead><tbody></tbody></table>
+
+<h2>Roster — 13 agents <span class="muted" style="font-size:13px;font-weight:400">(mark Keep / Merge / Cut)</span></h2>
+<div class="toolbar no-print">
+  <input type="text" id="reviewer" placeholder="Your name (for the export)">
+  <button data-filter="all" class="primary">All</button>
+  <button data-filter="new">New</button>
+  <button data-filter="consolidated">Consolidated</button>
+  <button data-filter="kept">Kept</button>
+  <button data-filter="reframed">Reframed</button>
+  <button data-filter="adapted">Adapted</button>
+  <button id="exportBtn" style="margin-left:6px">⬇ Export feedback</button>
+  <button id="resetBtn">Reset</button>
+  <div class="counts" id="counts"></div>
+</div>
+<div class="legend">
+  <span><b class="b status s-new" style="padding:1px 7px">new</b> added in review</span>
+  <span><b class="b status s-consolidated" style="padding:1px 7px">consolidated</b> absorbed merged roles</span>
+  <span><b class="b status s-kept" style="padding:1px 7px">kept</b> transfers as-is</span>
+  <span><b class="b status s-reframed" style="padding:1px 7px">reframed</b> repointed at science</span>
+  <span><b class="b status s-adapted" style="padding:1px 7px">adapted</b> policy fix applied</span>
+</div>
+<div class="grid" id="roster" style="margin-top:12px"></div>
+
+<h2>Discussion points</h2>
+<div id="discussion"></div>
+
+<div class="modal" id="modal">
+  <div class="box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b>Feedback export (Markdown)</b>
+      <div><button id="copyBtn" class="primary">Copy</button> <button id="dlBtn">Download .md</button> <button id="closeBtn">Close</button></div>
+    </div>
+    <p class="muted" style="margin:0 0 8px">Paste into the group thread or a shared doc. Your decisions &amp; notes are saved in this browser automatically.</p>
+    <textarea id="exportText" readonly></textarea>
+  </div>
+</div>
+
+</div>
+
+<script>
+const AGENTS = [
+  {id:"orchestrator",name:"Orchestrator",was:"Zeus",status:"kept",model:"opus",pillars:"all",stage:"all",
+   role:"The research project lead — decompose, assign, synthesize.",
+   detail:"Breaks a research goal into bounded tasks, assigns each to the specialist whose craft fits it at the right model tier, reads what comes back, and decides the next move — narrating the command so a human can course-correct. Coordinates; never does the specialists' work, and stops at the human gate for anything consequential or outward-facing."},
+  {id:"auditor",name:"Auditor",was:"Atlas + UQ + V&V + Novelty",status:"consolidated",model:"opus",pillars:"all",stage:"all (review)",
+   role:"Read-only scientific-rigor red-team — the heart of the rigor foundation.",
+   detail:"Steelmans a claim, then pressure-tests logic, statistics & uncertainty, numerical soundness (V&V), and falsifiability/novelty — pairing every flaw with the single decisive test that settles it. Stays read-only: it demands the evidence and names the test, the Coder runs it, so the judge never becomes the maker. The Orchestrator can't ship past a Critical finding by fiat."},
+  {id:"literature-scout",name:"Literature Scout",was:"Prometheus",status:"reframed",model:"opus",pillars:"all",stage:"1,2",
+   role:"Surveys prior art, synthesizes with per-finding confidence.",
+   detail:"Favors primary sources, reports confidence per finding, never overclaims from the absence of results. Promoted to Opus and paired with the Auditor: it finds what is already known, and the Auditor judges whether a claim is genuinely novel or merely unrecognized."},
+  {id:"study-designer",name:"Study Designer",was:"Athena + Experimentalist",status:"consolidated",model:"opus",pillars:"all",stage:"2,4",
+   role:"Turns a question into a phased plan — computational and physical.",
+   detail:"Hypotheses, variables and controls, sampling and power, instruments and calibration, field deployment and metadata, compute budget, milestones with done-conditions, and the permit/safety items for the human gate. Read-only; hands the plan to the Auditor before a field season or a large run is spent."},
+  {id:"theoretician",name:"Theoretician / Modeler",was:"— (round 2)",status:"new",model:"opus",pillars:"B (A,C theory)",stage:"2,4",
+   role:"Owns the math and the model.",
+   detail:"Derives the governing equations and their assumptions, nondimensionalizes, does scaling and dimensional analysis, chooses the numerical method, and produces analytical / limiting-case solutions that double as the Auditor's V&V benchmarks. Read-only reasoning with symbolic scratch — upstream of the Coder, who implements what it specifies."},
+  {id:"data-engineer",name:"Data Engineer",was:"— (round 2)",status:"new",model:"sonnet",pillars:"C",stage:"3,5",
+   role:"Turns raw, messy geophysical data into clean, reproducible datasets.",
+   detail:"Parses real formats and metadata (miniSEED/StationXML/FDSN, SEG-Y, NetCDF/HDF5), flags gaps, clock errors, glitches and instrument-response issues honestly instead of smoothing them away, and builds rerunnable data pipelines with full provenance. For assimilation, sets up and checks observation operators and error covariances."},
+  {id:"scientific-coder",name:"Scientific Coder & Software Engineer",was:"Hephaestus + RSE",status:"consolidated",model:"opus",pillars:"B,C",stage:"4,5,6",
+   role:"Writes the science AND engineers it well.",
+   detail:"Implements the Theoretician's method into correct code, then hardens it — architecture, performance/HPC optimization, packaging, CI, reproducible environments — behavior-preserving (proves outputs match before/after; escalates any change that would alter results). Also runs the V&V/UQ analyses the Auditor demands, but never declares them sufficient — that judgment stays with the Auditor."},
+  {id:"debugger",name:"Debugger & Tester",was:"Theseus + Cassandra",status:"consolidated",model:"opus",pillars:"B,C",stage:"5,6",
+   role:"The independent second pair of eyes — deliberately not the Coder.",
+   detail:"Writes tests that can fail and hunts the unhappy path (testing/QA), and traces failures to their root cause and fixes them at the source (debugging). Distinguishes a bug from plausible-but-wrong physics — routing the latter to the Auditor rather than 'fixing' correct code to match a wrong expectation."},
+  {id:"run-monitor",name:"Run Monitor",was:"Argus (runtime only)",status:"reframed",model:"opus",pillars:"B,C",stage:"5,6",
+   role:"Watches long HPC/simulation runs and warns before the cliff.",
+   detail:"Spawns a lightweight monitor per signal — liveness/crash, stall/hang, memory (OOM prevention), disk, scheduler walltime, run prerequisites — with thresholds set to warn before failure, not report it after. Escalates rather than silently changing a live run; acts only on explicit standing instruction."},
+  {id:"research-impact",name:"Research Impact",was:"— (round 4)",status:"new",model:"opus",pillars:"all",stage:"7,8",
+   role:"Scopes the “so what” — honestly — across four axes.",
+   detail:"Reads the results and asks what they change for society, for fundamental Earth science (geodynamics, earth dynamics), for hazard mitigation, and for resource management. Separates demonstrated impact from aspiration, names the concrete pathway from result to effect, grounds claims with the Literature Scout, and hands overreach to the Auditor. Feeds interpretation, broader-impacts statements, and future-work scoping."},
+  {id:"lab-notebook",name:"Lab Notebook",was:"Calliope",status:"reframed",model:"sonnet",pillars:"A,B,C",stage:"5–7 (+ throughout)",
+   role:"The electronic lab notebook and chronicle, in plain markdown.",
+   detail:"Keeps daily, method, and results notes — capturing failures honestly, recording the method alongside every result, dating everything, never overwriting history — and writes the human-facing documentation. A result with no recorded method is a rumor; this is where the group's work stays reproducible as it happens."},
+  {id:"provenance-keeper",name:"Provenance Keeper",was:"Mnemosyne",status:"adapted",model:"sonnet",pillars:"B,C",stage:"throughout",
+   role:"Commits work, records provenance, and ALWAYS logs AI use.",
+   detail:"Versions the work with honest, legible commits and captures the provenance that makes a result reproducible — environment, seeds, data DOIs. Identity is configurable per group member, never hardcoded, and every AI-assisted record discloses that assistance: the inverse of hiding the assistant, consistent with the group's disclosure policy."},
+  {id:"courier",name:"Courier",was:"Hermes",status:"kept",model:"haiku",pillars:"all",stage:"support",
+   role:"Fast, well-specified mechanical work on the cheap tier.",
+   detail:"Renames, moves, find-and-replace, formatting, bulk edits across many files — work where what to do is already decided. Running on Haiku keeps cheap errands off the expensive agents; the moment a task needs real judgment, it hands it up the chain."},
+];
+
+const WORKFLOW = [
+  ["1","Literature Review","Literature Scout (+ Auditor for novelty)"],
+  ["2","Ideation","Theoretician, Study Designer, Auditor"],
+  ["3","Data Pipeline","Data Engineer (+ Scientific Coder)"],
+  ["4","Method Development","Theoretician, Study Designer"],
+  ["5","Implementation","Scientific Coder (+ Debugger & Tester, Run Monitor, Courier)"],
+  ["6","Results","Scientific Coder, Run Monitor, Debugger & Tester"],
+  ["7","Interpretation","Auditor, Research Impact, Lab Notebook"],
+  ["8","Future Work Scoping","Research Impact, Study Designer, Auditor"],
+];
+
+const DISCUSSION = [
+  {id:"r5d1",q:"<b>Research Impact</b> — is the four-axis framing (society / fundamental science / hazard / resources) right, or should it split (e.g. scientific impact vs. societal/applied impact as separate agents)?"},
+  {id:"r5d2",q:"The <b>Scientific Coder</b> now does both the science AND the software engineering (RSE merged). Does one agent carry that breadth, or does it dilute either side?"},
+  {id:"r5d3",q:"Is the <b>Theoretician / Modeler</b> the right shape — derivation + model + method choice + analytical benchmarks in one — or should theory and modeling split?"},
+  {id:"r5d4",q:"Reproducibility ownership: <b>Provenance Keeper / Lab Notebook</b> vs. the pre-submission <code>S-RP</code> subagent — who owns it cleanly?"},
+  {id:"r5d5",q:"Anything still missing at 13 agents? A pillar or workflow stage under-covered, or a role we'd actually use that isn't here."},
+];
+
+const KEY="gaia-review-v5";
+const store = JSON.parse(localStorage.getItem(KEY) || "{}");
+function save(){localStorage.setItem(KEY, JSON.stringify(store));}
+
+function renderWorkflow(){
+  const tb=document.querySelector("#workflow tbody"); tb.innerHTML="";
+  WORKFLOW.forEach(r=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td><b>${r[0]}</b></td><td>${r[1]}</td><td class="muted">${r[2]}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function renderRoster(){
+  const el=document.getElementById("roster"); el.innerHTML="";
+  AGENTS.forEach(a=>{
+    const d=store[a.id]||{}; const dec=d.decision||""; const note=d.note||"";
+    const div=document.createElement("div");
+    div.className="agent"; div.dataset.status=a.status;
+    div.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+        <h4>${a.name}</h4><span class="was">was ${a.was}</span>
+      </div>
+      <div class="badges">
+        <span class="b status s-${a.status}">${a.status}</span>
+        <span class="b meta">${a.model}</span>
+        <span class="b meta">pillars ${a.pillars}</span>
+        <span class="b meta">stage ${a.stage}</span>
+      </div>
+      <div class="role">${a.role}</div>
+      <div class="detail">${a.detail}</div>
+      <div class="decide no-print">
+        <label class="keep"><input type="radio" name="dec-${a.id}" value="keep" ${dec==="keep"?"checked":""}><span>✓ Keep</span></label>
+        <label class="merge"><input type="radio" name="dec-${a.id}" value="merge" ${dec==="merge"?"checked":""}><span>⤳ Merge</span></label>
+        <label class="cut"><input type="radio" name="dec-${a.id}" value="cut" ${dec==="cut"?"checked":""}><span>✕ Cut</span></label>
+      </div>
+      <textarea class="no-print" placeholder="Notes on ${a.name}…">${note}</textarea>`;
+    div.querySelectorAll(`input[name="dec-${a.id}"]`).forEach(r=>{
+      r.addEventListener("change",()=>{store[a.id]=Object.assign({},store[a.id],{decision:r.value});save();updateCounts();});
+    });
+    div.querySelector("textarea").addEventListener("input",e=>{
+      store[a.id]=Object.assign({},store[a.id],{note:e.target.value});save();
+    });
+    el.appendChild(div);
+  });
+}
+
+function renderDiscussion(){
+  const el=document.getElementById("discussion"); el.innerHTML="";
+  DISCUSSION.forEach(d=>{
+    const v=(store[d.id]||{}).note||"";
+    const div=document.createElement("div"); div.className="disc";
+    div.innerHTML=`<p>${d.q}</p><textarea class="no-print" placeholder="Group thoughts…">${v}</textarea>`;
+    div.querySelector("textarea").addEventListener("input",e=>{
+      store[d.id]=Object.assign({},store[d.id],{note:e.target.value});save();
+    });
+    el.appendChild(div);
+  });
+}
+
+function updateCounts(){
+  let keep=0,merge=0,cut=0,und=0;
+  AGENTS.forEach(a=>{const dec=(store[a.id]||{}).decision; if(dec==="keep")keep++;else if(dec==="merge")merge++;else if(dec==="cut")cut++;else und++;});
+  document.getElementById("counts").innerHTML=
+    `<span class="chip" style="border-color:var(--keep)">Keep <b>${keep}</b></span>
+     <span class="chip" style="border-color:var(--merge)">Merge <b>${merge}</b></span>
+     <span class="chip" style="border-color:var(--cutd)">Cut <b>${cut}</b></span>
+     <span class="chip">Undecided <b>${und}</b></span>`;
+}
+
+document.querySelectorAll("[data-filter]").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("[data-filter]").forEach(x=>x.classList.remove("primary"));
+    b.classList.add("primary");
+    const f=b.dataset.filter;
+    document.querySelectorAll(".agent").forEach(c=>{
+      c.classList.toggle("hidden", f!=="all" && c.dataset.status!==f);
+    });
+  });
+});
+
+function buildExport(){
+  const who=document.getElementById("reviewer").value.trim()||"(unnamed)";
+  let out=`# Gaia roster review — feedback (v0.5, 13 agents)\n\nReviewer: ${who}\n\n## Agent decisions\n\n`;
+  AGENTS.forEach(a=>{
+    const d=store[a.id]||{}; const dec=d.decision?d.decision.toUpperCase():"—";
+    out+=`- **${a.name}** (${a.status}, ${a.model}) → **${dec}**`;
+    if(d.note) out+=`\n    - ${d.note.replace(/\n/g," ")}`;
+    out+="\n";
+  });
+  out+=`\n## Discussion points\n\n`;
+  DISCUSSION.forEach((d,i)=>{
+    const v=(store[d.id]||{}).note;
+    out+=`${i+1}. ${d.q.replace(/<[^>]+>/g,"")}\n`;
+    if(v) out+=`   → ${v.replace(/\n/g," ")}\n`;
+  });
+  return out;
+}
+
+const modal=document.getElementById("modal");
+document.getElementById("exportBtn").addEventListener("click",()=>{
+  document.getElementById("exportText").value=buildExport(); modal.classList.add("open");
+});
+document.getElementById("closeBtn").addEventListener("click",()=>modal.classList.remove("open"));
+modal.addEventListener("click",e=>{if(e.target===modal)modal.classList.remove("open");});
+document.getElementById("copyBtn").addEventListener("click",()=>{
+  const t=document.getElementById("exportText"); t.select(); document.execCommand("copy");
+  document.getElementById("copyBtn").textContent="Copied ✓"; setTimeout(()=>document.getElementById("copyBtn").textContent="Copy",1400);
+});
+document.getElementById("dlBtn").addEventListener("click",()=>{
+  const blob=new Blob([buildExport()],{type:"text/markdown"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="gaia-review-feedback.md"; a.click();
+});
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  if(confirm("Clear all your decisions and notes in this browser?")){localStorage.removeItem(KEY);for(const k in store)delete store[k];renderRoster();renderDiscussion();updateCounts();}
+});
+
+renderWorkflow(); renderRoster(); renderDiscussion(); updateCounts();
+</script>
+</body>
+</html>

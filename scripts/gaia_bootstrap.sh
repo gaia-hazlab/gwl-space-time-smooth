@@ -12,9 +12,11 @@ export PATH="$HOME/.pixi/bin:$PATH"
 
 echo "==> gh CLI"
 if ! command -v gh >/dev/null; then
+  sudo install -d -m 0755 /usr/share/keyrings
   curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+    | sudo tee /usr/share/keyrings/githubcli-archive-keyring.gpg > /dev/null
   sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+  sudo install -d -m 0755 /etc/apt/sources.list.d
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
     | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
   sudo apt update && sudo apt install gh -y
@@ -32,7 +34,7 @@ echo "       export ANTHROPIC_API_KEY=\"sk-ant-...\""
 echo "==> Quarto"
 if ! command -v quarto >/dev/null; then
   curl -fsSL https://quarto.org/download/latest/quarto-linux-amd64.deb -o /tmp/quarto.deb
-  sudo dpkg -i /tmp/quarto.deb
+  sudo dpkg -i /tmp/quarto.deb || sudo apt-get install -f -y   # pull in missing deps, then retry
 fi
 
 echo "==> Clone + build the pinned pixi env"

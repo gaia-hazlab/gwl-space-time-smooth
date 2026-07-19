@@ -1,0 +1,17 @@
+{
+  "name": "gaia",
+  "version": "0.5.0",
+  "description": "Denolle-group Gaia research agents — a coordinated family of 13 domain-expert subagents for the Earth-science research lifecycle (orchestrator, auditor, theoretician, scientific coder, data engineer, run monitor, research impact, and more), plus the /gaia:ground-rules command that enforces rigorous, human-gated, AI-disclosed operation.",
+  "author": {
+    "name": "Denolle Group, University of Washington"
+  },
+  "homepage": "https://github.com/mdenolle",
+  "keywords": [
+    "earth-science",
+    "geophysics",
+    "seismology",
+    "research-agents",
+    "subagents",
+    "scientific-rigor"
+  ]
+}

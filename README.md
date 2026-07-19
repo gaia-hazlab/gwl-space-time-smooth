@@ -198,6 +198,40 @@ committed. Only `download_log.json`, `MANIFEST.md`, and `src/` scripts are track
 
 ## Reproducing
 
+### 0. Starting from scratch (a fresh machine)
+
+If you're setting up on a brand-new box (laptop or remote server) with nothing installed yet,
+`scripts/gaia_bootstrap.sh` does it in one shot: [pixi](https://prefix.dev/docs/pixi/) (the pinned
+env, matching CI), the [`gh` CLI](https://cli.github.com/), the
+[Claude Code CLI](https://docs.claude.com/en/docs/claude-code), [Quarto](https://quarto.org/), a
+clone of this repo, and the `gaia` agent plugin (`.claude/gaia/`).
+
+```bash
+export REPO_URL="git@github.com:gaia-hazlab/gwl-space-time-smooth.git"   # or your fork
+export REPO_DIR="$HOME/gwl-space-time-smooth"                            # where to clone it
+bash scripts/gaia_bootstrap.sh
+```
+
+Notes:
+
+- It's written for **Debian/Ubuntu** (`apt`, `dpkg`) and expects `sudo`. On macOS, skip straight to
+  [step 1](#1-environment) below — pixi's installer is cross-platform, and `gh`/Quarto/Claude Code are
+  a `brew install gh`, a [Quarto download](https://quarto.org/download/), and
+  `npm install -g @anthropic-ai/claude-code` respectively.
+- Re-running it is safe — every step is skipped if already installed.
+- It deliberately does **not** set up two credentials (never put these in the repo):
+  ```bash
+  echo "$GH_TOKEN" | gh auth login --with-token   # needs repo + workflow scopes
+  export ANTHROPIC_API_KEY="sk-ant-..."            # shell profile or a systemd EnvironmentFile
+  ```
+  If the repo is cloned over SSH (the default `REPO_URL` above), the box also needs a private key
+  that can push to it — copy one over, or add a fresh deploy key under repo → Settings → Deploy keys.
+- Sanity-check before doing anything real: `ssh -T git@github.com`, `gh auth status`, and
+  `git -C "$REPO_DIR" push --dry-run origin main`.
+- This is also the prerequisite for the **unattended issue-queue automation** — see
+  [`docs/gaia-automation.md`](docs/gaia-automation.md) if you want the gaia agents resolving the
+  open-issue backlog on a schedule rather than interactively.
+
 ### 1. Environment
 
 This project uses [pixi](https://prefix.dev/docs/pixi/) for reproducible environments.
