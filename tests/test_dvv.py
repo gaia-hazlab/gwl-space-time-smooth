@@ -8,6 +8,7 @@ layer is always exercised.
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from scipy import signal
 
 from src.models import dvv
@@ -91,8 +92,7 @@ def test_register_inter_is_safe():
 
 def test_synthetic_depth_time_low_slow_high_fast():
     if not _codameter_available():
-        print("skip: codameter/disba not installed")
-        return
+        pytest.skip("codameter/disba not installed")
     from codameter.uq_depth import band_sensitivity_matrix
     prof = dvv.pnw_velocity_profile(400.0)
     fc = np.sqrt(np.asarray(dvv.DEFAULT_BANDS)[:, 0] * np.asarray(dvv.DEFAULT_BANDS)[:, 1])
@@ -114,19 +114,21 @@ def test_synthetic_depth_time_low_slow_high_fast():
 
 
 def _codameter_available():
+    # Only a genuine "not installed" (ImportError / ModuleNotFoundError) counts as a skip. Any OTHER
+    # exception during import means the package is present but BROKEN -- let it propagate and fail the
+    # run, rather than masking a real problem as a green SKIP.
     try:
         import codameter  # noqa: F401
         from codameter.kernels import disba_wrapper  # noqa: F401
         import disba  # noqa: F401
         return True
-    except Exception:
+    except ImportError:
         return False
 
 
 def test_processing_ensemble_covariance_exceeds_weaver_floor():
     if not _codameter_available():
-        print("skip: codameter/disba not installed")
-        return
+        pytest.skip("codameter/disba not installed")
     lags, ref, series, dvv_true, t_days, sr = _synthetic()
     ens = dvv.processing_ensemble_dvv(series, lags, sr, times_days=t_days)
     fc = sorted(ens)[2]
@@ -140,8 +142,7 @@ def test_processing_ensemble_covariance_exceeds_weaver_floor():
 
 def test_invert_states_from_bands_carries_measurement_error():
     if not _codameter_available():
-        print("skip: codameter/disba not installed")
-        return
+        pytest.skip("codameter/disba not installed")
     from codameter.uq_depth import band_sensitivity_matrix
     prof = dvv.pnw_velocity_profile(400.0)
     fc = np.sqrt(np.asarray(dvv.DEFAULT_BANDS)[:, 0] * np.asarray(dvv.DEFAULT_BANDS)[:, 1])
@@ -160,8 +161,7 @@ def test_invert_states_from_bands_carries_measurement_error():
 
 def test_depth_separation_orders_and_splits_at_water_table():
     if not _codameter_available():
-        print("skip: codameter/disba not installed")
-        return
+        pytest.skip("codameter/disba not installed")
     lags, ref, series, dvv_true, t_days, sr = _synthetic()
     ens = dvv.processing_ensemble_dvv(series, lags, sr, times_days=t_days)
     prof = dvv.pnw_velocity_profile(vs30_ms=400.0)
@@ -174,14 +174,20 @@ def test_depth_separation_orders_and_splits_at_water_table():
 
 
 if __name__ == "__main__":
-    test_peak_depth_relation()
-    test_cross_correlate_shapes_and_symmetry()
-    test_stretching_recovers_known_dvv()
-    test_dvv_to_state_conversions_and_signs()
-    test_top_layer_mean_and_vs30_conversion()
-    test_register_inter_is_safe()
-    test_synthetic_depth_time_low_slow_high_fast()
-    test_processing_ensemble_covariance_exceeds_weaver_floor()
-    test_invert_states_from_bands_carries_measurement_error()
-    test_depth_separation_orders_and_splits_at_water_table()
-    print("all dv/v tests passed")
+    _tests = [
+        test_peak_depth_relation, test_cross_correlate_shapes_and_symmetry,
+        test_stretching_recovers_known_dvv, test_dvv_to_state_conversions_and_signs,
+        test_top_layer_mean_and_vs30_conversion, test_register_inter_is_safe,
+        test_synthetic_depth_time_low_slow_high_fast,
+        test_processing_ensemble_covariance_exceeds_weaver_floor,
+        test_invert_states_from_bands_carries_measurement_error,
+        test_depth_separation_orders_and_splits_at_water_table,
+    ]
+    _skipped = 0
+    for _fn in _tests:
+        try:
+            _fn()
+        except pytest.skip.Exception as _e:            # a REAL, visible skip (not a silent pass)
+            _skipped += 1
+            print(f"SKIP {_fn.__name__}: {_e}")
+    print(f"all dv/v tests passed ({_skipped} skipped)")
