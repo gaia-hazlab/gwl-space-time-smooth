@@ -114,12 +114,15 @@ def test_synthetic_depth_time_low_slow_high_fast():
 
 
 def _codameter_available():
+    # Only a genuine "not installed" (ImportError / ModuleNotFoundError) counts as a skip. Any OTHER
+    # exception during import means the package is present but BROKEN -- let it propagate and fail the
+    # run, rather than masking a real problem as a green SKIP.
     try:
         import codameter  # noqa: F401
         from codameter.kernels import disba_wrapper  # noqa: F401
         import disba  # noqa: F401
         return True
-    except Exception:
+    except ImportError:
         return False
 
 
