@@ -33,6 +33,7 @@ book:
 
 format:
   pdf:
+    output-file: GAIA-Digital-Twin-of-Soil.pdf
     documentclass: report
     toc: true
     toc-depth: 3
