@@ -101,7 +101,7 @@ merra2 = "python -m src.data.fetch_merra2 --output data/processed/merra2_soil_mo
 merra2-validate = "python notebooks/validate_merra2.py"
 # Soil-moisture state: SOLUS→Saxton-Rawls static envelope × Thornthwaite-Mather dynamic bucket.
 soil-moisture = "python -m src.models.soil_moisture --output-dir data/processed"
-soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"  # SCAFFOLD (#19)
+soil-mechanics = "python -m src.models.soil_mechanics --slope data/processed/terrain_slope_domain_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"  # landslide infinite-slope FS (#128)
 # 90 m time-varying products: GWL + θ GIFs and the tracked downscaling uncertainty budget.
 products-90m = "python old/notebooks/make_products_90m.py"
 # Forcing-ensemble (TerraClimate vs PRISM) + demonstrative dv/v coupling figures.
