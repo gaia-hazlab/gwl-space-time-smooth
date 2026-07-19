@@ -1,6 +1,6 @@
 # Gaia vs. Olympus, and how to evaluate the agents
 
-*Private working note (inside the gitignored `research/gaia/`). Part 1 compares the
+*Working note, committed under `.claude/gaia/` in this repository. Part 1 compares the
 Gaia research framework with the Olympus (Opus-as-Fable) system it derives from. Part
 2 gives directions for building a golden evaluation dataset. Date: 2026-06-29.*
 

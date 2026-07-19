@@ -18,12 +18,13 @@ can be installed and launched from the Claude CLI. Ships:
 
 ## Install (local marketplace)
 
-This plugin lives inside the private `research/gaia/` folder, which doubles as a
-single-plugin **marketplace** (`.claude-plugin/marketplace.json` at its root). From a
-Claude Code session:
+In this repository the plugin lives at `.claude/gaia/`, which doubles as a single-plugin
+**marketplace** (`.claude-plugin/marketplace.json` at its root) — this is the path
+`scripts/gaia_bootstrap.sh` registers. From a Claude Code session, with the current
+working directory at the repo root:
 
 ```
-/plugin marketplace add /Users/marinedenolle/GitHub/academic-practice-agents/research/gaia
+/plugin marketplace add ./.claude/gaia
 /plugin install gaia@gaia
 ```
 
@@ -33,18 +34,17 @@ after editing, `/plugin marketplace update gaia` (or re-add the path).
 **Quick dev test (no marketplace):** launch a session with the plugin loaded directly —
 
 ```
-claude --plugin-dir /Users/marinedenolle/GitHub/academic-practice-agents/research/gaia/plugins/gaia
+claude --plugin-dir ./.claude/gaia/plugins/gaia
 ```
 
 and validate the manifest with `claude plugin validate .` from inside `plugins/gaia/`.
 
 ## Source of truth
 
-The canonical agent designs live one level up at `research/gaia/*.md`; the copies in
+The canonical agent designs live one level up at `.claude/gaia/*.md`; the copies in
 `agents/` here are the packaged distributable. Edit the parent files, then re-copy into
 `agents/` (or re-run the packaging step) before publishing a new plugin version. The
 roster rationale, evaluation design, and review board are in the parent folder
 (`README.md`, `EVALUATION.md`, `gaia-review.html`).
 
-**Private** — internal Denolle-group material, roster v0.5 under review. Not for public
-distribution yet.
+Roster v0.5, Denolle-group internal material.

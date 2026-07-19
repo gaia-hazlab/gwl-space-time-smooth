@@ -4,9 +4,9 @@
 Olympus governance pattern but renamed to plain research functions and rebuilt
 around the group's three research pillars and the single-project research cycle.*
 
-**Status:** roster v0.5, private — **13 agents**. Derived from the Olympus design
-(a private postdoc extraction; see `../Olympus/`) and the Earth-science audit
-(`../Olympus/AUDIT-earth-science.md`). Round 1 leaned the 16-agent candidate set to 10;
+**Status:** roster v0.5 — **13 agents**. Derived from the Olympus design (a private
+postdoc extraction, developed outside this repository) and an Earth-science audit of
+it. Round 1 leaned the 16-agent candidate set to 10;
 round 2 added the Theoretician/Modeler, Research Software Engineer, and Data Engineer
 (→13); round 3 merged the RSE into the Scientific Coder (→12); round 4 added the
 **Research Impact** agent (→13). See the review-round notes below.
