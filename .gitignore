@@ -75,3 +75,9 @@ cache/
 # Quarto multi-doc site build output
 docs/twin/_site/
 docs/twin/.quarto/
+
+# PDF-book build intermediates (the committed output is docs/GAIA-Digital-Twin-of-Soil.pdf)
+docs/twin-pdf/_pdf/
+docs/twin-pdf/.quarto/
+docs/twin-pdf/*.quarto_ipynb
+docs/twin-pdf/_freeze/
