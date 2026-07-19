@@ -1,0 +1,54 @@
+# A PDF-only "book" rendering of the docs/twin website, so the whole thing can be read (and cited)
+# as a single file. Chapters are NOT duplicated here: every page below is the SAME .qmd Quarto renders
+# for the website, referenced by relative path from ../twin/ (only index.qmd is local, and it just
+# {{< include >}}s ../twin/index.qmd -- a book requires its own index.qmd for the home page, but the
+# content itself has one source of truth). Render with `pixi run book-pdf`.
+project:
+  type: book
+  output-dir: _pdf
+
+book:
+  title: "GAIA Digital Twin of Soil"
+  subtitle: "A coupled 90 m soil reanalysis for the Pacific Northwest — GAIA HazLab"
+  chapters:
+    - index.qmd
+    - part: "The twin"
+      chapters:
+        - ../twin/00-structural-model.qmd
+        - ../twin/01-input-data.qmd
+        - ../twin/02b-cyberinfrastructure.qmd
+        - ../twin/03a-physics-hydrology.qmd
+        - ../twin/03b-physics-hydromechanics.qmd
+        - ../twin/03c-memory-disturbance.qmd
+        - ../twin/04-assimilation.qmd
+        - ../twin/05-state-evaluation.qmd
+        - ../twin/06-forecast.qmd
+        - ../twin/07-hazard-integration.qmd
+    - part: "Reference"
+      chapters:
+        - ../twin/02-evaluation-data.qmd
+    - part: "Appendices"
+      chapters:
+        - ../twin/A-compute-and-deployment.qmd
+
+format:
+  pdf:
+    output-file: GAIA-Digital-Twin-of-Soil.pdf
+    documentclass: report
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    fig-format: png
+    fig-dpi: 150
+    colorlinks: true
+
+bibliography: ../references.bib
+csl: https://raw.githubusercontent.com/citation-style-language/styles/master/american-geophysical-union.csl
+
+execute:
+  echo: false
+  warning: false
+  message: false
+  freeze: auto
+
+jupyter: python3

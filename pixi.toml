@@ -169,6 +169,12 @@ landlab-export = "python -m src.io.landlab_export"
 landlab-export-figure = "python old/notebooks/make_landlab_export_figure.py"
 # Demo: static figures + GIFs + provenance, assembled into the self-contained Quarto page.
 demo = "python old/notebooks/demo_gwl_sm.py && python old/notebooks/make_products_90m.py && python old/notebooks/make_ensemble_dvv_figures.py && python old/notebooks/build_demo_qmd.py && quarto render old/docs/gwl_soil_moisture_demo.qmd --to html"
+# One PDF of the whole docs/twin book (needs a LaTeX install, e.g. `quarto install tinytex`).
+# docs/twin-pdf/ holds no chapter content of its own -- every chapter is the SAME .qmd the website
+# renders, referenced by relative path, so there is one source of truth. Requires the docs/twin
+# GIF figure (issue: PDF can't embed an animated GIF) to be wrapped in a when-format="html" guard,
+# which it already is (`06-forecast.qmd`).
+book-pdf = "quarto render docs/twin-pdf --to pdf && cp docs/twin-pdf/_pdf/GAIA-Digital-Twin-of-Soil.pdf docs/GAIA-Digital-Twin-of-Soil.pdf"
 # === Legacy (comparison only) ===
 baseline-legacy = "python -m src.models.interpolate_baseline"
 anomalies-legacy = "python -m src.models.interpolate_anomalies"
