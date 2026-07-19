@@ -37,6 +37,13 @@ from src.models.dvv_coupling import (
 
 WETTING_RATIO = 2.0        # alpha_w / alpha_d: wetting air-entry scale (Kool-Parker default ~2)
 _SE_LO, _SE_HI = 1e-3, 1.0 - 1e-6
+_START = ("drying", "wetting")
+
+
+def _check_start(start: str) -> None:
+    """Fail fast on an invalid initial limb, rather than silently treating anything as wetting."""
+    if start not in _START:
+        raise ValueError(f"start must be one of {_START}, got {start!r}")
 
 
 def vg_suction(se: ArrayLike, alpha: float, n: float) -> NDArray[np.float64]:
@@ -81,6 +88,7 @@ def hysteretic_suction(se_path: ArrayLike, alpha_d: float, n: float,
     hd = lambda s: vg_suction(s, alpha_d, n)          # noqa: E731  drying bound (upper suction)
     hw = lambda s: vg_suction(s, alpha_w, n)          # noqa: E731  wetting bound (lower suction)
 
+    _check_start(start)
     h = np.empty_like(se)
     states: list[ScanState] = []
     cur = "d" if start == "drying" else "w"
@@ -129,6 +137,7 @@ def hysteretic_suction_field(se: ArrayLike, alpha_d: ArrayLike, n: ArrayLike,
     hw = lambda s: vg_suction(s, alpha_w, n)          # noqa: E731
 
     h = np.empty_like(se)
+    _check_start(start)
     cur = np.full(se.shape[1:], 1 if start == "drying" else -1, dtype="int8")   # +1 dry, -1 wet
     se_r = se[0].copy()
     h_r = np.where(cur == 1, hd(se[0]), hw(se[0]))
@@ -154,9 +163,12 @@ def vadose_dvv_hysteretic(theta_traj: ArrayLike, env: CouplingEnvelope,
                           ) -> NDArray[np.float64]:
     """Vadose-band dv/v along a moisture trajectory, WITH hysteresis memory.
 
-    Drop-in replacement for the ``dvv_high`` that ``dvv_coupling.forward_dvv`` computes single-valued:
-    ``dvv_high[t] = (V_s^{hyst}(t) - V_s^{hyst}(0)) / V_s^{hyst}(0)``, where the velocity is evaluated on
-    the hysteretic suction carried along the integrated trajectory. ``theta_traj`` is ``(T, ...)``.
+    Replaces the ``dvv_high`` that ``dvv_coupling.forward_dvv`` computes single-valued, but note the
+    **reference-state convention differs**: here it is *implicitly* ``theta_traj[0]`` (there is no
+    ``theta_ref`` argument), so ``dvv_high[t] = (V_s^{hyst}(t) - V_s^{hyst}(0)) / V_s^{hyst}(0)`` with
+    ``V_s^{hyst}(0)`` evaluated at the first frame. ``forward_dvv`` instead takes ``theta_ref``
+    explicitly. To swap this in, the caller **must place the t=0 analysis state at ``theta_traj[0]``**;
+    passing a trajectory that omits it silently changes the reference. ``theta_traj`` is ``(T, ...)``.
     """
     theta = np.asarray(theta_traj, dtype="float64")
     theta_r = np.asarray(env.theta_wp, dtype="float64")

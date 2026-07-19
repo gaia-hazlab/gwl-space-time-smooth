@@ -95,6 +95,17 @@ def _vs_vadose(theta, env: CouplingEnvelope):
 # ---------------------------------------------------------------------------
 # Forward: (GWL head anomaly, soil moisture) → banded dv/v
 # ---------------------------------------------------------------------------
+def saturated_dvv(dtw_anom, env: CouplingEnvelope) -> np.ndarray:
+    """Saturated / low-freq dv/v band from a depth-to-water anomaly.
+
+    ``dtw_anom`` = DTW − baseline (m); a deeper table (positive anomaly) is a head drop Δh = −dtw_anom,
+    so ``dvv_low = −k_sat·Δh``. Factored out so a hysteresis-aware caller can compute the (unchanged)
+    saturated band without re-running the vadose calculation it will replace.
+    """
+    dh = -np.asarray(dtw_anom, dtype="float64")                  # head change (m)
+    return (-env.k_sat * dh).astype("float32")
+
+
 def forward_dvv(dtw_anom, theta, theta_ref, env: CouplingEnvelope) -> dict:
     """Banded dv/v that the given states produce.
 
@@ -102,13 +113,11 @@ def forward_dvv(dtw_anom, theta, theta_ref, env: CouplingEnvelope) -> dict:
     Δh = −dtw_anom. ``theta_ref`` is the per-cell reference θ (t0) for the vadose band.
     Returns dict(dvv_low, dvv_high) as fractions (not %).
     """
-    dh = -np.asarray(dtw_anom, dtype="float64")                  # head change (m)
-    dvv_low = -env.k_sat * dh                                    # saturated / low-freq band
-
+    dvv_low = saturated_dvv(dtw_anom, env)                       # saturated / low-freq band
     vs_t = _vs_vadose(theta, env)
     vs_0 = _vs_vadose(theta_ref, env)
     dvv_high = (vs_t - vs_0) / vs_0                              # vadose / high-freq band
-    return {"dvv_low": dvv_low.astype("float32"), "dvv_high": dvv_high.astype("float32")}
+    return {"dvv_low": dvv_low, "dvv_high": dvv_high.astype("float32")}
 
 
 # ---------------------------------------------------------------------------

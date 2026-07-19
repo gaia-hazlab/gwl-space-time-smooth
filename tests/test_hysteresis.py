@@ -110,6 +110,19 @@ def test_forecast_dvv_is_path_dependent_when_hysteresis_on():
     assert np.abs(hy.dvv_high).max() > 5.0 * np.abs(hy.dvv_low).max()
 
 
+def test_invalid_start_fails_fast():
+    # An unrecognised start must RAISE, not silently land on the wetting limb.
+    from src.models.hysteresis import hysteretic_suction_field
+
+    def _raises(fn):
+        try:
+            fn(); return False
+        except ValueError:
+            return True
+    assert _raises(lambda: hysteretic_suction(_wet_then_dry(), ALPHA_D, N, start="up"))
+    assert _raises(lambda: hysteretic_suction_field(_wet_then_dry()[:, None], ALPHA_D, N, start="x"))
+
+
 if __name__ == "__main__":
     test_drying_bound_holds_more_suction_than_wetting_at_equal_saturation()
     test_the_loop_opens_on_a_wet_then_dry_path()
@@ -118,4 +131,5 @@ if __name__ == "__main__":
     test_reversal_resets_the_memory_anchor()
     test_trajectory_field_carries_memory_over_the_integrated_path()
     test_forecast_dvv_is_path_dependent_when_hysteresis_on()
+    test_invalid_start_fails_fast()
     print("all hysteresis tests passed")

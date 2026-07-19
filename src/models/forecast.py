@@ -163,15 +163,18 @@ def forecast_soil_state(forcing, theta_wp, theta_fc, theta_sat, vs30_base, wt_de
     wt_ref = np.broadcast_to(np.asarray(wt_depth0_m, float), wb.wt_depth_m.shape[1:])
     dtw_anom = wb.wt_depth_m - wt_ref                          # +ve = table deeper than baseline
 
-    d = forward_dvv(dtw_anom, wb.theta, theta_ref, env)
-    dvv_low = d["dvv_low"]
     if hysteresis:
         # carry the wetting/drying reversal memory along the INTEGRATED θ trajectory (#120): the same θ
         # reached by drying vs wetting yields a different vadose velocity, so dv/v is path-dependent.
+        # The saturated band is unchanged, so compute it directly and SKIP the (discarded) vadose
+        # calculation in forward_dvv -- avoidable work on large grids/horizons.
+        from src.models.dvv_coupling import saturated_dvv
         from src.models.hysteresis import vadose_dvv_hysteretic
+        dvv_low = saturated_dvv(dtw_anom, env)
         dvv_high = vadose_dvv_hysteretic(wb.theta, env).astype("float32")
     else:
-        dvv_high = d["dvv_high"]
+        d = forward_dvv(dtw_anom, wb.theta, theta_ref, env)
+        dvv_low, dvv_high = d["dvv_low"], d["dvv_high"]
 
     # first-order travel-time weighting of the top 30 m: the vadose root zone carries d/30 of the
     # column, the saturated material below carries the rest.
