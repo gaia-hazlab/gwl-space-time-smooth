@@ -66,6 +66,8 @@ codameter = { git = "https://github.com/Denolle-Lab/codameter.git" }
 # The whole suite is offline: every test constructs synthetic inputs, so it runs on a clean checkout.
 # codameter/disba-dependent tests SKIP visibly (never a silent pass). -p no:cacheprovider keeps CI clean.
 test = "pytest tests/ -q -p no:cacheprovider"
+# Online (hits doi.org), so it's a separate task from `test`, not folded into the offline suite.
+check-dois = "python scripts/check_doi_integrity.py"
 
 # === Primary pipeline ===
 data = "python -m src.data.download_nwis --start-date 2000-01-01 --output-dir data/raw/nwis"
