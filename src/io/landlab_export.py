@@ -279,18 +279,25 @@ def load_recharge_field(forcing_zarr, sm_zarr, root_depth_m=1.0,
     precip = fz["precip_mm"]                                            # (time, lat/lon)
     like = _georef_latlon(precip.isel(time=0))                         # forcing spatial template (4326)
 
+    from rasterio.enums import Resampling
+
     def _match(path):
+        # bilinear: slope/HAND/DTW are CONTINUOUS surfaces; nearest would introduce blocky artefacts in
+        # the calibrated water-budget inputs (matches align_to_grid / load_saturation_field).
         r = rioxarray.open_rasterio(path, masked=True).squeeze("band", drop=True)
-        return r.rio.reproject_match(like).values
+        return r.rio.reproject_match(like, resampling=Resampling.bilinear).values
     tan_b = np.tan(np.radians(_match(slope_tif)))                      # slope raster is in degrees
     hand = _match(hand_tif)
     dtw0 = np.nan_to_num(_match(dtw_tif), nan=5.0)                     # reservoir datum (m below surface)
 
     days = pd.to_datetime(fz["time"].values)
     step_d = float(np.median(np.diff(days) / np.timedelta64(1, "D"))) if len(days) > 1 else 30.0
-    daily = step_d <= 5.0
-    dt_days = 1.0 if daily else None                                   # None reproduces the monthly step
-    if not daily:
+    sub_monthly = step_d <= 5.0
+    # use the ACTUAL inferred step for the budget physics and the rate normalisation; None only for the
+    # monthly path (which reproduces the per-month convention below). A 2-3 day forcing must not be
+    # forced to dt=1.
+    dt_days = step_d if sub_monthly else None
+    if not sub_monthly:
         logger.warning("recharge: forcing cadence ~%.0f d is NOT the calibrated DAILY configuration "
                        "(#89); pass daily PRISM forcing before trusting this field", step_d)
 
@@ -300,8 +307,8 @@ def load_recharge_field(forcing_zarr, sm_zarr, root_depth_m=1.0,
                               slope_tan=tan_b, hand_m=hand, k_aniso=K_ANISO, wt_depth0_m=dtw0)
 
     # recharge_mm is per timestep; express as the canonical mm day⁻¹ before temporal statistics.
-    if daily:
-        rate = wb.recharge_mm / dt_days
+    if sub_monthly:
+        rate = wb.recharge_mm / dt_days                                # dt_days == the inferred step
     else:
         rate = wb.recharge_mm / days.days_in_month.values.astype("float64")[:, None, None]
     rech = xr.DataArray(rate, dims=precip.dims, coords=precip.coords)

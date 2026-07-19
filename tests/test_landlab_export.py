@@ -172,6 +172,16 @@ def test_recharge_warns_on_monthly_forcing():
         assert mean.extra["forcing_cadence_days"] > 20, "monthly cadence must be detected"
 
 
+def test_recharge_uses_the_inferred_substep_not_hardcoded_one():
+    # A 3-day forcing must be treated as a 3-day step (dt_days = inferred step), not forced to 1 day (#179).
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        fpath, spath, hand, dtw, tif = _tiny_recharge_inputs(td, freq="3D", nt=8)
+        mean, _ = le.load_recharge_field(fpath, spath, slope_tif=tif("s.tif", 12.0),
+                                         hand_tif=hand, dtw_tif=dtw)
+        assert abs(mean.extra["forcing_cadence_days"] - 3.0) < 0.6, "3-day cadence must be detected"
+
+
 if __name__ == "__main__":
     test_saturation_fraction_ratio_and_clip()
     test_seasonal_high_is_the_shallow_tail_of_dtw()
@@ -182,4 +192,5 @@ if __name__ == "__main__":
     test_export_bundle_writes_canonical_files_and_manifest()
     test_recharge_runs_the_calibrated_path_and_flags_cadence()
     test_recharge_warns_on_monthly_forcing()
+    test_recharge_uses_the_inferred_substep_not_hardcoded_one()
     print("all landlab-export tests passed")
