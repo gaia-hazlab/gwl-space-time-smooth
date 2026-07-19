@@ -253,26 +253,69 @@ def load_saturation_field(sm_zarr, envelope_zarr="data/processed/soil_hydraulic_
                         extra={"spatial_scale": "90 m envelope; dynamics at driver ~4 km"})
 
 
-def load_recharge_field(forcing_zarr, sm_zarr, root_depth_m=1.0):
-    """Gridded recharge (temporal mean, +max in extra) from the coupled water budget over the
-    TerraClimate forcing grid; σ ≈ 0.1·mean (the DataHub convention)."""
+def load_recharge_field(forcing_zarr, sm_zarr, root_depth_m=1.0,
+                        slope_tif="data/processed/terrain_slope_domain_90m.tif",
+                        hand_tif="data/processed/terrain_hand_domain_90m.tif",
+                        dtw_tif="data/processed/baseline_dtw_m.tif"):
+    """Gridded recharge (temporal mean, +max in extra) from the **v0.4-calibrated** water budget.
+
+    Runs the calibrated configuration — slope-driven lateral interflow + HAND-anchored groundwater
+    recession, with the baseline depth-to-water as the reservoir datum (#98) — **not** the legacy
+    lumped bucket. The earlier version called ``coupled_water_budget`` with no ``slope_tan``/``hand_m``/
+    ``dt_days``, i.e. the pre-calibration monthly path the project flags as runaway (#88/#89); this
+    shipped that field to the landslide chain under a "calibrated" banner (#126).
+
+    The domain slope/HAND/baseline-DTW rasters (EPSG:5070) are reprojected onto the forcing grid. The
+    flux calibration was fit in **daily** mode (#89), so a monthly forcing is not the calibrated
+    configuration: it **warns loudly** and should be replaced by daily PRISM before the field is
+    trusted. σ ≈ 0.1·mean (the DataHub convention).
+    """
     import pandas as pd
 
-    from src.models.water_budget import coupled_water_budget
+    from src.models.water_budget import K_ANISO, coupled_water_budget
 
     fz = xr.open_zarr(forcing_zarr)
     sm = xr.open_zarr(sm_zarr)
-    wb = coupled_water_budget(fz["precip_mm"].values, fz["pet_mm"].values,
+    precip = fz["precip_mm"]                                            # (time, lat/lon)
+    like = _georef_latlon(precip.isel(time=0))                         # forcing spatial template (4326)
+
+    from rasterio.enums import Resampling
+
+    def _match(path):
+        # bilinear: slope/HAND/DTW are CONTINUOUS surfaces; nearest would introduce blocky artefacts in
+        # the calibrated water-budget inputs (matches align_to_grid / load_saturation_field).
+        r = rioxarray.open_rasterio(path, masked=True).squeeze("band", drop=True)
+        return r.rio.reproject_match(like, resampling=Resampling.bilinear).values
+    tan_b = np.tan(np.radians(_match(slope_tif)))                      # slope raster is in degrees
+    hand = _match(hand_tif)
+    dtw0 = np.nan_to_num(_match(dtw_tif), nan=5.0)                     # reservoir datum (m below surface)
+
+    days = pd.to_datetime(fz["time"].values)
+    step_d = float(np.median(np.diff(days) / np.timedelta64(1, "D"))) if len(days) > 1 else 30.0
+    sub_monthly = step_d <= 5.0
+    # use the ACTUAL inferred step for the budget physics and the rate normalisation; None only for the
+    # monthly path (which reproduces the per-month convention below). A 2-3 day forcing must not be
+    # forced to dt=1.
+    dt_days = step_d if sub_monthly else None
+    if not sub_monthly:
+        logger.warning("recharge: forcing cadence ~%.0f d is NOT the calibrated DAILY configuration "
+                       "(#89); pass daily PRISM forcing before trusting this field", step_d)
+
+    wb = coupled_water_budget(precip.values, fz["pet_mm"].values,
                               sm["theta_wp"].values, sm["theta_fc"].values, sm["theta_sat"].values,
-                              root_depth_m=root_depth_m)
-    tmpl = fz["precip_mm"]                                              # (time, lat, lon) for coords
-    # The monthly budget yields recharge in mm per month; convert to the canonical mm day⁻¹ rate
-    # by each month's length before taking temporal statistics.
-    dim = pd.to_datetime(fz["time"].values).days_in_month.values.astype("float64")
-    rech = xr.DataArray(wb.recharge_mm / dim[:, None, None], dims=tmpl.dims, coords=tmpl.coords)
+                              root_depth_m=root_depth_m, dt_days=dt_days,
+                              slope_tan=tan_b, hand_m=hand, k_aniso=K_ANISO, wt_depth0_m=dtw0)
+
+    # recharge_mm is per timestep; express as the canonical mm day⁻¹ before temporal statistics.
+    if sub_monthly:
+        rate = wb.recharge_mm / dt_days                                # dt_days == the inferred step
+    else:
+        rate = wb.recharge_mm / days.days_in_month.values.astype("float64")[:, None, None]
+    rech = xr.DataArray(rate, dims=precip.dims, coords=precip.coords)
     mean = _georef_latlon(rech.mean("time"))
     mx = _georef_latlon(rech.max("time"))
-    scale = {"spatial_scale": "driver ~4 km (forcing-limited: P/PET-dominated flux)"}
+    scale = {"spatial_scale": "driver grid; v0.4-calibrated (slope interflow + HAND recession, #98)",
+             "forcing_cadence_days": round(step_d, 1)}
     return DynamicField("recharge", mean, epoch="mean", sigma=0.1 * abs(mean), extra=scale), \
         DynamicField("recharge", mx, epoch="max", extra=scale)
 

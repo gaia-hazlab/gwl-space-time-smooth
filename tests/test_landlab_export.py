@@ -118,6 +118,70 @@ def test_export_bundle_writes_canonical_files_and_manifest():
             pass
 
 
+def _tiny_recharge_inputs(td, freq="D", nt=8):
+    """Write a tiny forcing zarr + sm envelope zarr + terrain tifs (EPSG:4326) into ``td``."""
+    import pandas as pd
+    import rioxarray  # noqa: F401  (registers .rio)
+    ny, nx = 3, 3
+    lat = np.linspace(46.50, 46.52, ny)
+    lon = np.linspace(-122.02, -122.00, nx)
+    time = pd.date_range("2025-11-01", periods=nt, freq=freq)
+    precip = np.zeros((nt, ny, nx)); precip[2:5] = 15.0
+    fz = xr.Dataset({"precip_mm": (("time", "lat", "lon"), precip),
+                     "pet_mm": (("time", "lat", "lon"), np.full((nt, ny, nx), 1.5))},
+                    coords={"time": time, "lat": lat, "lon": lon})
+    fz.to_zarr(td / "forcing.zarr")
+    sm = xr.Dataset({k: (("lat", "lon"), np.full((ny, nx), v))
+                     for k, v in [("theta_wp", 0.10), ("theta_fc", 0.28), ("theta_sat", 0.42)]},
+                    coords={"lat": lat, "lon": lon})
+    sm.to_zarr(td / "sm.zarr")
+
+    def tif(name, val):
+        da = xr.DataArray(np.full((ny, nx), val, "float64"), dims=("y", "x"),
+                          coords={"y": lat[::-1], "x": lon}).rio.write_crs("EPSG:4326")
+        da.rio.to_raster(td / name)
+        return str(td / name)
+    return str(td / "forcing.zarr"), str(td / "sm.zarr"), tif("hand.tif", 20.0), tif("dtw.tif", 5.0), tif
+
+
+def test_recharge_runs_the_calibrated_path_and_flags_cadence():
+    # The calibrated config must actually be wired: recharge must RESPOND to slope (lateral interflow),
+    # which the pre-fix monthly call (no slope_tan/hand_m) could not do (#126). And daily forcing must
+    # be recognised as the calibrated cadence.
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        fpath, spath, hand, dtw, tif = _tiny_recharge_inputs(td, freq="D")
+        flat, _ = le.load_recharge_field(fpath, spath, slope_tif=tif("flat.tif", 0.5),
+                                         hand_tif=hand, dtw_tif=dtw)
+        steep, _ = le.load_recharge_field(fpath, spath, slope_tif=tif("steep.tif", 30.0),
+                                          hand_tif=hand, dtw_tif=dtw)
+        assert flat.key == "recharge" and "v0.4-calibrated" in flat.extra["spatial_scale"]
+        assert abs(flat.extra["forcing_cadence_days"] - 1.0) < 0.6, "daily forcing must read as ~1 day"
+        # steeper slope sheds more drainage laterally -> different recharge; proves slope_tan is wired
+        assert not np.allclose(np.nan_to_num(flat.data.values), np.nan_to_num(steep.data.values)), \
+            "recharge must respond to slope (the calibrated interflow path is active)"
+
+
+def test_recharge_warns_on_monthly_forcing():
+    # A monthly forcing is NOT the calibrated daily config (#89); it must flag the cadence, not run silently.
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        fpath, spath, hand, dtw, tif = _tiny_recharge_inputs(td, freq="MS", nt=6)
+        mean, _ = le.load_recharge_field(fpath, spath, slope_tif=tif("s.tif", 12.0),
+                                         hand_tif=hand, dtw_tif=dtw)
+        assert mean.extra["forcing_cadence_days"] > 20, "monthly cadence must be detected"
+
+
+def test_recharge_uses_the_inferred_substep_not_hardcoded_one():
+    # A 3-day forcing must be treated as a 3-day step (dt_days = inferred step), not forced to 1 day (#179).
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        fpath, spath, hand, dtw, tif = _tiny_recharge_inputs(td, freq="3D", nt=8)
+        mean, _ = le.load_recharge_field(fpath, spath, slope_tif=tif("s.tif", 12.0),
+                                         hand_tif=hand, dtw_tif=dtw)
+        assert abs(mean.extra["forcing_cadence_days"] - 3.0) < 0.6, "3-day cadence must be detected"
+
+
 if __name__ == "__main__":
     test_saturation_fraction_ratio_and_clip()
     test_seasonal_high_is_the_shallow_tail_of_dtw()
@@ -126,4 +190,7 @@ if __name__ == "__main__":
     test_apply_confidence_mask_blanks_unsupported_cells()
     test_sigma_sidecar_is_written_and_recorded()
     test_export_bundle_writes_canonical_files_and_manifest()
+    test_recharge_runs_the_calibrated_path_and_flags_cadence()
+    test_recharge_warns_on_monthly_forcing()
+    test_recharge_uses_the_inferred_substep_not_hardcoded_one()
     print("all landlab-export tests passed")
