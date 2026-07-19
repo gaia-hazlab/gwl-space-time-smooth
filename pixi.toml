@@ -39,6 +39,7 @@ llvmlite = "*"
 earthaccess = ">=0.17.0,<0.18"
 h5netcdf = ">=1.8.1,<2"
 obspy = ">=1.5.0,<2"
+pytest = ">=8,<9"
 
 [pypi-dependencies]
 dataretrieval = "*"
@@ -61,6 +62,11 @@ disba = ">=0.7, <0.8"
 codameter = { git = "https://github.com/Denolle-Lab/codameter.git" }
 
 [tasks]
+# === Tests (the CI gate) ===
+# The whole suite is offline: every test constructs synthetic inputs, so it runs on a clean checkout.
+# codameter/disba-dependent tests SKIP visibly (never a silent pass). -p no:cacheprovider keeps CI clean.
+test = "pytest tests/ -q -p no:cacheprovider"
+
 # === Primary pipeline ===
 data = "python -m src.data.download_nwis --start-date 2000-01-01 --output-dir data/raw/nwis"
 qc = "python -m src.data.qc_nwis --input-dir data/raw/nwis --output data/processed/nwis_gwlevels_monthly.parquet"

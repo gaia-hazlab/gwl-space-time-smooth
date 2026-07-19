@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reproduce the pinned environment from pixi.lock (git deps are pinned to commit SHAs).
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          frozen: true
+          cache: true
+
+      # The whole test suite is offline (every test builds synthetic inputs); codameter/disba-dependent
+      # tests SKIP visibly rather than passing silently. This is the regression gate for the assimilation,
+      # water budget, hysteresis, and domain invariants.
+      - name: Run tests
+        run: pixi run test
