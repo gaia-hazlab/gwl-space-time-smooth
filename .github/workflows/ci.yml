@@ -30,3 +30,18 @@ jobs:
       # water budget, hysteresis, and domain invariants.
       - name: Run tests
         run: pixi run test
+
+  check-dois:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          frozen: true
+          cache: true
+
+      # references.bib has a history of fabricated/wrong DOIs (#158); this resolves every DOI
+      # against doi.org and fails red on anything unregistered, so a fake citation can't merge silently.
+      - name: Verify references.bib DOIs resolve
+        run: pixi run check-dois

@@ -47,13 +47,26 @@ NISAR repeat, a cloud-limited Sentinel pass — and the two states change at ver
 moisture decorrelates in days; the water table integrates months.
 
 An observation is therefore weighted not only by its precision and its distance, but by its **age
-relative to the state it informs**. A measurement taken $\Delta t$ before the analysis time carries a
-temporal weight $\exp(-\Delta t / 2\tau)$ for a state of correlation time $\tau$: a day-old θ
-observation is nearly current for the slow water table but already stale for fast soil moisture, and a
-week-old satellite retrieval has aliased the very storm it might have caught
-([the space–time design](05-state-evaluation.qmd)). The continuous seismic array and the sub-daily
-probes therefore carry the *timing* of a soil-moisture event, while the satellite carries its *spatial
-extent*; assimilation combines them on the axis each is strong on.
+relative to the state it informs**. Modelling the state as a stationary Ornstein-Uhlenbeck process with
+correlation time $\tau$ gives a correlation $\rho(\Delta t)=\exp(-\Delta t/\tau)$ between the state now
+and $\Delta t$ in the past (`ou_correlation`) — a day-old θ observation is nearly current for the slow
+water table ($\tau\!\approx\!120$ d) but already stale for fast soil moisture ($\tau\!\approx\!5$ d),
+and a week-old satellite retrieval has aliased the very storm it might have caught. A lagged datum
+therefore enters the estimator on **two axes**, not one (`lagged_observation`):
+
+- its **operator gain shrinks** to $\rho\, g_i$ — a stale reading is *weak* evidence about the current
+  state, not full-strength evidence merely carrying more noise;
+- its **effective noise grows** by a drift term $\sigma_m^2(1-\rho^2)$ on top of the instrument
+  noise $\sigma_{d,i}^2$ — uncertainty accrued while the state evolved, unobserved, over $\Delta t$.
+
+(An earlier version of this treatment inflated $\sigma_{d,i}^2$ by $1/\exp(-\Delta t/2\tau)$ while
+leaving the gain at 1 and adding no drift term — silently overweighting stale data, and borrowing its
+factor of 2 from the unrelated spatial squared-exponential kernel rather than deriving it from the OU
+process. `temporal_resolution` in the [evaluation chapter](05-state-evaluation.qmd) is $\rho^2$, the
+special case of a perfectly-measured lagged datum, and is the one place the factor-of-2 form never
+belonged.) The continuous seismic array and the sub-daily probes therefore carry the *timing* of a
+soil-moisture event, while the satellite carries its *spatial extent*; assimilation combines them on
+the axis each is strong on.
 
 ## The estimator: what exactly is minimised
 
@@ -95,11 +108,11 @@ The misfit $d - Gm$ is **evaluated in observation space** — each datum is comp
   is the fine field *upscaled to that pixel* and the residual is formed at 9 km, not 90 m
   (upscale-then-compare, by construction — footprint leakage is impossible). A well's row is a point; a
   dv/v datum's row is a coda kernel over a volume; a gauge's row is a basin integral.
-- **Time** enters through $R$. A datum taken $\Delta t$ before the analysis has its variance inflated
-  by $1/\exp(-\Delta t/2\tau)$ — equivalently its precision carries the $\exp(-\Delta t/2\tau)$ weight
-  above, matching `temporal_resolution()` — so a week-old satellite retrieval barely moves fast soil
-  moisture ($\tau\!\approx\!5$ d) while
-  a day-old reading is still near-current for the slow water table ($\tau\!\approx\!120$ d).
+- **Time** enters through both $G$ and $R$. A datum taken $\Delta t$ before the analysis has its
+  operator row scaled by $\rho=\exp(-\Delta t/\tau)$ and its variance grown by the drift term
+  $\sigma_m^2(1-\rho^2)$ (`lagged_observation()`) — so a week-old satellite retrieval barely moves fast
+  soil moisture ($\tau\!\approx\!5$ d) while a day-old reading is still near-current for the slow water
+  table ($\tau\!\approx\!120$ d).
 
 So the homogenisation is the **forward operator**, not resampling: heterogeneous data are reconciled by
 predicting each one from the common fine state and differencing in its own footprint and at its own
@@ -111,7 +124,7 @@ little. Nothing in the pipeline ever pretends a downscaled pixel is a native mea
 The near-station numbers quoted elsewhere are the *local* reading of this estimator: with the
 off-diagonal covariance suppressed, cell $x$'s update reduces to a precision-weighted blend of the
 prior and the observations that reach it, weight
-$w_i = \exp(-d^2/2L^2)\,\exp(-\Delta t/2\tau)/\sigma_i^2$ against the prior precision
+$w_i = \exp(-d^2/2L^2)\,\rho^2/\sigma_i^2$ (with $\rho=\exp(-\Delta t/\tau)$) against the prior precision
 $1/\sigma_{\text{prior}}^2$. That is where "~94% wells for groundwater, ~95% dv/v for soil moisture"
 comes from — a *near-station refinement* fraction, not a claim about the field as a whole. The full
 $C_a$ above is what the design maps in [the evaluation chapter](05-state-evaluation.qmd).

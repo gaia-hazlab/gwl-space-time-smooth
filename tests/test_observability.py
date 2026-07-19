@@ -15,8 +15,11 @@ from src.models.observability import (
     GaussianPrior,
     channel_footprints,
     information_gain,
+    lagged_observation,
     marginal_resolution,
+    matern_correlation,
     normalise_footprint,
+    ou_correlation,
     point_footprint,
     blue_update,
     resolution,
@@ -62,6 +65,46 @@ def test_normalise_footprint_null_observation_is_all_zeros():
     # observing nothing (not a silent 1/0 or an unnormalised row).
     assert np.all(normalise_footprint(np.zeros(9)) == 0.0)
     assert np.all(normalise_footprint(np.full(9, np.nan)) == 0.0)
+
+
+def test_matern_correlation_is_rougher_than_the_old_squared_exponential():
+    length = 5.0
+    d = np.linspace(0.0, 20.0, 50)
+    rbf = np.exp(-(d ** 2) / (2.0 * length ** 2))                # the old (issue #163) kernel
+    for nu in (0.5, 1.5, 2.5):
+        m = matern_correlation(d, length, nu=nu)
+        assert m[0] == 1.0                                       # unit correlation at zero distance
+        assert np.all(np.diff(m) <= 1e-12)                       # monotone decreasing with distance
+        assert np.all(m >= -1e-9)
+    # nu=0.5 (exponential) is rougher near the origin than the squared-exponential -- it decays faster
+    assert matern_correlation(np.array([1.0]), length, nu=0.5)[0] < rbf[np.argmin(np.abs(d - 1.0))]
+    assert _raises(lambda: matern_correlation(1.0, length, nu=99), ValueError)
+
+
+def test_gaussian_prior_defaults_to_matern_and_is_positive_semidefinite():
+    c = _grid(n=12, span=20.0)
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)          # default nu=1.5
+    assert np.allclose(C, C.T)
+    eigvals = np.linalg.eigvalsh(C)
+    assert np.all(eigvals >= -1e-8 * eigvals.max())              # PSD (a valid covariance)
+    assert np.allclose(np.diag(C), 1.0)                          # unit variance at distance 0
+
+
+def test_region_id_masks_correlation_across_a_terrain_divide():
+    # Two cells at the SAME distance apart: one pair in the same region (valley), one pair split
+    # across regions (ridge vs valley). The terrain-aware prior must NOT correlate the split pair,
+    # unlike a plain isotropic kernel which treats them identically (issue #163's core complaint).
+    c = np.array([[0.0, 0.0], [1.0, 0.0], [10.0, 0.0], [11.0, 0.0]])
+    region = np.array([0, 0, 1, 1])          # cells 0,1 in region A; cells 2,3 in region B
+    prior = GaussianPrior(sigma=1.0, length_km=4.0, region_id=region)
+    C = prior.cov(c)
+    same_region_corr = C[0, 1] / (prior.sigma ** 2)
+    cross_region_corr = C[1, 2] / (prior.sigma ** 2)             # same 1 km distance as no masking would give
+    assert same_region_corr > 0.5                                 # unmasked, close-by, still correlated
+    assert cross_region_corr == 0.0                               # masked: no leakage across the divide
+    # without region_id, the isotropic kernel WOULD correlate cells 1 and 2 (9 km apart, still > 0)
+    unmasked = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    assert unmasked[1, 2] > 0.0
 
 
 def test_resolution_is_a_fraction_in_the_unit_interval():
@@ -180,6 +223,42 @@ def test_temporal_resolution_captures_the_space_time_tradeoff():
     assert temporal_resolution(sat_revisit, 120.0) > temporal_resolution(sat_revisit, 5.0)
     assert np.all((temporal_resolution([0.0, 3.0, 12.0], tau) >= 0) &
                   (temporal_resolution([0.0, 3.0, 12.0], tau) <= 1))
+
+
+def test_ou_correlation_is_the_single_exponent_behind_temporal_resolution():
+    # rho(dt) = exp(-dt/tau), no independent factor of 2 (that belongs to the spatial RBF kernel only)
+    tau = 10.0
+    assert ou_correlation(0.0, tau) == 1.0
+    assert np.isclose(ou_correlation(tau, tau), np.exp(-1.0))
+    # temporal_resolution is exactly rho^2 (issue #161: previously exp(-dt/2tau), an inconsistent
+    # exponent copied from the spatial kernel, not rho^2 of the OU process)
+    dt = np.array([0.0, 3.0, 10.0, 40.0])
+    assert np.allclose(temporal_resolution(dt, tau), ou_correlation(dt, tau) ** 2)
+
+
+def test_lagged_observation_shrinks_gain_and_adds_drift_noise():
+    tau, state_var, obs_var = 10.0, 1.0, 0.01
+    g = np.array([0.25, 0.25, 0.5])
+
+    # no lag: gain unchanged, no drift noise added
+    g0, nv0 = lagged_observation(g, 0.0, tau, state_var, obs_var)
+    assert np.allclose(g0, g)
+    assert np.isclose(nv0, obs_var)
+
+    # a stale datum: gain shrinks (rho < 1) and effective noise grows (drift term > 0) --
+    # NOT the old "unit gain, inflate noise by 1/rho^2" treatment, which left g untouched
+    g1, nv1 = lagged_observation(g, tau, tau, state_var, obs_var)
+    rho = np.exp(-1.0)
+    assert np.allclose(g1, rho * g)
+    assert np.isclose(nv1, state_var * (1 - rho ** 2) + obs_var)
+    assert nv1 > obs_var                                 # strictly more than the unlagged noise
+    assert np.sum(g1) < np.sum(g)                        # gain shrank, unlike the unit-gain treatment
+
+    # as the lag grows without bound, the datum carries no information about the current state:
+    # gain -> 0 and effective noise -> the full state variance (plus obs noise), not to infinity
+    g_inf, nv_inf = lagged_observation(g, 1e6, tau, state_var, obs_var)
+    assert np.allclose(g_inf, 0.0, atol=1e-6)
+    assert np.isclose(nv_inf, state_var + obs_var, atol=1e-6)
 
 
 def test_blue_update_recovers_a_smooth_truth_and_reverts_off_support():

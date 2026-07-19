@@ -138,6 +138,20 @@ the network's measured performance; the maps' *pattern* is robust to them, the a
 not.
 :::
 
+::: {.callout-note}
+## The prior is Matern, not squared-exponential, and can be made terrain-aware
+`GaussianPrior` defaults to a Matern-3/2 correlation (once-differentiable), not the earlier
+squared-exponential (issue #163) — a stationary Gaussian random field is smoother ($C^\infty$) than a
+terrain-driven hydraulic head or moisture field, which has kinks at drainage divides and lithologic
+contacts, actually has. It also takes an optional per-cell `region_id` (e.g. a drainage-basin label)
+that forces correlation to zero across regions, so a ridge cell and a valley cell 90 m apart are not
+implicitly assumed to communicate just because they are close in Euclidean distance — the figures above
+do not yet pass one in, so they still assume within-basin isotropy. What remains open is scalability at
+the full 90 m domain: the dense $(n,n)$ `C` is only tractable on the coarsened assimilation grid the
+twin actually solves on (`notebooks/make_twin_gif.py`); a sparse GMRF/SPDE precision representation —
+which would give both the terrain-awareness and the scalability at once — is future work.
+:::
+
 ### Satellite and surface-water streams
 
 Two distributed observations enter the same design and change it qualitatively, because they observe

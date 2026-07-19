@@ -54,25 +54,78 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 
+_SQRT3 = 3.0 ** 0.5
+_SQRT5 = 5.0 ** 0.5
+
+
+def matern_correlation(dist_km: ArrayLike, length_km: float, nu: float = 1.5) -> NDArray[np.float64]:
+    r"""Matern correlation at distance ``dist_km`` (smoothness ``nu``, closed forms for 0.5/1.5/2.5).
+
+    ``nu=0.5`` is the (rough, once-differentiable-in-expectation) exponential/OU form
+    :math:`\exp(-r)`; ``nu=2.5`` is close to the :math:`C^\infty` squared-exponential without actually
+    being infinitely smooth. Issue #163: the squared-exponential ``GaussianPrior`` used everywhere
+    before this was the :math:`\nu\to\infty` limit, which imposes an implausibly smooth field on a
+    terrain-driven state (real hydraulic head/soil moisture fields have kinks at drainage divides and
+    lithologic contacts); ``nu=1.5`` (the default here) is the standard practical compromise —
+    once-differentiable, not analytic.
+    """
+    r = _SQRT3 if nu == 1.5 else (_SQRT5 if nu == 2.5 else 1.0)
+    d = np.asarray(dist_km, dtype="float64") / max(length_km, 1e-12)
+    x = r * d
+    if nu == 0.5:
+        return np.exp(-x)
+    if nu == 1.5:
+        return (1.0 + x) * np.exp(-x)
+    if nu == 2.5:
+        return (1.0 + x + x ** 2 / 3.0) * np.exp(-x)
+    raise ValueError(f"nu must be one of 0.5, 1.5, 2.5 (closed-form only), got {nu!r}")
+
+
 @dataclass(frozen=True)
 class GaussianPrior:
-    """A stationary Gaussian prior over the state field: variance ``sigma^2``, correlation ``length_km``."""
+    """A stationary prior over the state field: variance ``sigma^2``, Matern correlation ``length_km``.
+
+    ``nu`` is the Matern smoothness (0.5 / 1.5 / 2.5; default 1.5 -- see :func:`matern_correlation`).
+    ``region_id``, if given (one label per cell, e.g. a drainage-basin or HAND-derived hydrologic-unit
+    ID), makes the prior **terrain-aware**: correlation is forced to zero between cells in different
+    regions, regardless of their Euclidean distance. Without it, a stationary isotropic kernel lets a
+    ridge cell and a valley cell 90 m apart correlate exactly as strongly as two valley cells 90 m
+    apart, leaking constraint across a divide the two sides of which do not hydraulically communicate
+    (issue #163) -- ``region_id`` is the cheap, exact fix for that leakage; it does not by itself solve
+    the separate scalability problem of a dense ``(n, n)`` ``C`` at full 90 m domain scale, which the
+    twin currently avoids by solving on a coarsened assimilation grid (`notebooks/make_twin_gif.py`) --
+    a sparse GMRF/SPDE precision representation remains future work for the full-resolution solve.
+    """
 
     sigma: float
     length_km: float
+    nu: float = 1.5
+    region_id: NDArray[np.int64] | None = None
+
+    def _mask(self, region_a: NDArray | None, region_b: NDArray | None) -> NDArray[np.float64] | float:
+        if region_a is None or region_b is None:
+            return 1.0
+        return (np.asarray(region_a)[:, None] == np.asarray(region_b)[None, :]).astype("float64")
 
     def cov(self, coords_km: NDArray[np.float64]) -> NDArray[np.float64]:
         """Dense prior covariance ``C`` for cell centres ``coords_km`` (``(n, 2)`` array, km)."""
         c = np.asarray(coords_km, dtype="float64")
-        d2 = np.sum((c[:, None, :] - c[None, :, :]) ** 2, axis=-1)
-        return (self.sigma ** 2) * np.exp(-d2 / (2.0 * self.length_km ** 2))
+        d = np.sqrt(np.sum((c[:, None, :] - c[None, :, :]) ** 2, axis=-1))
+        corr = matern_correlation(d, self.length_km, self.nu) * self._mask(self.region_id, self.region_id)
+        return (self.sigma ** 2) * corr
 
-    def cross(self, coords_km: NDArray[np.float64], pts_km: NDArray[np.float64]) -> NDArray[np.float64]:
-        """Prior cross-covariance between every cell and every point in ``pts_km`` (``(n, m)``)."""
+    def cross(self, coords_km: NDArray[np.float64], pts_km: NDArray[np.float64],
+             region_id_pts: NDArray[np.int64] | None = None) -> NDArray[np.float64]:
+        """Prior cross-covariance between every cell and every point in ``pts_km`` (``(n, m)``).
+
+        ``region_id_pts`` (one label per point in ``pts_km``) applies the same terrain-aware masking as
+        :attr:`region_id`; omit it (or leave ``self.region_id`` unset) to skip masking here.
+        """
         c = np.asarray(coords_km, dtype="float64")
         p = np.asarray(pts_km, dtype="float64")
-        d2 = np.sum((c[:, None, :] - p[None, :, :]) ** 2, axis=-1)
-        return (self.sigma ** 2) * np.exp(-d2 / (2.0 * self.length_km ** 2))
+        d = np.sqrt(np.sum((c[:, None, :] - p[None, :, :]) ** 2, axis=-1))
+        corr = matern_correlation(d, self.length_km, self.nu) * self._mask(self.region_id, region_id_pts)
+        return (self.sigma ** 2) * corr
 
 
 # --- the temporal axis --------------------------------------------------------------------------
@@ -86,12 +139,31 @@ TEMPORAL_TAU_DAYS = {
 }
 
 
+def ou_correlation(lag_days: ArrayLike, tau_days: float) -> NDArray[np.float64]:
+    r"""Ornstein-Uhlenbeck correlation :math:`\rho(\Delta t)=\exp(-\Delta t/\tau)` at lag ``lag_days``.
+
+    The state's temporal covariance is modelled as a stationary OU process with correlation time
+    :math:`\tau`: :math:`\mathrm{corr}(m(t), m(t-\Delta t)) = \exp(-\Delta t/\tau)`. This is the single
+    building block both :func:`temporal_resolution` and a lagged datum's effective operator/noise
+    (:func:`lagged_observation`) are derived from -- there is no independent factor of 2 anywhere; that
+    would be borrowed from the *spatial* squared-exponential kernel (:class:`GaussianPrior`, whose
+    :math:`\exp(-d^2/2L^2)` form is for a smooth Gaussian random field, not a first-order Markov process
+    in time) and does not belong here.
+    """
+    dt = np.asarray(lag_days, dtype="float64")
+    return np.exp(-np.clip(dt, 0.0, None) / max(tau_days, 1e-6))
+
+
 def temporal_resolution(revisit_days: ArrayLike, tau_days: float) -> NDArray[np.float64]:
     r"""Fraction of a state's temporal variability a stream with ``revisit_days`` sampling resolves.
 
-    For a state with exponential temporal correlation time :math:`\tau`, a sensor sampling at interval
-    :math:`\Delta t` captures :math:`\exp(-\Delta t / 2\tau)` of its variability: ~1 when it samples far
-    faster than the state changes, and ~0 when it aliases (revisit :math:`\gg \tau`). Continuous streams
+    A perfect (zero-noise) sample taken :math:`\Delta t` in the past explains a fraction
+    :math:`\rho(\Delta t)^2=\exp(-2\Delta t/\tau)` of the current state's variance under the OU model
+    (:func:`ou_correlation`) -- the same identity :func:`resolution` uses elsewhere
+    (:math:`R = 1 - \mathrm{var\_post}/\mathrm{var\_prior}`, and for one perfectly-measured correlated
+    datum :math:`\mathrm{var\_post}/\mathrm{var\_prior} = 1-\rho^2`), evaluated here in closed form for a
+    single lag rather than via the general observation-space solve. ~1 when the stream samples far
+    faster than the state changes, ~0 when it aliases (revisit :math:`\gg \tau`). Continuous streams
     (``revisit_days`` :math:`\to 0`) give 1.
 
     This is the temporal analogue of the spatial resolution, and the two multiply: a stream's
@@ -99,8 +171,36 @@ def temporal_resolution(revisit_days: ArrayLike, tau_days: float) -> NDArray[np.
     weekly satellite with domain-wide coverage still misses the soil-moisture *event* a continuous
     seismic array or an hourly probe catches — great space, poor time.
     """
-    dt = np.asarray(revisit_days, dtype="float64")
-    return np.exp(-np.clip(dt, 0.0, None) / (2.0 * max(tau_days, 1e-6)))
+    return ou_correlation(revisit_days, tau_days) ** 2
+
+
+def lagged_observation(g: ArrayLike, lag_days: ArrayLike, tau_days: float, state_var: ArrayLike,
+                       obs_noise_var: ArrayLike) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    r"""Effective footprint and noise variance for a datum taken ``lag_days`` before the analysis time.
+
+    A raw observation is :math:`y = m(t-\Delta t) + \varepsilon`. Under the OU model, the state at the
+    analysis time relates to its past value as :math:`m(t-\Delta t) = \rho\, m(t) + w`, with
+    :math:`\rho=\exp(-\Delta t/\tau)` (:func:`ou_correlation`) and independent drift noise
+    :math:`w\sim\mathcal N(0,\ \sigma_m^2(1-\rho^2))` (``state_var`` :math:`=\sigma_m^2`, the field's own
+    variance at that location). So :math:`y = \rho\, g^\top m(t) + \eta`, :math:`\eta\sim\mathcal
+    N(0,\ \sigma_m^2(1-\rho^2)+\sigma_\varepsilon^2)`:
+
+    - the **operator gain shrinks** to :math:`\rho\, g` (a stale datum is weak evidence about the
+      *current* state, not full-strength evidence with merely larger noise);
+    - the **effective noise gains a drift term** :math:`\sigma_m^2(1-\rho^2)$ on top of the instrument
+      noise (uncertainty accrued while the state evolved, unobserved, over :math:`\Delta t`).
+
+    This replaces the earlier "inflate :math:`\sigma_\varepsilon^2` by :math:`1/\exp(-\Delta t/2\tau)`,
+    leave :math:`g` at unit gain" treatment, which had no state-noise term and so silently overweighted
+    stale data through the untouched gain. Returns ``(g_eff, noise_var_eff)``, ready to feed a row (or
+    rows) of ``G``/``noise_var`` into :func:`resolution` or :func:`blue_update`.
+    """
+    rho = ou_correlation(lag_days, tau_days)
+    g = np.asarray(g, dtype="float64")
+    g_eff = rho * g if g.ndim == 1 else rho[:, None] * g
+    noise_eff = np.asarray(state_var, dtype="float64") * (1.0 - rho ** 2) + np.asarray(
+        obs_noise_var, dtype="float64")
+    return g_eff, noise_eff
 
 
 @dataclass(frozen=True)
