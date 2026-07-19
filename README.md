@@ -176,7 +176,13 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   ├── gaia-conventions.md          ← DataTree schema, STAC provenance, lithology contract
 │   ├── intermediate-staging-plan.md ← pre-gaia-cli staging + soil-hydromechanics scope
 │   ├── assumptions.md               ← severity-tagged assumptions register
-│   └── limitations.md               ← known limitations
+│   ├── limitations.md               ← known limitations
+│   └── gaia-automation.md           ← unattended gaia-agent issue queue: PR → Copilot review → merge
+│
+├── scripts/
+│   ├── gaia_bootstrap.sh            ← one-time remote-server setup (pixi, gh, claude, quarto)
+│   ├── gaia_group_issues.py         ← groups open issues into PR-sized batches (milestone/label)
+│   └── gaia_run_queue.sh            ← runs the queue: orchestrator → PR → Copilot review → merge
 │
 └── .github/
     ├── copilot-instructions.md        ← workspace coding rules (updated for GAIA)
@@ -524,6 +530,8 @@ See the report's **Scientific & Data Grounds** for the equations each seam imple
 - [`docs/assumptions.md`](docs/assumptions.md) — All simplifying assumptions with severity ratings
 - [`docs/limitations.md`](docs/limitations.md) — Known limitations, updated continuously
 - [`data/raw/MANIFEST.md`](data/raw/MANIFEST.md) — Registry of all raw datasets with provenance
+- [`docs/gaia-automation.md`](docs/gaia-automation.md) — Running the gaia agents unattended on a
+  remote server: priority-grouped issue queue → PR → Copilot review → merge, kept in sync with GitHub
 
 ---
 
