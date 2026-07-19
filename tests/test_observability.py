@@ -99,7 +99,7 @@ def test_region_id_masks_correlation_across_a_terrain_divide():
     prior = GaussianPrior(sigma=1.0, length_km=4.0, region_id=region)
     C = prior.cov(c)
     same_region_corr = C[0, 1] / (prior.sigma ** 2)
-    cross_region_corr = C[1, 2] / (prior.sigma ** 2)             # same 1 km distance as no masking would give
+    cross_region_corr = C[1, 2] / (prior.sigma ** 2)             # 9 km apart, still > 0 without masking
     assert same_region_corr > 0.5                                 # unmasked, close-by, still correlated
     assert cross_region_corr == 0.0                               # masked: no leakage across the divide
     # without region_id, the isotropic kernel WOULD correlate cells 1 and 2 (9 km apart, still > 0)

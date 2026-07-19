@@ -69,8 +69,10 @@ def matern_correlation(dist_km: ArrayLike, length_km: float, nu: float = 1.5) ->
     lithologic contacts); ``nu=1.5`` (the default here) is the standard practical compromise —
     once-differentiable, not analytic.
     """
+    if not (np.isfinite(length_km) and length_km > 0):
+        raise ValueError(f"length_km must be a positive finite number, got {length_km!r}")
     r = _SQRT3 if nu == 1.5 else (_SQRT5 if nu == 2.5 else 1.0)
-    d = np.asarray(dist_km, dtype="float64") / max(length_km, 1e-12)
+    d = np.asarray(dist_km, dtype="float64") / length_km
     x = r * d
     if nu == 0.5:
         return np.exp(-x)
@@ -150,8 +152,12 @@ def ou_correlation(lag_days: ArrayLike, tau_days: float) -> NDArray[np.float64]:
     :math:`\exp(-d^2/2L^2)` form is for a smooth Gaussian random field, not a first-order Markov process
     in time) and does not belong here.
     """
+    if not (np.isfinite(tau_days) and tau_days > 0):
+        raise ValueError(f"tau_days must be a positive finite number, got {tau_days!r}")
     dt = np.asarray(lag_days, dtype="float64")
-    return np.exp(-np.clip(dt, 0.0, None) / max(tau_days, 1e-6))
+    if np.any(dt < 0):
+        raise ValueError("lag_days must be >= 0 (a datum from the future is not a lag)")
+    return np.exp(-dt / tau_days)
 
 
 def temporal_resolution(revisit_days: ArrayLike, tau_days: float) -> NDArray[np.float64]:
@@ -187,7 +193,7 @@ def lagged_observation(g: ArrayLike, lag_days: ArrayLike, tau_days: float, state
 
     - the **operator gain shrinks** to :math:`\rho\, g` (a stale datum is weak evidence about the
       *current* state, not full-strength evidence with merely larger noise);
-    - the **effective noise gains a drift term** :math:`\sigma_m^2(1-\rho^2)$ on top of the instrument
+    - the **effective noise gains a drift term** :math:`\sigma_m^2(1-\rho^2)` on top of the instrument
       noise (uncertainty accrued while the state evolved, unobserved, over :math:`\Delta t`).
 
     This replaces the earlier "inflate :math:`\sigma_\varepsilon^2` by :math:`1/\exp(-\Delta t/2\tau)`,

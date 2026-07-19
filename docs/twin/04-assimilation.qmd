@@ -124,7 +124,8 @@ little. Nothing in the pipeline ever pretends a downscaled pixel is a native mea
 The near-station numbers quoted elsewhere are the *local* reading of this estimator: with the
 off-diagonal covariance suppressed, cell $x$'s update reduces to a precision-weighted blend of the
 prior and the observations that reach it, weight
-$w_i = \exp(-d^2/2L^2)\,\rho^2/\sigma_i^2$ (with $\rho=\exp(-\Delta t/\tau)$) against the prior precision
+$w_i = \kappa(d, L)\,\rho^2/\sigma_i^2$ (with $\kappa$ the prior's spatial correlation — Matern by default,
+`GaussianPrior`/`matern_correlation` — and $\rho=\exp(-\Delta t/\tau)$) against the prior precision
 $1/\sigma_{\text{prior}}^2$. That is where "~94% wells for groundwater, ~95% dv/v for soil moisture"
 comes from — a *near-station refinement* fraction, not a claim about the field as a whole. The full
 $C_a$ above is what the design maps in [the evaluation chapter](05-state-evaluation.qmd).
