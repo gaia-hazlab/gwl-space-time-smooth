@@ -56,7 +56,7 @@ def main():
     # and the image is given some transparency, both requested fixes for a basemap that read too dark.
     pygmt.makecpt(cmap="oleron", series=[0, 4400], no_bg=True)
     shade = pygmt.grdgradient(grid=relief, radiance=[315, 45], normalize="t0.25")
-    fig.grdimage(grid=relief, cmap=True, shading=shade, region=region, projection="M14c", transparency=25)
+    fig.grdimage(grid=relief, cmap=True, shading=shade, region=region, projection="M14c", transparency=50)
 
     # Paint water OVER the relief image with GMT's own coastline polygons -- simpler and more robust
     # than aligning a separate land/sea raster mask to the relief grid, and keeps Puget Sound, lakes,

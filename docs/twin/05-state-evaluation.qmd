@@ -27,6 +27,10 @@ The gauges are therefore not a secondary check on the wells — they constrain a
 problem, and the calibration uses both ([Physics — Hydrology](03a-physics-hydrology.qmd)).
 :::
 
+![**Where the three station-based networks actually sit** — NWIS wells, SNOTEL, and the UW/CC seismic
+stations that supply dv/v, on shaded relief over the domain. Regenerate with
+`pixi run pygmt-network-map`.](assets/network_map_pygmt.png){#fig-network-map}
+
 ![**The observing networks over the domain, and the spatial support of a dv/v measurement.** Left: the
 four ground networks. Centre: the **coda sensitivity** $S(x)$ of the seismic network — the region the
 noise cross-correlations actually sample. Right: the measurement uncertainty that follows,

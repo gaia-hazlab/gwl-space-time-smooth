@@ -40,6 +40,7 @@ earthaccess = ">=0.17.0,<0.18"
 h5netcdf = ">=1.8.1,<2"
 obspy = ">=1.5.0,<2"
 pytest = ">=8,<9"
+pygmt = "*"
 
 [pypi-dependencies]
 dataretrieval = "*"
@@ -148,7 +149,11 @@ sensor-figure = "python notebooks/make_sensor_figure.py"
 observability-figure = "python notebooks/make_observability_figure.py"
 observing-system-figure = "python notebooks/make_observing_system_figure.py"
 spacetime-figure = "python notebooks/make_spacetime_figure.py"
-dvv-proxy-demo = "python notebooks/make_dvv_proxy_demo.py"
+# standard checkerboard resolution test: recovery of a regular anomaly pattern, network by network
+# (replaces the earlier dvv-proxy-demo, whose random-Gaussian-random-field "truth" was hard to read)
+checkerboard-test = "python notebooks/make_checkerboard_test.py"
+# PyGMT map of the ground sensor networks (wells, SNOTEL, seismic) on shaded relief
+pygmt-network-map = "python notebooks/make_pygmt_network_map.py"
 hysteresis-demo = "python notebooks/make_hysteresis_demo.py"
 cyberinfra-figure = "python notebooks/make_cyberinfra_figure.py"
 insitu-sm = "python -m src.data.fetch_insitu_sm"
