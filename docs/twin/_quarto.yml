@@ -27,6 +27,8 @@ website:
 
       - section: "The twin"
         contents:
+          - text: "0 · Digital twins and digital shadows"
+            href: 00a-digital-twins-review.qmd
           - text: "1 · Structural model"
             href: 00-structural-model.qmd
           - text: "2 · Input data"

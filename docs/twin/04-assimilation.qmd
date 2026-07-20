@@ -130,28 +130,44 @@ $1/\sigma_{\text{prior}}^2$. That is where "~94% wells for groundwater, ~95% dv/
 comes from — a *near-station refinement* fraction, not a claim about the field as a whole. The full
 $C_a$ above is what the design maps in [the evaluation chapter](05-state-evaluation.qmd).
 
-## Worked inversion: dv/v at the stations to a state proxy between them
+## Worked inversion: a checkerboard resolution test, network by network
 
-The estimator is not only a variance calculation — run forward and back, it turns a **measured dv/v at
-the seismic stations into an estimate of the states between them**. The twin does *not* forecast a
-gridded dv/v field; dv/v lives only where there are receivers. What the coda kernels do is carry that
-station information into the intervening volume:
+The estimator is not only a variance calculation — run forward and back through `blue_update`, it
+recovers a **known synthetic state** from synthetic data at each network's actual footprints, which is
+the standard way to make "how well does this network resolve the field" concrete rather than abstract.
+The input is the tomography-standard **checkerboard**: a regular, alternating-sign pattern at a chosen
+wavelength (`checkerboard()` in `notebooks/make_checkerboard_test.py`), not a random smooth field —
+a known regular pattern makes *where* a network resolves it, and where it smears into the prior,
+immediately legible, and directly comparable network to network in a way a single random draw is not.
 
-![Forward: the modelled state produces a dv/v at each station (its coda footprint average). Inverse:
-those station dv/v values, run through the same kernels by the BLUE above, reconstruct a soil-moisture
-(shallow band) and water-table (deep band) proxy *between* the stations. The proxy matches the truth
-where the network is dense and reverts to the prior where it is sparse; the error is small wherever the
-coda actually constrains the cell.](assets/dvv_proxy.png)
+![Checkerboard resolution test for the water table (wells + deep dv/v) and soil moisture (SNOTEL +
+shallow dv/v): the true checkerboard, then its recovery by the point network alone, by dv/v alone, and
+by both combined. Forward data are noise-free (each network's footprint average of the true
+checkerboard); the recovery is therefore purely a function of the observing geometry, not measurement
+error. Correlation with the truth (annotated per panel, computed only where resolution exceeds 0.3) is
+the single-number summary; the maps are the reason to look past that number — recovery quality is
+strongly regime-dependent (see below).](assets/checkerboard_test.png){#fig-checkerboard}
 
-The **forward** step is $d_i = g_i^\top m$: a synthetic-but-physical dv/v at each station is the
-coda-kernel average of the modelled state, split by band — the shallow band scales with soil moisture
-through $S_\theta$, the deep band with the water table through $k_{sat}$
-([Physics — hydromechanics](03b-physics-hydromechanics.qmd)). The **inverse** step divides out the band
-sensitivity and applies `blue_update` with those same coda footprints as $G$. Because dv/v is the only
-*volume* stream, it is what ties the point wells and probes together in the gaps — the recovered proxy
-correlates with the true field at $r\!\approx\!0.85$ where the network is well-constrained, and honestly
-reverts to the model where it is not. This is the whole chain the twin runs with real measured dv/v in
-place of the synthetic.
+Two results the panels make concrete, testing what each network type actually contributes:
+
+- **The point networks anchor recovery near their stations and revert to the prior between them** —
+  the checker pattern is only recovered inside a station's own resolution length, exactly as
+  [the resolution/information-gain design](05-state-evaluation.qmd) predicts.
+- **dv/v's value is state-dependent, not uniform.** For the water table, dv/v alone recovers the
+  checkerboard far more weakly than wells alone (dv/v is a *volume* average over a coda path, a
+  fundamentally coarser probe of a smooth field than a point well sitting inside it); for soil
+  moisture, dv/v alone is competitive with — in this run, better than — SNOTEL alone, because the
+  seismic network is denser and better distributed than the handful of SNOTEL sites
+  ([the sensitivity map](05-state-evaluation.qmd)). Combining networks never recovers the checkerboard
+  worse than the better of the two alone, matching the resolution design's "more data never loses
+  resolution" invariant.
+
+The **forward** step is $d_i = g_i^\top m$: a synthetic-but-physical dv/v (or point) datum is the
+network's own footprint average of the true checkerboard, split by band for dv/v — the shallow band
+scales with soil moisture through $S_\theta$, the deep band with the water table through $k_{sat}$
+([Physics — hydromechanics](03b-physics-hydromechanics.qmd)). The **inverse** step is `blue_update`
+with each network's footprints as $G$. This is the same estimator the twin runs with real measured
+dv/v in place of the synthetic checkerboard datum.
 
 ## dv/v depth separation into hydrologic states
 
@@ -178,6 +194,78 @@ fourth quantity is reported **separately and never merged in**: the **observabil
 instrument constrains a cell at all ([the sensitivity map](05-state-evaluation.qmd)). A cell can carry
 a confident model prediction and no measurement able to test it; conflating the two would be the most
 misleading error available.
+
+## Recursion in time: from one analysis to a filter
+
+Everything above is a **single** analysis at one instant: given $m_b$ and the observations available
+now, produce $m_a$ and $C_a$. Nowcasting needs this run sequentially — $t \to t+1 \to t+2 \dots$ — with
+the posterior of one step feeding the prior of the next. That recursion already exists implicitly: the
+Rung-2 dynamics operator ([Stage 2](03a-physics-hydrology.qmd), the transfer-function-noise / linear
+reservoir) is a linear-Gaussian **forecast** step, $m_b(t{+}1) = A\,m_a(t) + B\,u_t + w_t$, and
+`blue_update` is the **analysis** step. Chained together, forecast $\to$ analysis $\to$ forecast is
+exactly a Kalman filter; the OU-decay reweighting of stale data (above) was an approximation to this
+recursion for the case where the forecast step wasn't yet running explicitly. For the nonlinear Rung-3
+emulator (ParFlow-ML) the linear forecast no longer applies and the natural generalisation is an
+**ensemble Kalman filter** — perturbed-forcing ensemble members propagated through the emulator, with
+the ensemble covariance standing in for $B$ at each step.
+
+## When the linear-Gaussian filter stops being honest: dynamic Bayesian networks
+
+A Kalman filter is the special case of a **dynamic Bayesian network** (DBN) in which every transition
+and observation distribution is linear-Gaussian. That restriction is what makes it cheap and
+closed-form, and it is *also* the thing that can make its uncertainty wrong in specific,
+identifiable ways. Because this project's product is not a point estimate but a calibrated $\sigma$
+that travels with it (the static/dynamic/downscaling/observability budget above), a DBN should be
+added only when there is a concrete, observed way the linear-Gaussian filter is **misreporting** that
+$\sigma$ — not as a general upgrade.
+
+::: {.callout-important}
+## The trigger is a diagnosed uncertainty failure, not a desire for a fancier model
+Three specific failure modes justify the added cost and reduced interpretability of a DBN. Each is
+something you can check for in the existing residuals/innovations before deciding to build it:
+
+1. **Regime-dependent dynamics.** Recharge is threshold-like (little response below field capacity,
+   fast response above it) and recession behaves differently wet vs. dry. A single linear $A$ averages
+   over both regimes, so its process noise $w_t$ is *too small* in one regime and *too large* in the
+   other — the filter's $C_a$ is miscalibrated exactly at the transitions (snowmelt onset, drought
+   breaks) that matter most operationally. Diagnostic: check whether the innovation sequence
+   $d - G m_b$ is heteroscedastic conditioned on wet/dry state: if its variance shifts systematically at
+   known regime boundaries, the single-regime filter is the problem. Fix: a DBN with a discrete regime
+   node (wet/dry, or frozen/thawed) switching between linear-Gaussian sub-models — a switching
+   state-space model — restores a $\sigma$ that is honest in both regimes instead of one averaged,
+   wrong-everywhere value.
+2. **Non-Gaussian or bounded error structure.** Surface-water classification (Sentinel, binary
+   wet/dry per HAND cell) and a hazard-relevant susceptibility state (bounded probability, once landlab
+   susceptibility joins the state) are not well described by a symmetric Gaussian posterior — a Gaussian
+   $C_a$ will assign non-trivial mass outside $[0,1]$ or symmetric error bars to a state whose real risk
+   is entirely in one tail. Diagnostic: compare the filter's nominal coverage (does the true state fall
+   inside the 90% interval 90% of the time) against a held-out set for these specific streams; if
+   coverage is systematically wrong at one tail, the Gaussian assumption is the cause, not the gain.
+   Fix: a DBN lets the emission/transition distribution for that node be whatever is honest (Beta,
+   censored, logit-Gaussian) while keeping the rest of the network linear-Gaussian where that is already
+   adequate — the point of a DBN is that only the nodes that need it pay the cost.
+3. **Explicit graphical coupling once landlab susceptibility joins the state.** The coupling between
+   GWL/soil-moisture states and slope-stability susceptibility is currently a hypothesis (does
+   susceptibility depend on GWL lagged by $k$ days, on soil moisture directly, on both, on neither) not
+   yet a tested dependency structure. A DBN forces that hypothesis into an explicit edge that can be
+   fit and compared against alternatives, and — critically for the uncertainty budget — propagates the
+   *upstream* GWL/soil-moisture posterior uncertainty into the susceptibility posterior honestly,
+   instead of a coupling equation that silently treats the upstream state as known. Diagnostic: this
+   one is triggered by the coupling being built at all, not by a residual pattern — it is a modeling
+   decision, not a repair.
+:::
+
+None of these are yet observed in the current pipeline — Rung 2/EnKF above is the actual near-term
+work. This section exists so that when one of the three diagnostics fires, the fix has a name and a
+place in the ladder rather than being improvised. If a DBN is built, it should be a **structured
+probabilistic state-space model** (a switching Kalman filter, a Beta/censored emission node — the
+minimum non-Gaussian or discrete structure the diagnostic demands), not a bare LSTM: an LSTM's point
+forecast throws away exactly the calibrated $\sigma$ that is this project's uncertainty budget, and
+"looks like an LSTM" is only useful here as an *architecture* intuition (an unrolled recurrent
+transition), not license to drop the probabilistic bookkeeping. A DBN inference pass (particle filter or
+variational) is also materially more expensive than the closed-form BLUE/Kalman update above, and needs
+more data to fit transition/emission distributions reliably — reasons to reach for it only where a
+diagnosed failure, not a hunch, calls for it.
 
 ## Confidence mask and honest masking
 

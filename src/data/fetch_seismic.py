@@ -40,8 +40,11 @@ logger = logging.getLogger("fetch_seismic")
 from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
 
 NETWORKS = ("UW", "CC")
-# Vertical channels only for the demo: broadband (BH/HH) and short-period (EH).
-CHANNELS = "BHZ,HHZ,EHZ"
+# Vertical channels only (single-component autocorrelation / cross-correlation dv/v): broadband
+# (BH), high-sample-rate broadband (HH), short-period (EH), and strong-motion accelerometer (HN) --
+# HN was previously omitted, silently dropping every accelerometer-only station (common at CC's
+# volcano-monitoring sites, e.g. near Rainier) from the inventory.
+CHANNELS = "BHZ,HHZ,EHZ,HNZ"
 # Per-network waveform backend (metadata is always open fdsnws, independent of this).
 WAVEFORM_BACKEND = {"UW": "s3_auth", "CC": "fdsn"}
 CACHE = Path("data/cache/seismic")
@@ -103,7 +106,7 @@ def fetch_inventory(bbox=PUGET_CASCADES_BBOX, networks=NETWORKS, channels=CHANNE
     return agg
 
 
-def fetch_waveforms(network, station, channel_priority=("BHZ", "HHZ", "EHZ"),
+def fetch_waveforms(network, station, channel_priority=("BHZ", "HHZ", "EHZ", "HNZ"),
                     start="2024-06-01", days=30, backend=None, cache=CACHE):
     """Download daily vertical-component miniSEED for one station; cache one file per day.
 

@@ -71,6 +71,19 @@ on the flats) — a thin, rocky mountain soil cannot buffer a storm the way a me
 and root depth scales that storage directly. Regenerate with `pixi run domain-figures`.
 ](assets/static_layers_domain.png){#fig-static-layers}
 
+::: {.content-visible when-format="html"}
+![**The same catalog, one layer at a time** (3 s/frame, looping): each panel shown at full size
+instead of shrunk to a ninth of the grid above, with the label inside the frame rather than as a
+title above it. Regenerate with `pixi run domain-layers-gif`.
+](assets/static_layers_domain.gif){#fig-static-layers-gif}
+:::
+
+::: {.content-visible when-format="pdf"}
+**The same catalog, one layer at a time** is animated (GIF): each of the nine panels above shown at
+full size for 3 seconds, looping — see the animation at the
+[online chapter](https://gaia-hazlab.github.io/gwl-space-time-smooth/twin/00-structural-model.html#fig-static-layers-gif).
+:::
+
 ::: {.callout-important}
 ## Vs30 is 200 m information on a 90 m grid
 The SVM shallow-Vs grid is **200 m** horizontally, so placing it on the 90 m analysis grid is an
