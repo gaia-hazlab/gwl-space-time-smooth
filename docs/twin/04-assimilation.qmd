@@ -130,28 +130,44 @@ $1/\sigma_{\text{prior}}^2$. That is where "~94% wells for groundwater, ~95% dv/
 comes from — a *near-station refinement* fraction, not a claim about the field as a whole. The full
 $C_a$ above is what the design maps in [the evaluation chapter](05-state-evaluation.qmd).
 
-## Worked inversion: dv/v at the stations to a state proxy between them
+## Worked inversion: a checkerboard resolution test, network by network
 
-The estimator is not only a variance calculation — run forward and back, it turns a **measured dv/v at
-the seismic stations into an estimate of the states between them**. The twin does *not* forecast a
-gridded dv/v field; dv/v lives only where there are receivers. What the coda kernels do is carry that
-station information into the intervening volume:
+The estimator is not only a variance calculation — run forward and back through `blue_update`, it
+recovers a **known synthetic state** from synthetic data at each network's actual footprints, which is
+the standard way to make "how well does this network resolve the field" concrete rather than abstract.
+The input is the tomography-standard **checkerboard**: a regular, alternating-sign pattern at a chosen
+wavelength (`checkerboard()` in `notebooks/make_checkerboard_test.py`), not a random smooth field —
+a known regular pattern makes *where* a network resolves it, and where it smears into the prior,
+immediately legible, and directly comparable network to network in a way a single random draw is not.
 
-![Forward: the modelled state produces a dv/v at each station (its coda footprint average). Inverse:
-those station dv/v values, run through the same kernels by the BLUE above, reconstruct a soil-moisture
-(shallow band) and water-table (deep band) proxy *between* the stations. The proxy matches the truth
-where the network is dense and reverts to the prior where it is sparse; the error is small wherever the
-coda actually constrains the cell.](assets/dvv_proxy.png)
+![Checkerboard resolution test for the water table (wells + deep dv/v) and soil moisture (SNOTEL +
+shallow dv/v): the true checkerboard, then its recovery by the point network alone, by dv/v alone, and
+by both combined. Forward data are noise-free (each network's footprint average of the true
+checkerboard); the recovery is therefore purely a function of the observing geometry, not measurement
+error. Correlation with the truth (annotated per panel, computed only where resolution exceeds 0.3) is
+the single-number summary; the maps are the reason to look past that number — recovery quality is
+strongly regime-dependent (see below).](assets/checkerboard_test.png){#fig-checkerboard}
 
-The **forward** step is $d_i = g_i^\top m$: a synthetic-but-physical dv/v at each station is the
-coda-kernel average of the modelled state, split by band — the shallow band scales with soil moisture
-through $S_\theta$, the deep band with the water table through $k_{sat}$
-([Physics — hydromechanics](03b-physics-hydromechanics.qmd)). The **inverse** step divides out the band
-sensitivity and applies `blue_update` with those same coda footprints as $G$. Because dv/v is the only
-*volume* stream, it is what ties the point wells and probes together in the gaps — the recovered proxy
-correlates with the true field at $r\!\approx\!0.85$ where the network is well-constrained, and honestly
-reverts to the model where it is not. This is the whole chain the twin runs with real measured dv/v in
-place of the synthetic.
+Two results the panels make concrete, testing what each network type actually contributes:
+
+- **The point networks anchor recovery near their stations and revert to the prior between them** —
+  the checker pattern is only recovered inside a station's own resolution length, exactly as
+  [the resolution/information-gain design](05-state-evaluation.qmd) predicts.
+- **dv/v's value is state-dependent, not uniform.** For the water table, dv/v alone recovers the
+  checkerboard far more weakly than wells alone (dv/v is a *volume* average over a coda path, a
+  fundamentally coarser probe of a smooth field than a point well sitting inside it); for soil
+  moisture, dv/v alone is competitive with — in this run, better than — SNOTEL alone, because the
+  seismic network is denser and better distributed than the handful of SNOTEL sites
+  ([the sensitivity map](05-state-evaluation.qmd)). Combining networks never recovers the checkerboard
+  worse than the better of the two alone, matching the resolution design's "more data never loses
+  resolution" invariant.
+
+The **forward** step is $d_i = g_i^\top m$: a synthetic-but-physical dv/v (or point) datum is the
+network's own footprint average of the true checkerboard, split by band for dv/v — the shallow band
+scales with soil moisture through $S_\theta$, the deep band with the water table through $k_{sat}$
+([Physics — hydromechanics](03b-physics-hydromechanics.qmd)). The **inverse** step is `blue_update`
+with each network's footprints as $G$. This is the same estimator the twin runs with real measured
+dv/v in place of the synthetic checkerboard datum.
 
 ## dv/v depth separation into hydrologic states
 
