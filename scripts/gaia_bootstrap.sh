@@ -24,6 +24,26 @@ fi
 echo "    -> now run: echo \"\$GH_TOKEN\" | gh auth login --with-token"
 echo "       (needs repo + workflow scopes; used for issue queries and the final push)"
 
+echo "==> Node.js (>=22, required by @anthropic-ai/claude-code)"
+# A fresh box's SYSTEM node (apt's default `nodejs` package is often years out of date, e.g.
+# v10/npm 6) is too old for the CLI's engine requirement, and even a new-enough system node's
+# global npm prefix is often root-owned. Rather than sudo apt install a newer nodejs (fights the
+# system package manager) or sudo npm install -g (root ends up owning every future global
+# install), use nvm: a user-owned, per-user Node that needs no sudo anywhere in this section.
+# `nvm install --lts` is NOT pinned to 22 -- it tracks whatever the current LTS is, which can
+# drift below 22 over time -- so pin the major explicitly instead.
+NODE_MIN_MAJOR=22
+node_major() { command -v node >/dev/null && node -e 'console.log(process.versions.node.split(".")[0])' || echo 0; }
+npm_prefix_writable() { command -v npm >/dev/null && [ -w "$(npm config get prefix)/lib" ] 2>/dev/null; }
+if [ "$(node_major)" -lt "$NODE_MIN_MAJOR" ] || ! npm_prefix_writable; then
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+  # shellcheck disable=SC1091
+  . "$NVM_DIR/nvm.sh"
+  nvm install "$NODE_MIN_MAJOR"
+  nvm use "$NODE_MIN_MAJOR"
+fi
+
 echo "==> Claude Code CLI"
 if ! command -v claude >/dev/null; then
   npm install -g @anthropic-ai/claude-code
@@ -48,10 +68,16 @@ echo "==> Register + install the gaia agent plugin"
 claude plugin marketplace add ./.claude/gaia
 claude plugin install gaia@gaia
 
-cat <<'EOF'
+NODE_BIN_DIR="$(dirname "$(command -v node)" 2>/dev/null || true)"
+cat <<EOF
 
 Bootstrap done. Before running scripts/gaia_run_queue.sh:
   1. gh auth login (above)
   2. export ANTHROPIC_API_KEY=...
   3. Confirm push access: git -C "$REPO_DIR" push --dry-run origin main
+  4. If running unattended via cron (docs/gaia-automation.md): cron does not source
+     .bashrc/.zshrc, so its minimal default PATH typically won't see pixi or nvm's
+     node/claude (gh and quarto are usually already under /usr/bin or /usr/local/bin,
+     which cron does see). Put an explicit PATH line in the crontab, e.g.:
+       PATH=${NODE_BIN_DIR:-\$HOME/.nvm/versions/node/*/bin}:$HOME/.pixi/bin:/usr/local/bin:/usr/bin:/bin
 EOF
