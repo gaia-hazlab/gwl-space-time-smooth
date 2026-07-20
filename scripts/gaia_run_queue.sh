@@ -126,10 +126,14 @@ Do not commit -- leave the working tree dirty for the pipeline to check."
 
   # `cmd && rc=0 || rc=$?` (not a bare `cmd; rc=$?`) is required here: under `set -e`, a plain
   # failing command exits the script immediately, before a following `rc=$?` line ever runs.
+  # Streamed through `tee` (not `>>` alone) so the orchestrator's work is visible on the console
+  # live, before the pre-flight gate/commit/push below ever touch GitHub. `set -o pipefail` (from
+  # the script's `set -euo pipefail`) keeps `orchestrator_rc` reflecting claude's exit code, not tee's.
+  echo "  running gaia orchestrator on ${numbers_csv} (live below, also logged to $logfile)..." | tee -a "$logfile"
   claude -p "$impl_prompt" \
       --permission-mode acceptEdits \
       --dangerously-skip-permissions \
-      >> "$logfile" 2>&1 && orchestrator_rc=0 || orchestrator_rc=$?
+      2>&1 | tee -a "$logfile" && orchestrator_rc=0 || orchestrator_rc=$?
   if [ "$orchestrator_rc" -ne 0 ]; then
     report_failure "orchestrator failed on ${numbers_csv}; discarding" "$logfile" "$orchestrator_rc"
     abandon_branch "$branch" "$logfile"
@@ -169,6 +173,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
   # script (not just this batch) if `cmd` fails -- there is no later stage to report or recover.
   # Guard it, and fall back to a minimal body/message (still carrying the Closes lines) so a
   # lab-notebook drafting failure never blocks the actual PR from opening or merging.
+  echo "  drafting PR description via gaia-lab-notebook (logged to $logfile)..." | tee -a "$logfile"
   pr_body="$(claude -p "Use the gaia-lab-notebook agent to write a clear, scientist-facing pull
 request description for the change on branch ${branch} in ${REPO_DIR}, which together
 resolves this batch of related issues (grouped under '${readable_key}'):
@@ -225,10 +230,11 @@ Make the changes the review actually calls for -- don't pad the diff. If a comme
 wrong or out of scope, leave a note explaining why instead of blindly complying.
 Do not commit -- leave the working tree dirty."
 
+  echo "  running gaia orchestrator's revision pass on PR #${pr_number} (live below, also logged to $logfile)..." | tee -a "$logfile"
   claude -p "$revise_prompt" \
     --permission-mode acceptEdits \
     --dangerously-skip-permissions \
-    >> "$logfile" 2>&1 || echo "  revision pass errored; continuing to gate check" | tee -a "$logfile"
+    2>&1 | tee -a "$logfile" || echo "  revision pass errored; continuing to gate check" | tee -a "$logfile"
 
   if ! git diff --quiet || ! git diff --cached --quiet; then
     echo "  re-running gate after revision" | tee -a "$logfile"
