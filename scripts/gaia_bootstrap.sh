@@ -6,20 +6,37 @@ set -euo pipefail
 REPO_URL="${REPO_URL:-git@github.com:gaia-hazlab/gwl-space-time-smooth.git}"
 REPO_DIR="${REPO_DIR:-$HOME/gwl-space-time-smooth}"
 
+# gh and Quarto below install as portable, per-user tarballs into ~/.local -- no apt/dnf/pacman,
+# no sudo, no assumption about which package manager (or whether one) is on the box. This is the
+# same "user-owned, no sudo" reasoning as the pixi/nvm installs.
+LOCAL_BIN="$HOME/.local/bin"
+mkdir -p "$LOCAL_BIN"
+export PATH="$LOCAL_BIN:$PATH"
+for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  [ -f "$rc" ] && ! grep -qF '.local/bin' "$rc" && echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$rc"
+done
+
+# uname -m -> the arch suffix gh/Quarto's release assets use.
+case "$(uname -m)" in
+  x86_64|amd64) PKG_ARCH=amd64 ;;
+  aarch64|arm64) PKG_ARCH=arm64 ;;
+  *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
 echo "==> pixi (pinned env, matches CI)"
 curl -fsSL https://pixi.sh/install.sh | bash
 export PATH="$HOME/.pixi/bin:$PATH"
 
 echo "==> gh CLI"
 if ! command -v gh >/dev/null; then
-  sudo install -d -m 0755 /usr/share/keyrings
-  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    | sudo tee /usr/share/keyrings/githubcli-archive-keyring.gpg > /dev/null
-  sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-  sudo install -d -m 0755 /etc/apt/sources.list.d
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-  sudo apt update && sudo apt install gh -y
+  GH_TARBALL_URL=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest \
+    | grep -o "https://[^\"]*linux_${PKG_ARCH}\.tar\.gz" | head -1)
+  [ -n "$GH_TARBALL_URL" ] || { echo "Could not find a gh release asset for linux_${PKG_ARCH}" >&2; exit 1; }
+  curl -fsSL "$GH_TARBALL_URL" -o /tmp/gh.tar.gz
+  rm -rf /tmp/gh-extract && mkdir -p /tmp/gh-extract
+  tar -xzf /tmp/gh.tar.gz -C /tmp/gh-extract --strip-components=1
+  install -m 0755 /tmp/gh-extract/bin/gh "$LOCAL_BIN/gh"
+  rm -rf /tmp/gh.tar.gz /tmp/gh-extract
 fi
 echo "    -> now run: echo \"\$GH_TOKEN\" | gh auth login --with-token"
 echo "       (needs repo + workflow scopes; used for issue queries and the final push)"
@@ -53,8 +70,11 @@ echo "       export ANTHROPIC_API_KEY=\"sk-ant-...\""
 
 echo "==> Quarto"
 if ! command -v quarto >/dev/null; then
-  curl -fsSL https://quarto.org/download/latest/quarto-linux-amd64.deb -o /tmp/quarto.deb
-  sudo dpkg -i /tmp/quarto.deb || sudo apt-get install -f -y   # pull in missing deps, then retry
+  curl -fsSL "https://quarto.org/download/latest/quarto-linux-${PKG_ARCH}.tar.gz" -o /tmp/quarto.tar.gz
+  rm -rf "$HOME/.local/quarto" && mkdir -p "$HOME/.local/quarto"
+  tar -xzf /tmp/quarto.tar.gz -C "$HOME/.local/quarto" --strip-components=1
+  ln -sf "$HOME/.local/quarto/bin/quarto" "$LOCAL_BIN/quarto"
+  rm -f /tmp/quarto.tar.gz
 fi
 
 echo "==> Clone + build the pinned pixi env"
@@ -76,8 +96,8 @@ Bootstrap done. Before running scripts/gaia_run_queue.sh:
   2. export ANTHROPIC_API_KEY=...
   3. Confirm push access: git -C "$REPO_DIR" push --dry-run origin main
   4. If running unattended via cron (docs/gaia-automation.md): cron does not source
-     .bashrc/.zshrc, so its minimal default PATH typically won't see pixi or nvm's
-     node/claude (gh and quarto are usually already under /usr/bin or /usr/local/bin,
-     which cron does see). Put an explicit PATH line in the crontab, e.g.:
-       PATH=${NODE_BIN_DIR:-\$HOME/.nvm/versions/node/*/bin}:$HOME/.pixi/bin:/usr/local/bin:/usr/bin:/bin
+     .bashrc/.zshrc, so its minimal default PATH won't see anything this script
+     installed (pixi, gh, quarto, and nvm's node/claude are all per-user, not system
+     paths). Put an explicit PATH line in the crontab, e.g.:
+       PATH=${NODE_BIN_DIR:-\$HOME/.nvm/versions/node/*/bin}:$HOME/.pixi/bin:$LOCAL_BIN:/usr/local/bin:/usr/bin:/bin
 EOF
