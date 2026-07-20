@@ -111,13 +111,21 @@ per cell, the **resolution** $R = 1 - C_\text{post}/C \in [0,1]$ (the fraction o
 network removes), the **information gain** $\tfrac12\ln(C/C_\text{post})$ in nats, and the **marginal
 gain** of one network beyond another, $R(A\cup B) - R(B)$.
 
-![**Observability of the twin.** Rows: GWL (top), soil moisture (bottom). Columns: the point network
-alone; dv/v alone; **the resolution dv/v adds beyond the point network**; and the total information
-gain. The point sensors resolve their own neighbourhoods — wells the lowland, SNOTEL a set of isolated
-blobs — and leave the space between them unobserved. dv/v, a *volume* measurement, fills that space,
-and the third column shows it contributes most **exactly where the point sensors cannot reach**: the
-mountain headwaters for GWL, and the whole between-station field for soil
-moisture.](assets/observability.png){#fig-observability}
+![**Observability of the twin, static layers included.** Rows: GWL (top), soil moisture (bottom).
+Columns: the static layers alone (see below); the point network alone; dv/v alone; **the resolution
+dv/v adds beyond the point network**; and the total information gain — now from static layers **and**
+network together, via the nonstationary-prior construction described
+[below](#the-static-layers-resolve-space-the-sensor-network-resolves-the-rest), not from the network
+alone. The point sensors resolve their own neighbourhoods — wells the lowland, SNOTEL a set of
+isolated blobs — and leave the space between them unobserved. dv/v, a *volume* measurement, fills
+that space, and the fourth column shows it contributes most **exactly where the point sensors cannot
+reach**: the mountain headwaters for GWL, and the whole between-station field for soil moisture.
+GWL's static-layer column is genuinely patchy — HAND/soil covariates resolve real 90 m structure
+everywhere, not only near wells — while soil moisture's is honestly **flat**: Stage 1 for SM is a
+pedotransfer envelope, not a fitted regression, so its uncertainty is one constant, not a spatially
+validated one, and its information-gain column is dominated by that unvalidated constant rather than
+genuine spatial skill — a limitation to fix, not to
+hide.](assets/observability.png){#fig-observability}
 
 Three results the maps make concrete:
 
@@ -173,6 +181,32 @@ uncertainty budget. That puts "resolution from static layers" in exactly the sam
 nonstationary prior $C(x,x') = \sigma_{\text{rf}}(x)\,\sigma_{\text{rf}}(x')\,\rho(|x-x'|)$ — the
 same Matern correlation above, just scaled by the covariate-informed std at each point instead of a
 constant.
+
+::: {.callout-note}
+## How the two resolutions are actually combined
+Scaling a stationary correlation $\rho(x,x')$ by a *spatially varying* marginal std at each point is
+the standard geostatistical "nonstationary variance, stationary correlation" construction — it stays
+a valid covariance (positive semi-definite) for any $\rho$ that is, and it is exactly what makes the
+two resolutions combinable rather than merely comparable. Treating $C_{\text{static}}$ as the prior
+and then running the ordinary `blue_update`/`resolution` machinery with the sensor network as $G$
+is **sequential Bayesian updating** — prior from static layers, likelihood from sensors — which is
+mathematically identical to one joint update of a single "virtual observation per pixel + real
+sensor rows" system, but far cheaper: it needs one $n\times n$ solve with the sensor footprints,
+never an $n\times n$ system with one row per grid cell for the static layers too. Three resolutions
+fall out of the same $C_{\text{static}}$, differing only in which variance sits in the denominator:
+
+- $R_{\text{static}}(x) = 1-\sigma_{\text{rf}}(x)^2/\sigma_{\text{flat}}^2$ — static layers against
+  a flat (no-covariate, no-well) prior;
+- $R_{\text{combined}}(x) = 1-\mathrm{Var}_{\text{post}}(x)/\sigma_{\text{flat}}^2$ — static layers
+  *and* sensors, still against the flat prior, where $\mathrm{Var}_{\text{post}}$ comes from solving
+  `resolution(C_static, G_sensors, noise_sensors)`;
+- $R_{\text{marginal}}(x) = 1-\mathrm{Var}_{\text{post}}(x)/\sigma_{\text{rf}}(x)^2$ — the same
+  posterior, but measured against the static-layer prior instead of the flat one, i.e. what the
+  sensor network adds *given that the static layers are already known*. This is the map a sensor-
+  siting decision actually needs, and it is the per-cell analogue of `marginal_resolution()`
+  elsewhere in this chapter — the only difference is that "the base network" here is the static-layer
+  prior itself, not another sensor set.
+:::
 
 ![**Where spatial resolution comes from, for the water table.** Static layers alone (top left)
 resolve real but patchy structure everywhere, including far from any station — HAND/soil texture
