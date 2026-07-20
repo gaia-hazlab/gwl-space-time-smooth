@@ -35,18 +35,38 @@ cd "$REPO_DIR"
 mkdir -p "$LOG_DIR"
 REPO_SLUG="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 
+# Every failure path below calls this: it prints WHY inline (exit code + the tail of the actual
+# claude/pixi/quarto output) so a failure is diagnosable from the console alone, not only by
+# separately opening $logfile on whatever box this ran on.
+report_failure() {
+  local msg="$1" logfile="$2" exit_code="${3:-?}"
+  {
+    echo ""
+    echo "  !!! $msg (exit $exit_code)"
+    echo "  --- last 40 lines of $logfile ---"
+    tail -n 40 "$logfile" 2>/dev/null | sed 's/^/  | /'
+    echo "  --- end of tail; full log at $logfile ---"
+  } | tee -a "$logfile"
+}
+
 abandon_branch() {
-  local branch="$1"
-  git checkout main
-  git branch -D "$branch" 2>/dev/null || true
-  git push origin --delete "$branch" 2>/dev/null || true
+  local branch="$1" logfile="$2"
+  {
+    echo "  abandoning branch ${branch}:"
+    git diff --stat 2>&1
+    git checkout main 2>&1
+    git branch -D "$branch" 2>&1 || true
+    git push origin --delete "$branch" 2>&1 || true
+  } >> "$logfile" 2>&1
 }
 
 wait_for_copilot_review() {
   local pr_number="$1" logfile="$2"
   for ((i = 0; i < REVIEW_WAIT_TRIES; i++)); do
+    # A transient gh api hiccup here must not kill the whole script mid-poll -- fall through to
+    # the sleep-and-retry rather than let a single failed request propagate under `set -e`.
     body="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/reviews" \
-      --jq "[.[] | select(.user.login == \"${COPILOT_REVIEWER}\")] | last")"
+      --jq "[.[] | select(.user.login == \"${COPILOT_REVIEWER}\")] | last" 2>>"$logfile")" || body=""
     if [ -n "$body" ] && [ "$body" != "null" ]; then
       echo "$body"
       return 0
@@ -104,32 +124,37 @@ change where that makes sense, rather than as unrelated patches stapled together
 Make the minimal correct change (code, tests, and/or docs) for the whole batch.
 Do not commit -- leave the working tree dirty for the pipeline to check."
 
-  if ! claude -p "$impl_prompt" \
+  # `cmd && rc=0 || rc=$?` (not a bare `cmd; rc=$?`) is required here: under `set -e`, a plain
+  # failing command exits the script immediately, before a following `rc=$?` line ever runs.
+  claude -p "$impl_prompt" \
       --permission-mode acceptEdits \
       --dangerously-skip-permissions \
-      >> "$logfile" 2>&1; then
-    echo "  orchestrator failed on ${numbers_csv}; discarding" | tee -a "$logfile"
-    abandon_branch "$branch"
+      >> "$logfile" 2>&1 && orchestrator_rc=0 || orchestrator_rc=$?
+  if [ "$orchestrator_rc" -ne 0 ]; then
+    report_failure "orchestrator failed on ${numbers_csv}; discarding" "$logfile" "$orchestrator_rc"
+    abandon_branch "$branch" "$logfile"
     continue
   fi
 
   if git diff --quiet && git diff --cached --quiet; then
-    echo "  no changes produced for ${numbers_csv}; skipping" | tee -a "$logfile"
-    abandon_branch "$branch"
+    echo "  no changes produced for ${numbers_csv}; skipping (see $logfile for what the orchestrator said)" | tee -a "$logfile"
+    abandon_branch "$branch" "$logfile"
     continue
   fi
 
   echo "  pre-flight gate: pixi run test && pixi run check-dois" | tee -a "$logfile"
-  if ! { pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; }; then
-    echo "  pre-flight gate FAILED for ${numbers_csv}; discarding, issues stay open" | tee -a "$logfile"
-    abandon_branch "$branch"
+  { pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; } && test_rc=0 || test_rc=$?
+  if [ "$test_rc" -ne 0 ]; then
+    report_failure "pre-flight gate FAILED for ${numbers_csv}; discarding, issues stay open" "$logfile" "$test_rc"
+    abandon_branch "$branch" "$logfile"
     continue
   fi
-  quarto render docs/twin --to html >> "$logfile" 2>&1 || {
-    echo "  quarto render failed for ${numbers_csv}; discarding" | tee -a "$logfile"
-    abandon_branch "$branch"
+  quarto render docs/twin --to html >> "$logfile" 2>&1 && quarto_rc=0 || quarto_rc=$?
+  if [ "$quarto_rc" -ne 0 ]; then
+    report_failure "quarto render failed for ${numbers_csv}; discarding" "$logfile" "$quarto_rc"
+    abandon_branch "$branch" "$logfile"
     continue
-  }
+  fi
 
   git add -A
   git commit -m "gaia: resolve ${numbers_csv} (${readable_key})
@@ -140,6 +165,10 @@ and the quarto book render passed before opening this PR.
 Co-Authored-By: Claude <noreply@anthropic.com>"
   git push -u origin "$branch"
 
+  # A bare `var="$(cmd)"` with no exit-code guard would, under `set -e`, silently kill the WHOLE
+  # script (not just this batch) if `cmd` fails -- there is no later stage to report or recover.
+  # Guard it, and fall back to a minimal body/message (still carrying the Closes lines) so a
+  # lab-notebook drafting failure never blocks the actual PR from opening or merging.
   pr_body="$(claude -p "Use the gaia-lab-notebook agent to write a clear, scientist-facing pull
 request description for the change on branch ${branch} in ${REPO_DIR}, which together
 resolves this batch of related issues (grouped under '${readable_key}'):
@@ -150,12 +179,24 @@ Read the actual diff (git diff main...${branch}) -- don't guess. Explain in plai
 language: what was wrong across these issues, what changed, and what it means
 scientifically. No filler, no restating the diff line by line. End the body with
 these literal lines, one per issue:
-${closes_lines}" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")"
+${closes_lines}" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" \
+    && pr_body_rc=0 || pr_body_rc=$?
+  if [ "$pr_body_rc" -ne 0 ] || [ -z "$pr_body" ]; then
+    report_failure "gaia-lab-notebook failed to draft the PR body for ${numbers_csv}; using a minimal body" "$logfile" "$pr_body_rc"
+    pr_body="Automated change resolving ${numbers_csv} (${readable_key}). PR description drafting failed; see ${logfile}.
+
+${closes_lines}"
+  fi
 
   pr_number="$(gh pr create --base main --head "$branch" \
     --title "gaia: ${readable_key} (${numbers_csv})" \
     --body "$pr_body" \
-    --json number -q .number 2>>"$logfile" || gh pr view "$branch" --json number -q .number)"
+    --json number -q .number 2>>"$logfile" || gh pr view "$branch" --json number -q .number 2>>"$logfile")" \
+    && pr_create_rc=0 || pr_create_rc=$?
+  if [ "$pr_create_rc" -ne 0 ] || [ -z "$pr_number" ]; then
+    report_failure "could not open (or find) a PR for ${numbers_csv}; branch ${branch} left pushed for manual follow-up" "$logfile" "$pr_create_rc"
+    continue
+  fi
   echo "  opened PR #$pr_number for ${numbers_csv}" | tee -a "$logfile"
 
   gh api "repos/${REPO_SLUG}/pulls/${pr_number}/requested_reviewers" \
@@ -169,7 +210,7 @@ ${closes_lines}" --permission-mode acceptEdits --dangerously-skip-permissions 2>
   fi
   echo "$review" >> "$logfile"
 
-  review_comments="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/comments" --jq '.[] | "- \(.path):\(.line // .original_line): \(.body)"')"
+  review_comments="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/comments" --jq '.[] | "- \(.path):\(.line // .original_line): \(.body)"' 2>>"$logfile")" || review_comments="(could not fetch inline comments; see $logfile)"
 
   revise_prompt="Use the gaia orchestrator to address this Copilot code review on PR #${pr_number}
 (branch ${branch}, resolving ${numbers_csv}) in ${REPO_DIR}.
@@ -220,17 +261,28 @@ ${issue_bullets}
 Read the actual diff on that branch -- don't guess. Plain language: what was wrong,
 what changed, what it means for the science/results. This will be posted as the
 closing comment on each issue in the batch." \
-    --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")"
+    --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" \
+    && close_message_rc=0 || close_message_rc=$?
+  if [ "$close_message_rc" -ne 0 ] || [ -z "$close_message" ]; then
+    report_failure "gaia-lab-notebook failed to draft the close message for ${numbers_csv}; using a minimal message" "$logfile" "$close_message_rc"
+    close_message="Resolved via PR #${pr_number}. Closing-message drafting failed; see ${logfile}."
+  fi
 
-  gh pr merge "$pr_number" --squash --delete-branch --body "$close_message" >> "$logfile" 2>&1
+  gh pr merge "$pr_number" --squash --delete-branch --body "$close_message" >> "$logfile" 2>&1 \
+    && merge_rc=0 || merge_rc=$?
+  if [ "$merge_rc" -ne 0 ]; then
+    report_failure "merge of PR #${pr_number} failed for ${numbers_csv} -- PR left open, issues NOT closed" "$logfile" "$merge_rc"
+    continue
+  fi
   while IFS= read -r number; do
     [ -z "$number" ] && continue
-    gh issue comment "$number" --body "$close_message"
+    gh issue comment "$number" --body "$close_message" >> "$logfile" 2>&1 \
+      || echo "  could not comment on issue #$number (already merged/closed via 'Closes #N', so this is cosmetic)" | tee -a "$logfile"
   done <<< "$numbers"
   echo "  merged PR #$pr_number, closed ${numbers_csv}" | tee -a "$logfile"
 
   if [ -n "$milestone" ]; then
-    epic_number="$(epic_for_milestone "$milestone")"
+    epic_number="$(epic_for_milestone "$milestone")" || epic_number=""
     if [ -n "$epic_number" ]; then
       gh issue comment "$epic_number" --body "Sub-issues ${numbers_csv} resolved via PR #${pr_number} (squash-merged, Copilot-reviewed, checks green). Epic left open for your own review." \
         || echo "  could not comment on epic #$epic_number" | tee -a "$logfile"
