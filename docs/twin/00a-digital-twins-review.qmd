@@ -2,9 +2,7 @@
 title: "0 · Digital twins and digital shadows"
 ---
 
-# Digital Twins and Digital Shadows in Earth-System Science
-
-## 1. Why terminology matters
+## Why terminology matters
 
 The language of **digital twins** has moved rapidly from engineering into weather,
 climate, hydrology, oceanography, ecology, and natural-hazard research. In its original
@@ -35,7 +33,7 @@ estimation, prediction, scenario exploration, physical consistency, uncertainty,
 validation, interoperability, and accountable feedback. This is more informative than
 accepting the label used by a project.
 
-## 2. From Earth-system models to operational twins
+## From Earth-system models to operational twins
 
 Earth science already possessed most of the individual ingredients now associated with
 digital twins: coupled physical models, ensemble prediction, reanalysis, data assimilation,
@@ -67,9 +65,9 @@ yet been demonstrated [@li2023bigdata]. A more scientifically defensible goal is
 **federation of thematic digital shadows and decision-support twins**, each with a defined
 purpose, observable state, validation protocol, and interface to other components.
 
-## 3. Modeling challenges
+## Modeling challenges
 
-### 3.1 Multiscale, multiphysics coupling
+### Multiscale, multiphysics coupling
 
 The atmosphere, surface water, groundwater, soil, vegetation, ocean, and solid Earth evolve
 on very different spatial and temporal scales. Models developed independently in these
@@ -83,7 +81,7 @@ precipitation and biased evapotranspiration may produce plausible runoff until o
 is replaced. A twin therefore needs explicit coupling contracts, conservation tests, and
 component-wise uncertainty, not just software connectivity.
 
-### 3.2 Resolution is not fidelity
+### Resolution is not fidelity
 
 Kilometre-scale atmospheric modeling resolves processes hidden in coarser models, but it
 does not resolve soil pores, preferential flow, vegetation physiology, groundwater
@@ -97,7 +95,7 @@ represents only the processes resolved by the combined model--observation system
 [@barros2024dte]. Increasing resolution can reveal important dynamics, but it can also make
 structural errors more spatially detailed.
 
-### 3.3 Confounded sources of error
+### Confounded sources of error
 
 A model--observation discrepancy may reflect an incorrect initial state, erroneous forcing,
 an uncertain parameter, a missing process, numerical error, observation bias, or an
@@ -112,7 +110,7 @@ historical calibration an incomplete test of future performance. Digital twins i
 for extremes require ensembles, regime-specific diagnostics, stress tests, and
 out-of-period evaluation rather than a single best-fit trajectory.
 
-### 3.4 Hybrid physics and machine learning
+### Hybrid physics and machine learning
 
 Machine learning can accelerate model components, learn unresolved relationships, perform
 downscaling, and support latent-state estimation. It does not automatically provide
@@ -122,7 +120,7 @@ flux, and admissibility rules. The mass-conserving perceptron, for example, make
 and transfer explicit while learning functional relationships from data
 [@wang2024massconserving].
 
-## 4. Data and ecosystem-binding challenges
+## Data and ecosystem-binding challenges
 
 Earth-system data differ by more than file format. A value may represent a point, line,
 pixel, depth interval, three-dimensional volume, watershed average, instantaneous sample,
@@ -160,7 +158,7 @@ tested adapters into model space. The adapter---including its regridding kernel,
 observation operator, uncertainty transformation, and provenance---is part of the scientific
 product.
 
-## 5. State prediction with a constrained water budget
+## State prediction with a constrained water budget
 
 A digital shadow can be expressed as a state-space system:
 
@@ -204,7 +202,7 @@ ensemble, maps it into each sensor's measurement space, assimilates bias-aware o
 applies physical constraints jointly, diagnoses the correction by compartment, and then
 propagates a probabilistic forecast.
 
-## 6. Validation in observation space
+## Validation in observation space
 
 Validation must occur at the resolution and support of the observing system. The correct
 comparison is not generally between a model grid cell and a resampled product; it is
@@ -246,7 +244,7 @@ assumptions are examined [@gruber2016triplecollocation]. Evaluation should exten
 RMSE to ensemble reliability, calibration, event timing, extremes, spatial spectra,
 regime-specific skill, and conservation residuals.
 
-## 7. Adoption, silos, and the risk of hype
+## Adoption, silos, and the risk of hype
 
 Disciplinary silos are a structural limitation. Atmospheric science, hydrology,
 oceanography, ecology, geodesy, and geomechanics developed separate models, standards,
@@ -277,7 +275,7 @@ ensemble of independent models. Without such a comparison, the digital-twin labe
 repackage established capabilities without demonstrating additional scientific or
 decision value.
 
-## 8. Positioning the GAIA model
+## Positioning the GAIA model
 
 GAIA is best understood today as a **critical-zone digital shadow and hazard
 decision-support framework under development**. Its distinctive scientific object is not a
