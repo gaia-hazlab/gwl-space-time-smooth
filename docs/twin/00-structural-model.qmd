@@ -125,3 +125,47 @@ domain stratification.
 Together these form the static envelope; the [Input data](01-input-data.qmd) chapter covers the
 dynamic ground-sensor and satellite streams that modulate it, and the [Physics](03a-physics-hydrology.qmd)
 chapters show how the envelope enters the water budget and the petrophysical rheology.
+
+## The baseline water table: observation-anchored, not assumed
+
+One static layer is built differently from the rest: `baseline_dtw_m.tif` (and its elevation
+counterpart `baseline_wte_m.tif`) is **regressed from real GWL observations**, not just
+resampled from a source raster like HAND or SOLUS. It is Stage 1 of the GWL pipeline
+(`src/models/baseline_regression.py`) and answers a specific question: what is the *long-term*
+water table, before any dynamic forcing is added on top?
+
+**Target.** Each NWIS well contributes its **long-term median** depth-to-water
+(`median_dtw_m`), computed over that well's own period of record — the archive pull starts
+2000-01-01 and runs open-ended to whenever it was last refreshed (`pixi run data`), so this is a
+multi-year climatological median per well, not a value tied to one calendar date. Wells deeper
+than a configurable screen (`--max-well-depth-m`, ~30 m for the Puget Lowland) are dropped: HAND
+predicts the shallow, terrain-following table, and pooling in deep-confined wells whose head is
+not terrain-driven would corrupt the fit (issue #46).
+
+**Predictors.** The random forest is trained on the static layers above — HAND, TWI, slope, SOLUS
+soil texture/$K_{sat}$, PRISM climate, Vs30, depth-to-bedrock — and deliberately **excludes
+coordinates**, so it cannot memorise where the training wells sit and must generalise from
+physical covariates alone. It is *not* initialized from, or blended with, an external WTD product
+(Fan et al. 2013, HydroGEN, or the newer Ma et al. [-@ma2026highres] high-resolution product) — those
+appear only as literature context; the baseline here is fit from scratch on this project's own
+static layers and its own wells.
+
+**Residual correction.** The random forest alone leaves spatially structured residuals at the
+wells; those are kriged (ordinary kriging on a normal-score transform) and added back, so
+$\text{DTW}_{\text{final}} = \text{DTW}_{\text{RF}} + \text{residual}_{\text{kriged}}$ — a
+regression-kriging hybrid, not a pure ML fit.
+
+**Uncertainty.** Two components are propagated, not just the point estimate: $\sigma_{\text{rf}}$
+(the random-forest tree-ensemble spread — how much the trees disagree at each cell, a covariate-
+uncertainty term) and $\sigma_{\text{krige}}$ (the ordinary-kriging variance on the residual field
+— a spatial-interpolation term, larger far from wells). `src/evaluation/uncertainty_stack.py`
+combines these in quadrature, together with the Stage-2 climate-response residual term, into one
+tracked $\sigma_{\text{total}}$ — the same static/dynamic/downscaling decomposition the
+[assimilation chapter](04-assimilation.qmd#the-uncertainty-budget-static-dynamic-downscaling-observability)
+uses everywhere else. It is not just computed but checked: per-domain interval coverage, PIT, and
+CRPS (`coverage_metrics.json`) confirm the random-forest spread is calibrated — that 90% intervals
+actually contain the held-out truth ~90% of the time — rather than trusting an uncalibrated spread
+at face value.
+
+Regenerate with `pixi run baseline` (pilot domain) or `pixi run baseline-wt-domain` (the extended
+western-Cascades domain).

@@ -156,6 +156,38 @@ twin actually solves on (`notebooks/make_twin_gif.py`); a sparse GMRF/SPDE preci
 which would give both the terrain-awareness and the scalability at once — is future work.
 :::
 
+## The static layers resolve space; the sensor network resolves the rest
+
+The resolution maps above answer "how much does the **sensor network** reduce variance relative to
+a spatially flat prior" — by construction they credit zero spatial information to HAND, soil
+texture, or terrain, because that flat prior has no spatial structure of its own. But
+[the structural model](00-structural-model.qmd#the-baseline-water-table-observation-anchored-not-assumed)'s
+random forest already resolves real 90 m spatial structure from covariates alone, in cells with no
+well anywhere nearby — the sensor-only maps are blind to that.
+
+The fix reuses the same information-theoretic machinery, not a new one: the covariate-informed
+estimate is treated as a **virtual self-observation of every cell** — footprint = identity, noise
+= the random-forest tree-ensemble $\sigma_{\text{rf}}(x)^2$ already computed for the baseline's own
+uncertainty budget. That puts "resolution from static layers" in exactly the same units as
+"resolution from sensors," so the two are directly comparable and combinable through one
+nonstationary prior $C(x,x') = \sigma_{\text{rf}}(x)\,\sigma_{\text{rf}}(x')\,\rho(|x-x'|)$ — the
+same Matern correlation above, just scaled by the covariate-informed std at each point instead of a
+constant.
+
+![**Where spatial resolution comes from, for the water table.** Static layers alone (top left)
+resolve real but patchy structure everywhere, including far from any station — HAND/soil texture
+do not care where the wells are. Wells + dv/v alone (top right) resolve smooth, station-centred
+blobs that vanish in station-sparse terrain. Combined (bottom left) is their union. The bottom-right
+panel is the one the sensor-design question actually needs: what the network adds **beyond** what
+the static layers already give, evaluated against the covariate-informed prior rather than a flat
+one — it is near zero in the sparse east (the network has nothing to add there) and largest in the
+well-dense lowland (where it has the most to add). Regenerate with
+`pixi run static-resolution-figure`.](assets/static_resolution.png){#fig-static-resolution}
+
+The aggregate version of the top-left panel is the spatial-block-CV $R^2$ already reported in
+`block_cv_metrics.json` — "how much spatial variance do the static layers explain when tested at
+*unseen* locations" is the scalar summary of the same question this figure maps spatially.
+
 ### Satellite and surface-water streams
 
 Two distributed observations enter the same design and change it qualitatively, because they observe
