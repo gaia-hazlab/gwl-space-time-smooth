@@ -42,7 +42,13 @@ def _frame(arr, title, cmap, unit) -> Image.Image:
     cm = plt.get_cmap(cmap).copy()
     cm.set_bad("#eef0f3")
 
-    fig, ax = plt.subplots(figsize=(8.0, 8.0), constrained_layout=True)
+    # Fixed axes rects (not constrained_layout, which can shift box position per-frame) so the
+    # map sits at the SAME spot in every frame. The domain array is taller than wide (1890x1567),
+    # so imshow's equal-aspect image doesn't fill a square box -- set_anchor("W") left-aligns the
+    # rendered image within its box instead of matplotlib's default centering.
+    fig = plt.figure(figsize=(8.0, 8.0))
+    ax = fig.add_axes((0.02, 0.02, 0.78, 0.96))
+    ax.set_anchor("W")
     im = ax.imshow(arr, cmap=cm, vmin=lo, vmax=hi)
     ax.set_xticks([])
     ax.set_yticks([])
@@ -50,7 +56,8 @@ def _frame(arr, title, cmap, unit) -> Image.Image:
     ax.text(0.03, 0.97, f"{title}  [{unit}]", transform=ax.transAxes, fontsize=20,
             fontweight="bold", va="top", ha="left", color="black",
             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.85, edgecolor="none"))
-    fig.colorbar(im, ax=ax, shrink=0.7)
+    cax = fig.add_axes((0.84, 0.15, 0.03, 0.7))
+    fig.colorbar(im, cax=cax)
 
     buf = BytesIO()
     fig.savefig(buf, format="png", dpi=100, facecolor="white")
