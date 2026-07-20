@@ -140,6 +140,8 @@ calibrate-snow = "python notebooks/calibrate_snow_swe.py"
 calibrate-fluxes = "python notebooks/calibrate_fluxes.py"
 # presentation figures on the extended domain
 domain-figures = "python notebooks/make_domain_figures.py"
+# same static-layer catalog, one full-size frame per layer (3s each), animated GIF
+domain-layers-gif = "python notebooks/make_static_layers_gif.py"
 validation-figure = "python notebooks/make_validation_figure.py"
 twin-gif = "python notebooks/make_twin_gif.py"
 sensor-figure = "python notebooks/make_sensor_figure.py"
