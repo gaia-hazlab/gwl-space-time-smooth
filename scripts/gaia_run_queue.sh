@@ -44,6 +44,20 @@ cd "$REPO_DIR"
 mkdir -p "$LOG_DIR"
 REPO_SLUG="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 
+# A stable fingerprint of stdin, for the convergence check below -- NOT a security primitive, so
+# any of these is fine; `shasum` is macOS/Perl-native and not guaranteed on a fresh Linux box (the
+# actual unattended target per docs/gaia-automation.md), where `sha256sum` (coreutils) is standard.
+# `cksum` (POSIX, always present) is the last-resort fallback so this never hard-fails on a minimal image.
+fingerprint() {
+  if command -v shasum >/dev/null; then
+    shasum -a 256 | cut -d' ' -f1
+  elif command -v sha256sum >/dev/null; then
+    sha256sum | cut -d' ' -f1
+  else
+    cksum | cut -d' ' -f1
+  fi
+}
+
 # Every failure path below calls this: it prints WHY inline (exit code + the tail of the actual
 # claude/pixi/quarto output) so a failure is diagnosable from the console alone, not only by
 # separately opening $logfile on whatever box this ran on.
@@ -264,7 +278,7 @@ ${missing_closes}"
     round_since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
     review_comments="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/comments" --jq '.[] | "- \(.path):\(.line // .original_line): \(.body)"' 2>>"$logfile")" || review_comments="(could not fetch inline comments; see $logfile)"
-    comment_fingerprint="$(echo -n "$review_comments" | shasum -a 256 | cut -d' ' -f1)"
+    comment_fingerprint="$(echo -n "$review_comments" | fingerprint)"
 
     if [ -z "$review_comments" ] || [ "$comment_fingerprint" = "$prev_comment_fingerprint" ]; then
       echo "  converged: Copilot has nothing new to say (round ${review_round})" | tee -a "$logfile"

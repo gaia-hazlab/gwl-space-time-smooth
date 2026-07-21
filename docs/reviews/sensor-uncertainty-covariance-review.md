@@ -10,8 +10,8 @@ report at different times.
 This grounds the evaluation in what is actually implemented (`src/models/observability.py`,
 `src/models/dvv.py`, `src/models/anchor.py`, `docs/twin/04-assimilation.qmd`,
 `docs/twin/01-input-data.qmd`) plus the known gaps recorded in
-[`docs/probabilistic-nowcast-forecast-roadmap.md`](probabilistic-nowcast-forecast-roadmap.md) and
-[`ROADMAP.md`](../ROADMAP.md).
+[`docs/probabilistic-nowcast-forecast-roadmap.md`](../probabilistic-nowcast-forecast-roadmap.md) and
+[`ROADMAP.md`](../../ROADMAP.md).
 
 ---
 

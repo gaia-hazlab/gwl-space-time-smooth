@@ -119,8 +119,19 @@ def main():
     wmask &= (~wells.get("is_deep_well", pd.Series(False, index=wells.index)))
     wmask &= wells["median_dtw_m"].notna() & (wells["median_dtw_m"] > 0)
     sigma_flat2_gwl = float(np.var(wells[wmask]["median_dtw_m"].values))
-    theta_obs = pd.read_parquet(sm)["theta_obs"].dropna().values if sm.exists() else np.array([0.1])
+    theta_obs = pd.read_parquet(sm)["theta_obs"].dropna().values if sm.exists() else np.array([])
+    if theta_obs.size < 2:
+        raise RuntimeError(
+            f"{sm} is missing or has fewer than 2 usable theta_obs values -- cannot compute a real "
+            "population variance for soil moisture's flat prior (a degenerate/zero variance would "
+            "silently blow up the SM static-layer and information-gain panels below via a division "
+            "and a multiplication by it). Run `pixi run snotel` to fetch real SNOTEL soil-moisture "
+            "observations first."
+        )
     sigma_flat2_sm = float(np.var(theta_obs))
+    if not np.isfinite(sigma_flat2_sm) or sigma_flat2_sm <= 0.0:
+        raise RuntimeError(f"theta_obs from {sm} has a degenerate (near-constant) variance "
+                          f"({sigma_flat2_sm!r}) -- refusing to divide/multiply by it below.")
 
     # --- observation operators ------------------------------------------------------------------
     def point_G(pts):
