@@ -261,11 +261,13 @@ ${missing_closes}"
   # Iterate-until-convergence, not one fixed round: Copilot's code review NEVER submits an
   # "Approve" state (confirmed empirically -- it only ever leaves a COMMENTED review), so waiting
   # for approval would hang forever. "Converged" here means Copilot has nothing NEW left to say --
-  # tracked as a fingerprint of its inline comments, not the review's (permanently COMMENTED) state.
+  # tracked as a fingerprint of its inline comments AND its review body, not the review's (permanently
+  # COMMENTED) state -- Copilot can leave actionable feedback in the body with zero inline comments, so
+  # inline comments alone are not the whole signal.
   # Merging past a merely-COMMENTED review relies on the repo's ruleset bypass_actor for this token
   # (scoped to bypass_mode=pull_request only -- direct-push protections on main still apply).
   gate_ok=1
-  prev_comment_fingerprint=""
+  prev_round_fingerprint=""
   round_since=""
   for ((review_round = 1; review_round <= REVIEW_MAX_ROUNDS; review_round++)); do
     echo "  waiting for Copilot's review (round ${review_round}/${REVIEW_MAX_ROUNDS})..." | tee -a "$logfile"
@@ -277,18 +279,34 @@ ${missing_closes}"
     echo "$review" >> "$logfile"
     round_since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-    review_comments="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/comments" --jq '.[] | "- \(.path):\(.line // .original_line): \(.body)"' 2>>"$logfile")" || review_comments="(could not fetch inline comments; see $logfile)"
-    comment_fingerprint="$(echo -n "$review_comments" | fingerprint)"
+    # A FAILED fetch of inline comments must not masquerade as "no comments": the old placeholder made a
+    # stable fingerprint that false-converged us straight into a merge. `if !` distinguishes a genuine
+    # request failure (non-zero exit) from a legitimately empty comment set (exit 0, empty output) --
+    # gh returns success with empty output when a PR simply has no inline comments.
+    if ! review_comments="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/comments" --jq '.[] | "- \(.path):\(.line // .original_line): \(.body)"' 2>>"$logfile")"; then
+      echo "  could not fetch inline comments for PR #$pr_number; leaving it open for a human rather than risk a false-converge merge" | tee -a "$logfile"
+      gate_ok=0
+      break
+    fi
+    review_body="$(jq -r '.body // ""' <<<"$review" 2>>"$logfile")" || review_body=""
 
-    if [ -z "$review_comments" ] || [ "$comment_fingerprint" = "$prev_comment_fingerprint" ]; then
-      echo "  converged: Copilot has nothing new to say (round ${review_round})" | tee -a "$logfile"
+    # "Nothing to say" requires BOTH no inline comments AND no review body -- otherwise body-only
+    # feedback would be silently dropped. Convergence otherwise means the WHOLE payload (inline comments
+    # + review body) is byte-identical to the previous round, not just the inline comments.
+    if [ -z "$review_comments" ] && [ -z "$review_body" ]; then
+      echo "  converged: Copilot left no inline comments and no review body (round ${review_round})" | tee -a "$logfile"
+      break
+    fi
+    round_fingerprint="$(printf '%s\n--- review body ---\n%s' "$review_comments" "$review_body" | fingerprint)"
+    if [ -n "$prev_round_fingerprint" ] && [ "$round_fingerprint" = "$prev_round_fingerprint" ]; then
+      echo "  converged: Copilot's inline comments and review body are unchanged since the previous round (round ${review_round})" | tee -a "$logfile"
       break
     fi
     if [ "$review_round" -eq "$REVIEW_MAX_ROUNDS" ]; then
       echo "  hit the ${REVIEW_MAX_ROUNDS}-round cap with unresolved Copilot comments; proceeding to the gate/merge step anyway (CI green + the bypass actor are the real gate here, not Copilot's approval, which never comes) -- see $logfile for what's still open" | tee -a "$logfile"
       break
     fi
-    prev_comment_fingerprint="$comment_fingerprint"
+    prev_round_fingerprint="$round_fingerprint"
 
     revise_prompt="Use the gaia orchestrator to address this Copilot code review on PR #${pr_number}
 (branch ${branch}, resolving ${numbers_csv}) in ${REPO_DIR}. This is revision round ${review_round}.
