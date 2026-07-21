@@ -145,8 +145,10 @@ flowchart TD
   CYCLE --> FCST["#191 Ensemble-native forecast"]
   FORCING["#32/#56/#58/#70/#71/#136 Forcing and FuXi"] --> FCST
 
-  CONTRACT --> MECH["#190 Probabilistic mechanical memory"]
+  CONTRACT --> MECH["#190 Probabilistic mechanical memory (RBPF, conditional on CYCLE)"]
   ATTRIB["#162/#169 + #119-#125"] --> MECH
+  PETRO["#198 Common forward/inverse petrophysical operator"] --> MECH
+  CYCLE --> MECH
 
   FCST --> HAZ["#193 Joint ensemble hazard handoff"]
   MECH --> HAZ
@@ -210,6 +212,16 @@ The first #188 prototype may use the current calibrated daily model, a small spa
 limited hydrologic state. Do not wait for every hazard or mechanical issue. Production claims and
 full-domain cycling wait for the water and scale exit gates.
 
+**Filter architecture note.** #188 is scoped to exactly the state where the observation operator is
+linear — GWL (head) and soil moisture ($\theta$), observed through the point footprints of NWIS wells and
+SNOTEL/SCAN/USCRN. That is the deliberate boundary: this phase is an EnKF (`blue_update` with the
+ensemble covariance standing in for $B$), not a general nonlinear filter, because wells/SNOTEL are linear
+in the state and the Rung-2/Rung-3 forecast is linear or ensemble-handled. dv/v does **not** enter #188 at
+full fidelity yet — it enters today through its linearized $k_{sat}\Delta h$ / $S_\theta\Delta\theta$
+coefficients, same as any other linear observation, which is an accepted, explicit approximation, not an
+oversight. See [Assimilation §"Linear versus nonlinear observation operators"](twin/04-assimilation.qmd)
+for the full justification and its handoff to Phase 4.
+
 Nowcast acceptance:
 
 - posterior members become the next forecast's initial members;
@@ -251,6 +263,38 @@ Required separation:
 - event catalog/forcing.
 
 Slow damage/healing remains firewalled from seconds-scale liquefaction triggering as required by #145.
+
+**Filter architecture for this phase: a Rao-Blackwellized particle filter (RBPF), conditional on the
+#188 EnKF, not a filter of its own.** #190's damage/healing state and the dv/v-derived petrophysical
+state (hysteresis branch, effective saturation) are exactly the node where a Gaussian filter — EnKF or
+extended Kalman alike — stops being honest: the underlying chain (Hertz–Mindlin contact modulus, a
+retention-curve capillary term, a rate-dependent dynamic-capillarity term) is nonlinear and hysteretic,
+so a single $\delta v/v$ reading can be consistent with more than one $(\theta,\text{history})$ state at
+once. #198 (common forward/inverse petrophysical operator) is the prerequisite that makes this
+nonlinearity real rather than assumed — today's $k_{sat}$/$S_\theta$ constants are its linearization, and
+#190 should not build particle machinery before #198 lands.
+
+Design (spelled out with justification in
+[Assimilation §"The concrete two-tier filter"](twin/04-assimilation.qmd)):
+
+- Partition the state at the seam where linearity stops: $x_{\rm lin}$ (GWL, soil moisture — #188's EnKF)
+  and $x_{\rm nl}$ (hysteresis branch, effective saturation, damage/healing amplitude — a particle
+  ensemble, small and per-region, not per-cell-of-the-full-domain).
+- Each particle propagates $x_{\rm nl}$ through the real nonlinear/hysteretic transition model (no
+  linearization); conditional on a particle's trajectory, the dv/v sensitivity coefficients are fixed
+  numbers, so dv/v (like wells and SNOTEL) becomes **linear in $x_{\rm lin}$ given the particle** — this
+  is what makes marginalizing $x_{\rm lin}$ into #188's EnKF valid rather than merely convenient, and why
+  this is not a full particle filter over the whole state.
+- Particle weights update from the exact conditional likelihood of the full data vector at each
+  trajectory, with resampling when effective sample size drops.
+- Localize $x_{\rm nl}$ using the same terrain-aware `region_id` blocking already built for the spatial
+  prior $B$ (issue #163) — reused, not reinvented, to keep the particle dimension tractable.
+- Explicit approximation to flag, not hide: once Rung-3 (ParFlow-ML) is in the forecast loop, the
+  "conditional Kalman filter" for $x_{\rm lin}$ becomes a **conditional EnKF** — an approximation to the
+  textbook Rao-Blackwellized construction, which is exact only for a linear-Gaussian forecast model.
+  Document this as a controlled approximation in the eventual #190 write-up, not as exact marginalization.
+- A new dependency edge belongs in the graph above: `CYCLE["#188 EnKF"] --> MECH["#190, as an RBPF
+  conditional on #188"]`, in addition to the existing `CONTRACT --> MECH` and `ATTRIB --> MECH` edges.
 
 ### Phase 5 — Joint hazard ensembles
 
@@ -331,14 +375,20 @@ Foundation C: #154, #164, #165, #168
 #188
 #192
 #194             || #71/#136/#32
-#191             || #190 synthetic transition work
+#191             || #190 synthetic transition work (RBPF design, no #198 dependency yet)
+#198             (blocks #190's RBPF conditioning on real dv/v; #190's synthetic-transition work above does not wait for it)
 #193
 #195
 ```
 
 Do not dispatch #193 before #191. Do not claim operational nowcast completion at #188 alone; #192 and
 #194 are its calibration and evidence gates. Do not close #161 merely because the OU formula landed;
-the dynamical propagation requirement remains open until #188 is functioning.
+the dynamical propagation requirement remains open until #188 is functioning. Do not build #190's
+Rao-Blackwellized particle filter conditioning on real dv/v sensitivity coefficients before #198 lands —
+its synthetic transition-model work (branch/damage dynamics, particle mechanics, resampling) can and
+should proceed in parallel with #188, but the conditional-linearity argument that makes the filter
+Rao-Blackwellized rather than a full joint particle filter depends on #198's real $k_{sat}(x_{\rm
+nl})$/$S_\theta(x_{\rm nl})$ coefficients, not the current fixed constants.
 
 ## Scope boundaries
 
@@ -367,4 +417,9 @@ The milestone is complete when:
    reliability-ready outputs.
 9. Mechanical-memory uncertainty is either propagated through the relevant hazard path or explicitly
    excluded and documented for that release.
+10. The filter architecture is explicit and matches the state's own linearity: an EnKF over GWL/soil
+    moisture (#188), and — only once #198's forward/inverse petrophysical operator lands and #190 is
+    built — a Rao-Blackwellized particle filter over the hysteresis/damage node, conditional on that
+    EnKF, not a separate unconditioned filter. Until #198 lands, dv/v's linearized assimilation ($k_{sat}$,
+    $S_\theta$) is an accepted, documented approximation, not a silent one.
 
