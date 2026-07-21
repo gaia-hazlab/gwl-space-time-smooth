@@ -32,7 +32,7 @@ OUT = Path("figures/demo/checkerboard_test.png")
 STEP = 22
 WAVELENGTH_KM = 24.0                    # checker cell size: 2 x the GWL correlation length below
 GWL_L_KM, SM_L_KM = 6.0, 3.0
-NOISE = dict(well=0.02, snotel=0.03, dvv_deep=0.25, dvv_shallow=0.12)
+NOISE = dict(well=0.02, snotel=0.03, dvv_deep=0.25, dvv_shallow=0.12, gauge=0.35)
 
 
 def checkerboard(coords_km: np.ndarray, wavelength_km: float) -> np.ndarray:
@@ -72,9 +72,13 @@ def main():
     x0, y0, x1, y1 = DOMAIN.bounds()
     tf = Transformer.from_crs("EPSG:4326", DOMAIN.crs, always_xy=True)
 
+    def keep_mask(lon, lat):
+        xm, ym = tf.transform(np.asarray(lon), np.asarray(lat))
+        return (xm >= x0) & (xm <= x1) & (ym >= y0) & (ym <= y1)
+
     def stations_km(lon, lat):
         xm, ym = tf.transform(np.asarray(lon), np.asarray(lat))
-        keep = (xm >= x0) & (xm <= x1) & (ym >= y0) & (ym <= y1)
+        keep = keep_mask(lon, lat)
         return np.column_stack([xm[keep] / 1000.0, ym[keep] / 1000.0])
 
     wells = pd.read_parquet(PROC / "nwis_sites_clean.parquet")
@@ -83,10 +87,17 @@ def main():
     snotel = pd.read_parquet(swe) if swe.exists() else pd.DataFrame()
     if "lat" not in snotel.columns and sm.exists():
         snotel = pd.read_parquet(sm)
+    gauges = pd.read_parquet(PROC / "usgs_gauge_sites.parquet")
 
     well_km = stations_km(wells.lon, wells.lat)
     sno_km = stations_km(snotel.drop_duplicates("triplet").lon, snotel.drop_duplicates("triplet").lat)
     seis_km = stations_km(seis.lon, seis.lat)
+    gauge_km = stations_km(gauges.lon, gauges.lat)
+    # Same basin-radius approximation as make_observability_figure.py: a gauge constrains the
+    # BASIN-INTEGRATED flux, not a point depth, so its footprint is a Gaussian blob sized to the
+    # real drainage area -- not the true watershed polygon (would need DEM flow-accumulation).
+    gauge_keep = keep_mask(gauges.lon, gauges.lat)
+    gauge_radius_km = np.sqrt(np.clip(gauges.drainage_area_mi2.values[gauge_keep] * 2.58999, 1.0, None) / np.pi)
 
     # --- the same checkerboard truth for both states -- only the observing NETWORK differs ---------
     truth = checkerboard(coords, WAVELENGTH_KM)
@@ -95,6 +106,9 @@ def main():
         return np.vstack([point_footprint(coords, p) for p in pts]) if len(pts) else np.empty((0, len(coords)))
 
     G_well, G_sno = point_G(well_km), point_G(sno_km)
+    G_gauge = (np.vstack([point_footprint(coords, p, width_km=w)
+                          for p, w in zip(gauge_km, gauge_radius_km)])
+              if len(gauge_km) else np.empty((0, len(coords))))
 
     dvv_rows = []
     for i in range(len(seis_km)):
@@ -108,14 +122,18 @@ def main():
         return np.where(land, v, np.nan).reshape(shp)
 
     def recover(B, G_point, noise_point, G_dvv, noise_dvv, which):
-        """Recover the checkerboard from ONE of: point network alone, dv/v alone, or both."""
+        """Recover the checkerboard from point alone / dv/v alone / point+dv/v / +gauges too."""
         if which == "point":
             G, nv = G_point, np.full(len(G_point), noise_point)
         elif which == "dvv":
             G, nv = G_dvv, np.full(len(G_dvv), noise_dvv)
-        else:
+        elif which == "both":
             G = np.vstack([G_point, G_dvv])
             nv = np.concatenate([np.full(len(G_point), noise_point), np.full(len(G_dvv), noise_dvv)])
+        else:                                              # "gauges": point + dv/v + USGS gauges
+            G = np.vstack([G_point, G_dvv, G_gauge])
+            nv = np.concatenate([np.full(len(G_point), noise_point), np.full(len(G_dvv), noise_dvv),
+                                 np.full(len(G_gauge), NOISE["gauge"])])
         d = G @ np.nan_to_num(truth)                        # perfect (noise-free) forward data
         m_a, _ = blue_update(B, G, d, noise_var=nv)
         res, _ = resolution(B, G, nv)
@@ -134,7 +152,7 @@ def main():
     ]
     dvv_noise = {"WATER TABLE": NOISE["dvv_deep"], "SOIL MOISTURE": NOISE["dvv_shallow"]}
 
-    fig, ax = plt.subplots(2, 4, figsize=(19.5, 9.7), constrained_layout=True)
+    fig, ax = plt.subplots(2, 5, figsize=(24.0, 9.7), constrained_layout=True)
     kw = dict(vmin=-1.0, vmax=1.0)
     cm = plt.get_cmap("RdBu_r").copy(); cm.set_bad("#eef0f3")
 
@@ -150,15 +168,27 @@ def main():
             (m(m_dvv), f"dv/v alone\n(r={corr(m_dvv, res_dvv):.2f} where resolved)", None),
             (m(m_both), f"{pt_label} + dv/v\n(r={corr(m_both, res_both):.2f} where resolved)", pt_km),
         ]
+        if state == "WATER TABLE":
+            m_gauges, res_gauges = recover(B, G_pt, noise_pt, G_dvv, nv_dvv, "gauges")
+            panels.append((m(m_gauges),
+                          f"+ USGS gauges too\n(r={corr(m_gauges, res_gauges):.2f} where resolved)",
+                          gauge_km))
+        else:
+            panels.append((None, "Gauges do not directly\ninform SM in this design", None))
         for cc, (field, title, station_km) in enumerate(panels):
             a = ax[r, cc]
-            im = a.imshow(field, cmap=cm, **kw)
-            if station_km is not None and len(station_km):
-                stx = (station_km[:, 0] * 1000 - x0) / (DOMAIN.res_m * STEP)
-                sty = (y1 - station_km[:, 1] * 1000) / (DOMAIN.res_m * STEP)
-                a.scatter(stx, sty, s=14, c="k", marker="^", linewidths=0)
-            a.set_title(title, fontsize=13, fontweight="bold")
-            fig.colorbar(im, ax=a, shrink=.72)
+            if field is None:
+                a.set_facecolor("#eef0f3")
+                a.text(0.5, 0.5, title, ha="center", va="center", fontsize=12, fontweight="bold",
+                      color="dimgray", transform=a.transAxes, wrap=True)
+            else:
+                im = a.imshow(field, cmap=cm, **kw)
+                if station_km is not None and len(station_km):
+                    stx = (station_km[:, 0] * 1000 - x0) / (DOMAIN.res_m * STEP)
+                    sty = (y1 - station_km[:, 1] * 1000) / (DOMAIN.res_m * STEP)
+                    a.scatter(stx, sty, s=14, c="k", marker="^", linewidths=0)
+                a.set_title(title, fontsize=13, fontweight="bold")
+                fig.colorbar(im, ax=a, shrink=.72)
             a.set_xticks([]); a.set_yticks([])
         ax[r, 0].set_ylabel(state, fontsize=15, fontweight="bold", color=col, labelpad=8)
 
@@ -172,7 +202,7 @@ def main():
     fig.savefig(OUT, dpi=120, bbox_inches="tight", facecolor="white")
     shutil.copy(OUT, ASSETS / OUT.name)
     print(f"wrote {OUT}  (wavelength={WAVELENGTH_KM:.0f} km, {len(well_km)} wells, "
-          f"{len(sno_km)} SNOTEL, {G_dvv.shape[0]} dv/v footprints)")
+          f"{len(sno_km)} SNOTEL, {G_dvv.shape[0]} dv/v footprints, {len(gauge_km)} gauges)")
 
 
 if __name__ == "__main__":

@@ -213,18 +213,23 @@ def lagged_observation(g: ArrayLike, lag_days: ArrayLike, tau_days: float, state
 class ObsStream:
     """One observation stream, characterised on BOTH axes of the design and by what it truly is.
 
-    ``kind`` is the spatial geometry (point / volume / satellite / channel). ``is_measurement`` records
-    whether the stream *measures* the state or *estimates* it through a retrieval model — a satellite
-    soil-moisture product is the latter, and its noise is a model error, not an instrument error.
+    ``kind`` is the spatial geometry (point / volume / satellite / channel / flux). ``is_measurement``
+    records whether the stream *measures* the state or *estimates* it through a retrieval model — a
+    satellite soil-moisture product is the latter, and its noise is a model error, not an instrument
+    error. ``employed`` is a SEPARATE axis from ``is_measurement``: whether this repo's pipeline
+    actually ingests the stream today (``True``) or the entry is a design-catalog placeholder for a
+    real, located network we don't yet pull data from (``False``) — the black/gray marker-edge
+    convention on the network map follows this field, not ``is_measurement``.
     """
 
     name: str
     states: tuple[str, ...]          # which model states it informs (from TEMPORAL_TAU_DAYS keys)
     support_km: float                # spatial footprint (point ~ 0.1; SMAP 9; NISAR 0.2; dv/v ~ path)
     revisit_days: float              # sampling interval (0 = continuous)
-    kind: str                        # "point" | "volume" | "satellite" | "channel"
+    kind: str                        # "point" | "volume" | "satellite" | "channel" | "flux"
     noise: float                     # observation-error VARIANCE (sigma_d^2), in units of the prior variance
     is_measurement: bool             # True = measures the state; False = a retrieval / model estimate
+    employed: bool = True            # True = this repo ingests it today; False = real network, not yet used
 
 
 # The observing system, on both axes. Revisit is what the user's point turns on: soil moisture changes
@@ -236,9 +241,28 @@ STREAMS: tuple[ObsStream, ...] = (
     ObsStream("USCRN θ", ("soil_moisture",), 0.1, 0.04, "point", 0.03, True),           # hourly
     ObsStream("Seismic dv/v", ("soil_moisture", "gwl"), 8.0, 0.04, "volume", 0.12, True),  # ~continuous
     ObsStream("SMAP (retrieval)", ("soil_moisture",), 9.0, 2.5, "satellite", 0.10, False),
-    ObsStream("NISAR (retrieval, future)", ("soil_moisture",), 0.2, 12.0, "satellite", 0.06, False),
-    ObsStream("Sentinel surface water", ("gwl",), 0.1, 6.0, "channel", 0.04, False),    # cloud-limited
+    ObsStream("NISAR Beta SM v1 (retrieval)", ("soil_moisture",), 0.2, 6.0, "satellite", 0.06, False,
+              employed=False),   # real product since 2025-10-01 (issue #197), not yet ingested here
+    # Cloud-limited optical revisit, not the nominal 5-day Sentinel-2 orbit: usable cloud-free passes
+    # over this domain run roughly every 1-3 WEEKS, not days -- corrected from an earlier 6-day figure.
+    # A time-lapse, geospatially distributed proxy for river/wetland extent (hence water HEIGHT at the
+    # channel margin), not a point gauge.
+    ObsStream("Sentinel surface water", ("gwl",), 0.1, 14.0, "channel", 0.04, False, employed=False),
     ObsStream("USGS gauges", ("gwl",), 5.0, 0.01, "flux", 0.05, True),                  # 15-min, basin
+    # Real, located networks with no fetcher/assimilation path yet -- see the network map for
+    # coordinates. Weather stations are what PRISM is itself built from; using them directly (rather
+    # than only PRISM's finished grid) would let local station data correct/downscale the coarse
+    # forcing instead of just consuming it as-is.
+    ObsStream("GHCN-Daily weather stations", ("gwl", "soil_moisture"), 0.1, 1.0, "point", 0.05, True,
+              employed=False),
+    # GNSS-IR (reflectometry, near-surface soil moisture/snow/water level) and GNSS-TEC/ZTD-derived
+    # precipitable water are two DIFFERENT retrievals from the same antennas; both unemployed.
+    ObsStream("GNSS-IR / GNSS-TEC precipitable water", ("soil_moisture",), 0.1, 1.0, "point", 0.08,
+              False, employed=False),
+    # NOAA Stage IV is a gridded (4 km CONUS) radar+gauge precip analysis, not a point network -- no
+    # station coordinates to plot; carried here only so it appears in the design catalog.
+    ObsStream("NOAA Stage IV radar precip (gridded)", ("gwl", "soil_moisture"), 4.0, 0.25, "satellite",
+              0.08, False, employed=False),
 )
 
 

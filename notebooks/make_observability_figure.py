@@ -52,7 +52,7 @@ STEP = 22                       # coarse grid for the covariance solve (resoluti
 # deep dv/v (0.25) is a weaker handle on the water table than a well (0.02); shallow dv/v (0.12) a
 # moderate handle on moisture vs a probe (0.03).
 GWL_L_KM, SM_L_KM = 6.0, 3.0    # GWL varies more smoothly than soil moisture
-NOISE = dict(well=0.02, snotel=0.03, dvv_deep=0.25, dvv_shallow=0.12)
+NOISE = dict(well=0.02, snotel=0.03, dvv_deep=0.25, dvv_shallow=0.12, gauge=0.35)
 PTF_SIGMA = 0.03                 # soil_moisture.py's constant pedotransfer-envelope sigma (m3/m3)
 
 
@@ -85,9 +85,13 @@ def main():
     x0, y0, x1, y1 = DOMAIN.bounds()
     tf = Transformer.from_crs("EPSG:4326", DOMAIN.crs, always_xy=True)
 
+    def keep_mask(lon, lat):
+        xm, ym = tf.transform(np.asarray(lon), np.asarray(lat))
+        return (xm >= x0) & (xm <= x1) & (ym >= y0) & (ym <= y1)
+
     def stations_km(lon, lat):
         xm, ym = tf.transform(np.asarray(lon), np.asarray(lat))
-        keep = (xm >= x0) & (xm <= x1) & (ym >= y0) & (ym <= y1)
+        keep = keep_mask(lon, lat)
         return np.column_stack([xm[keep] / 1000.0, ym[keep] / 1000.0])
 
     wells = pd.read_parquet(PROC / "nwis_sites_clean.parquet")
@@ -100,6 +104,14 @@ def main():
     well_km = stations_km(wells.lon, wells.lat)
     sno_km = stations_km(snotel.drop_duplicates("triplet").lon, snotel.drop_duplicates("triplet").lat)
     seis_km = stations_km(seis.lon, seis.lat)
+    gauges = pd.read_parquet(PROC / "usgs_gauge_sites.parquet")
+    gauge_km = stations_km(gauges.lon, gauges.lat)
+    # drainage_area_mi2 -> km2 -> an equivalent circular-basin radius, used as the footprint WIDTH.
+    # A gauge constrains the BASIN-INTEGRATED flux, not a point depth -- this Gaussian blob of the
+    # basin's own characteristic radius is a stated approximation of that footprint, not the true
+    # watershed polygon (which would need a real flow-accumulation delineation from the DEM).
+    gauge_keep = keep_mask(gauges.lon, gauges.lat)
+    gauge_radius_km = np.sqrt(np.clip(gauges.drainage_area_mi2.values[gauge_keep] * 2.58999, 1.0, None) / np.pi)
 
     # --- physical (not normalised) prior variances: the "know nothing" baseline each static-layer
     # resolution is measured against -- the population variance of the observed target itself.
@@ -116,6 +128,9 @@ def main():
 
     G_well = point_G(well_km)
     G_sno = point_G(sno_km)
+    G_gauge = (np.vstack([point_footprint(coords, p, width_km=w)
+                          for p, w in zip(gauge_km, gauge_radius_km)])
+              if len(gauge_km) else np.empty((0, len(coords))))
 
     # dv/v footprints: every pair (<=40 km) + every single-station autocorrelation, each a normalised
     # coda kernel on the coarse grid. The SAME spatial footprints inform both states -- what differs is
@@ -149,12 +164,18 @@ def main():
     C_static_gwl = np.outer(sigma_rf, sigma_rf) * matern_correlation(dist, GWL_L_KM, nu=1.5)
     C_static_sm = (PTF_SIGMA ** 2) * matern_correlation(dist, SM_L_KM, nu=1.5)   # constant sigma -> stationary
 
-    # GWL: wells + deep dv/v
+    # GWL: wells + deep dv/v + USGS streamflow gauges (basin-integrated flux, approximated as a
+    # Gaussian blob of the basin's own characteristic radius -- see G_gauge above).
     res_well, _ = resolution(C_gwl, G_well, NOISE["well"])
     res_dvvG, _ = resolution(C_gwl, G_dvv, NOISE["dvv_deep"])
+    res_gauge, _ = resolution(C_gwl, G_gauge, NOISE["gauge"])
     mg_dvvG = marginal_resolution(C_gwl, G_dvv, G_well, NOISE["dvv_deep"], NOISE["well"])
-    both_G = np.vstack([G_well, G_dvv])
-    nv_G = np.concatenate([np.full(len(G_well), NOISE["well"]), np.full(len(G_dvv), NOISE["dvv_deep"])])
+    mg_gauge = marginal_resolution(C_gwl, G_gauge, np.vstack([G_well, G_dvv]), NOISE["gauge"],
+                                   np.concatenate([np.full(len(G_well), NOISE["well"]),
+                                                   np.full(len(G_dvv), NOISE["dvv_deep"])]))
+    both_G = np.vstack([G_well, G_dvv, G_gauge])
+    nv_G = np.concatenate([np.full(len(G_well), NOISE["well"]), np.full(len(G_dvv), NOISE["dvv_deep"]),
+                           np.full(len(G_gauge), NOISE["gauge"])])
     _, vpost_G_static = resolution(C_static_gwl, both_G, nv_G * sigma_flat2_gwl)
     ig_G = information_gain(np.full_like(vpost_G_static, sigma_flat2_gwl), vpost_G_static)
 
@@ -177,31 +198,38 @@ def main():
     IG = dict(cmap="inferno", vmin=0, vmax=ig_vmax)
     RES = dict(cmap="viridis", vmin=0, vmax=1)
 
-    fig, ax = plt.subplots(2, 5, figsize=(24.0, 9.6), constrained_layout=True)
+    fig, ax = plt.subplots(2, 6, figsize=(28.5, 9.6), constrained_layout=True)
     rows = [
         ("GROUNDWATER LEVEL", "#2E86AB",
          [(res_static_gwl, "Static layers alone\n(HAND/soil -> RF)", RES),
           (res_well, "Wells alone", RES), (res_dvvG, "dv/v alone (deep band)", RES),
+          (res_gauge, "USGS gauges alone\n(basin-blob approx.)", RES),
           (mg_dvvG, "dv/v gain beyond wells", dict(cmap="magma", vmin=0, vmax=0.6)),
-          (ig_G, "Information gain (nats)\nstatic + wells + dv/v", IG)]),
+          (ig_G, "Information gain (nats)\nstatic + wells + dv/v + gauges", IG)]),
         ("SOIL MOISTURE", "#3BB273",
          [(res_static_sm, "Static layers alone\n(pedotransfer, constant σ)", RES),
           (res_sno, "SNOTEL alone", RES), (res_dvvS, "dv/v alone (shallow band)", RES),
+          (None, "Gauges do not directly\ninform SM in this design", None),
           (mg_dvvS, "dv/v gain beyond SNOTEL", dict(cmap="magma", vmin=0, vmax=0.6)),
           (ig_S, "Information gain (nats)\nstatic + SNOTEL + dv/v", IG)]),
     ]
     for r, (state, col, panels) in enumerate(rows):
         for cc, (field, title, kw) in enumerate(panels):
             a = ax[r, cc]
-            cm = plt.get_cmap(kw["cmap"]).copy(); cm.set_bad("#eef0f3")
-            im = a.imshow(masked(field), cmap=cm, vmin=kw["vmin"], vmax=kw["vmax"])
-            a.set_title(title, fontsize=13, fontweight="bold")
-            fig.colorbar(im, ax=a, shrink=.72)
+            if field is None:      # gauges-do-not-inform-SM placeholder: text, no data
+                a.set_facecolor("#eef0f3")
+                a.text(0.5, 0.5, title, ha="center", va="center", fontsize=12, fontweight="bold",
+                      color="dimgray", transform=a.transAxes, wrap=True)
+            else:
+                cm = plt.get_cmap(kw["cmap"]).copy(); cm.set_bad("#eef0f3")
+                im = a.imshow(masked(field), cmap=cm, vmin=kw["vmin"], vmax=kw["vmax"])
+                a.set_title(title, fontsize=13, fontweight="bold")
+                fig.colorbar(im, ax=a, shrink=.72)
             a.set_xticks([]); a.set_yticks([])
         ax[r, 0].set_ylabel(state, fontsize=15, fontweight="bold", color=col, labelpad=8)
 
-    fig.suptitle("Observability of the twin — resolution and information gain, static layers included\n"
-                 "GWL: HAND/soil (RF) + wells (point) + dv/v deep band (volume)      "
+    fig.suptitle("Observability of the twin — resolution and information gain, static layers + streamflow gauges included\n"
+                 "GWL: HAND/soil (RF) + wells (point) + dv/v deep band (volume) + USGS gauges (basin flux)      "
                  "SM: pedotransfer envelope + SNOTEL (point) + dv/v shallow band (volume)",
                  fontsize=16, fontweight="bold")
 
@@ -209,8 +237,8 @@ def main():
     ASSETS.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT, dpi=120, bbox_inches="tight", facecolor="white")
     shutil.copy(OUT, ASSETS / OUT.name)
-    print("wrote %s  (%d cells, %d wells, %d SNOTEL, %d dv/v footprints, ig_vmax=%.2f nats)"
-          % (OUT, int(land.sum()), len(well_km), len(sno_km), len(G_dvv), ig_vmax))
+    print("wrote %s  (%d cells, %d wells, %d SNOTEL, %d dv/v footprints, %d gauges, ig_vmax=%.2f nats)"
+          % (OUT, int(land.sum()), len(well_km), len(sno_km), len(G_dvv), len(gauge_km), ig_vmax))
 
 
 if __name__ == "__main__":

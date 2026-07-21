@@ -8,15 +8,36 @@ which it is ([Evaluation data](02-evaluation-data.qmd)).
 
 ## The observing networks, and what each one can say
 
-Four ground networks observe the twin, and they are **not interchangeable**. Each constrains a
-different term, and a model can be badly wrong in a way that only one of them can see.
+Four ground networks are **employed** today — actually ingested and assimilated — and are **not
+interchangeable**: each constrains a different term, and a model can be badly wrong in a way that only
+one of them can see. A second set is **planned**: real, located networks with no fetcher or
+assimilation path in this repo yet. [The network map](#fig-network-map) marks the two sets with black
+vs. gray marker edges, and that same `employed` flag is the single source of truth
+(`ObsStream.employed` in `src/models/observability.py`) read by every figure in this chapter.
 
-| network | observes | constrains |
-|---|---|---|
-| **NWIS wells** | depth to water, at a point | the **saturated store** — state, and its seasonal amplitude and phase |
-| **USGS gauges** | streamflow, integrated over a basin | the **fluxes** — runoff, interflow, baseflow, via a hydrograph separation |
-| **SNOTEL** | SWE and soil moisture, at a point | the **snowpack** — the recharge clock, and the vadose store |
-| **Seismic (UW/CC)** | dv/v, over a *volume* between stations | shallow **moisture change**, at storm timescales |
+| network | status | observes | constrains |
+|---|---|---|---|
+| **NWIS wells** | employed | depth to water, at a point | the **saturated store** — state, and its seasonal amplitude and phase |
+| **USGS gauges** | employed | streamflow, integrated over a basin | the **fluxes** — runoff, interflow, baseflow, via a hydrograph separation |
+| **SNOTEL** | employed | SWE and soil moisture, at a point | the **snowpack** — the recharge clock, and the vadose store |
+| **Seismic (UW/CC)** | employed | dv/v, over a *volume* between stations | shallow **moisture change**, at storm timescales |
+| **GHCN-Daily weather stations** | planned | precipitation, at a point | a local correction/downscaling target for the coarse gridded precip products (the same role these stations already play in PRISM) |
+| **GNSS-IR / GNSS-TEC** | planned | precipitable water in the atmosphere, at a point | an independent atmospheric-moisture proxy for the forcing side of the water budget, not the soil state itself |
+| **NOAA Stage IV radar precip** | planned | precipitation, 4 km gridded, domain-wide | a higher-cadence alternative/complement to the static gridded precip forcing |
+| **Sentinel surface water** | planned | inundated water extent, geospatially distributed | best read as a **time-lapse** product — geospatially distributed water height/extent at a ~weeks repeat, not a station network with discrete sites |
+
+::: {.callout-note}
+## Seismic stations can double as streamflow gauges
+Band-limited seismic power tracks turbulent flow and hence discharge, so a subset of the UW/CC
+stations already used for dv/v can, in principle, also serve as a **streamgage proxy**
+[@denolle2026seishydro]. That paper's finding for this same region is specific: the seismic-power–to–
+discharge relationship stays robust through a compound atmospheric-river flood, but the interesting
+signal is the *deviation* between the seismic proxy and the real gauge, which grows specifically during
+intense AR events rather than gradually — i.e. the proxy is most informative exactly where a nearby real
+gauge is most valuable to have, not as a wholesale substitute for one. This is marked on
+[the network map](#fig-network-map) as a gray dashed halo on the seismic markers, not a new point set:
+it is the same physical stations, evaluated for a second use.
+:::
 
 ::: {.callout-important}
 ## Wells alone cannot validate a water budget
@@ -27,9 +48,16 @@ The gauges are therefore not a secondary check on the wells — they constrain a
 problem, and the calibration uses both ([Physics — Hydrology](03a-physics-hydrology.qmd)).
 :::
 
-![**Where the three station-based networks actually sit** — NWIS wells, SNOTEL, and the UW/CC seismic
-stations that supply dv/v, on shaded relief over the domain. Regenerate with
-`pixi run pygmt-network-map`.](assets/network_map_pygmt.png){#fig-network-map}
+![**Every observing network over the domain, employed and planned**, on the same gray shaded-relief
+background as [the sensitivity figure](#fig-sensors) below. Marker **edge color is the employed/planned
+convention**: black edge = this repo ingests real data from that network today (wells, SNOTEL, seismic
+dv/v, USGS gauges); gray edge = a real, located network with no assimilation path here yet (GHCN-Daily
+weather stations, GNSS-IR/TEC). USGS gauges, GHCN stations, and GNSS stations are all real coordinates
+fetched fresh from NWIS, NOAA NCEI, and the EarthScope/UNAVCO GAGE facility respectively — none
+fabricated. The dashed gray halo on the seismic markers notes the streamgage-proxy potential of those
+same stations (see the callout above). Sentinel surface water and NOAA Stage IV radar precipitation are
+not point networks and so are not plotted as markers at all — they are noted in the legend text
+instead. Regenerate with `pixi run pygmt-network-map`.](assets/network_map_pygmt.png){#fig-network-map}
 
 ![**The observing networks over the domain, and the spatial support of a dv/v measurement.** Left: the
 four ground networks. Centre: the **coda sensitivity** $S(x)$ of the seismic network — the region the
@@ -111,21 +139,27 @@ per cell, the **resolution** $R = 1 - C_\text{post}/C \in [0,1]$ (the fraction o
 network removes), the **information gain** $\tfrac12\ln(C/C_\text{post})$ in nats, and the **marginal
 gain** of one network beyond another, $R(A\cup B) - R(B)$.
 
-![**Observability of the twin, static layers included.** Rows: GWL (top), soil moisture (bottom).
-Columns: the static layers alone (see below); the point network alone; dv/v alone; **the resolution
-dv/v adds beyond the point network**; and the total information gain — now from static layers **and**
-network together, via the nonstationary-prior construction described
-[below](#the-static-layers-resolve-space-the-sensor-network-resolves-the-rest), not from the network
-alone. The point sensors resolve their own neighbourhoods — wells the lowland, SNOTEL a set of
-isolated blobs — and leave the space between them unobserved. dv/v, a *volume* measurement, fills
-that space, and the fourth column shows it contributes most **exactly where the point sensors cannot
-reach**: the mountain headwaters for GWL, and the whole between-station field for soil moisture.
-GWL's static-layer column is genuinely patchy — HAND/soil covariates resolve real 90 m structure
-everywhere, not only near wells — while soil moisture's is honestly **flat**: Stage 1 for SM is a
-pedotransfer envelope, not a fitted regression, so its uncertainty is one constant, not a spatially
-validated one, and its information-gain column is dominated by that unvalidated constant rather than
-genuine spatial skill — a limitation to fix, not to
-hide.](assets/observability.png){#fig-observability}
+![**Observability of the twin, static layers and USGS gauges included.** Rows: GWL (top), soil
+moisture (bottom). Columns: the static layers alone (see below); the point network alone; dv/v alone;
+**the resolution dv/v adds beyond the point network**; USGS streamflow gauges, each footprint widened
+to a Gaussian blob sized by that gauge's real drainage area (a basin-integrated flux is not a point
+measurement — this is a stated geometric approximation, not a DEM-derived watershed polygon); and the
+total information gain, now from static layers **and** network together, via the nonstationary-prior
+construction described
+[below](#the-static-layers-resolve-space-the-sensor-network-resolves-the-rest). The point sensors
+resolve their own neighbourhoods — wells the lowland, SNOTEL a set of isolated blobs — and leave the
+space between them unobserved. dv/v, a *volume* measurement, fills that space, contributing most
+**exactly where the point sensors cannot reach**: the mountain headwaters for GWL, and the whole
+between-station field for soil moisture. Gauges add resolution too, but only in small, localized blobs
+at their own basin outlets — they mostly constrain **GWL**, not soil moisture directly, which is why
+the SM row's gauge column is a gray placeholder rather than a map: gauges are not wired into this
+design as an SM constraint, even though soil moisture and the water table are physically coupled
+(they just do not correlate cell-for-cell the way a shared sensor would need). GWL's static-layer
+column is genuinely patchy — HAND/soil covariates resolve real 90 m structure everywhere, not only near
+wells — while soil moisture's is honestly **flat**: Stage 1 for SM is a pedotransfer envelope, not a
+fitted regression, so its uncertainty is one constant, not a spatially validated one, and its
+information-gain column is dominated by that unvalidated constant rather than genuine spatial skill —
+a limitation to fix, not to hide.](assets/observability.png){#fig-observability}
 
 Three results the maps make concrete:
 
@@ -262,8 +296,10 @@ fine its pixels. The water table integrates months, so a coarse revisit costs it
 is therefore worth different amounts for the two states.
 
 For a state with temporal correlation time $\tau$, a stream sampling at interval $\Delta t$ resolves a
-fraction $\exp(-\Delta t / 2\tau)$ of its variability, and a stream's observability of a *dynamic*
-field is the product $R_\text{space}\times R_\text{time}$ (`src/models/observability.py`).
+fraction $\rho(\Delta t)^2=\exp(-2\Delta t / \tau)$ of its variability under the OU model
+(`ou_correlation`/`temporal_resolution`, [assimilation chapter](04-assimilation.qmd)), and a stream's
+observability of a *dynamic* field is the product $R_\text{space}\times R_\text{time}$
+(`src/models/observability.py`).
 
 ![**The observing system on both axes.** Left: each stream in the spatial-support / revisit-interval
 plane, with retrievals (satellites) as diamonds and measurements as circles. Streams above the

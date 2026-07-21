@@ -141,12 +141,19 @@ a known regular pattern makes *where* a network resolves it, and where it smears
 immediately legible, and directly comparable network to network in a way a single random draw is not.
 
 ![Checkerboard resolution test for the water table (wells + deep dv/v) and soil moisture (SNOTEL +
-shallow dv/v): the true checkerboard, then its recovery by the point network alone, by dv/v alone, and
-by both combined. Forward data are noise-free (each network's footprint average of the true
-checkerboard); the recovery is therefore purely a function of the observing geometry, not measurement
-error. Correlation with the truth (annotated per panel, computed only where resolution exceeds 0.3) is
-the single-number summary; the maps are the reason to look past that number — recovery quality is
-strongly regime-dependent (see below).](assets/checkerboard_test.png){#fig-checkerboard}
+shallow dv/v): the true checkerboard, then its recovery by the point network alone, by dv/v alone, by
+both combined, and — for the water table only — by wells + dv/v **plus USGS gauges** (each gauge's
+footprint widened to the equivalent-circle radius of its real drainage area, the same basin-integrated-
+flux approximation used in [the observability figure](05-state-evaluation.qmd#fig-observability)).
+Gauges recover small, localized patches of the checkerboard right at their own basin outlets — a real
+but narrow contribution, not a broad improvement over wells + dv/v alone — which is why the soil-
+moisture row's matching column is a gray placeholder: gauges do not directly inform soil moisture in
+this design, even though the two states are physically coupled. Forward data are noise-free (each
+network's footprint average of the true checkerboard); the recovery is therefore purely a function of
+the observing geometry, not measurement error. Correlation with the truth (annotated per panel,
+computed only where resolution exceeds 0.3) is the single-number summary; the maps are the reason to
+look past that number — recovery quality is strongly regime-dependent (see
+below).](assets/checkerboard_test.png){#fig-checkerboard}
 
 Two results the panels make concrete, testing what each network type actually contributes:
 
@@ -161,6 +168,11 @@ Two results the panels make concrete, testing what each network type actually co
   ([the sensitivity map](05-state-evaluation.qmd)). Combining networks never recovers the checkerboard
   worse than the better of the two alone, matching the resolution design's "more data never loses
   resolution" invariant.
+- **Gauges add resolution, but only near their own basin outlet.** For the water table, adding USGS
+  gauges to wells + dv/v barely moves the correlation score (the metric is dominated by the much larger
+  area wells and dv/v already resolve), but the map shows genuine, additional local recovery right at
+  the 8 gauge locations — consistent with a gauge constraining an integrated basin flux rather than a
+  broad spatial field.
 
 The **forward** step is $d_i = g_i^\top m$: a synthetic-but-physical dv/v (or point) datum is the
 network's own footprint average of the true checkerboard, split by band for dv/v — the shallow band
