@@ -15,6 +15,15 @@ Sentinel surface water (a time-lapse, geospatially DISTRIBUTED water-extent/heig
 station network -- its "sample points" are wherever the channel network is, at whatever cloud-free
 pass happens weeks apart) and NOAA Stage IV radar precipitation (a 4 km CONUS-wide gridded analysis,
 no station coordinates to plot at all).
+
+Marker FILL color is a second convention, independent of the employed/planned edge: **blue** (shades)
+for any network that observes water in some form -- wells (groundwater), USGS gauges (streamflow),
+SNOTEL (SWE), GHCN-Daily (precipitation); **red/blue/purple** for a geophysical network *hosted by the
+EarthScope Consortium* -- seismic dv/v (IRIS DMC) and GNSS-IR/TEC (the GAGE facility) -- using
+EarthScope's own logo palette (red ``#ef3e42``, deep blue ``#22428d``, periwinkle-purple ``#8b9fc6``,
+pulled from EarthScope's official logo SVG) rather than the water-blue family, even though GNSS-PWV
+is itself a water-adjacent (atmospheric moisture) measurement -- the hosting-consortium convention
+takes precedence for those two.
 """
 from __future__ import annotations
 
@@ -85,18 +94,20 @@ def main():
         return EMPLOYED_PEN if employed.get(stream_name, True) else PLANNED_PEN
 
     # --- point/volume networks with real coordinates ------------------------------------------
+    # Water-related networks: blue family (shape carries the distinction, not hue).
     fig.plot(x=wells.lon, y=wells.lat, style="c0.09c", fill="38/106/166", pen=pen_for("NWIS wells"),
              transparency=15, label=f"NWIS wells ({len(wells)})")
-    fig.plot(x=snotel.lon, y=snotel.lat, style="t0.24c", fill="59/178/115",
+    fig.plot(x=snotel.lon, y=snotel.lat, style="t0.24c", fill="94/166/224",
              pen=pen_for("SNOTEL / SCAN θ"), label=f"SNOTEL ({len(snotel)})")
-    fig.plot(x=seis.lon, y=seis.lat, style="s0.22c", fill="232/72/85", pen=pen_for("Seismic dv/v"),
-             label=f"Seismic dv/v ({len(seis)})")
-    fig.plot(x=gauges.lon, y=gauges.lat, style="i0.32c", fill="246/174/45", pen=pen_for("USGS gauges"),
+    fig.plot(x=gauges.lon, y=gauges.lat, style="i0.32c", fill="41/121/255", pen=pen_for("USGS gauges"),
              label=f"USGS gauges ({len(gauges)})")
-    fig.plot(x=ghcn.lon, y=ghcn.lat, style="d0.16c", fill="200/200/200",
+    fig.plot(x=ghcn.lon, y=ghcn.lat, style="d0.16c", fill="179/229/252",
              pen=pen_for("GHCN-Daily weather stations"),
              label=f"GHCN-Daily stations ({len(ghcn)})")
-    fig.plot(x=gnss.lon, y=gnss.lat, style="a0.26c", fill="230/20/140",
+    # Geophysical networks hosted by the EarthScope Consortium: its own logo palette, not water-blue.
+    fig.plot(x=seis.lon, y=seis.lat, style="s0.22c", fill="239/62/66", pen=pen_for("Seismic dv/v"),
+             label=f"Seismic dv/v ({len(seis)})")
+    fig.plot(x=gnss.lon, y=gnss.lat, style="a0.30c", fill="139/159/198",
              pen=pen_for("GNSS-IR / GNSS-TEC precipitable water"),
              label=f"GNSS-IR/TEC PWV ({len(gnss)})")
     # Same physical stations as "Seismic dv/v" above -- a thin gray HALO marks the subset of them
