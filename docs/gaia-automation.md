@@ -23,8 +23,12 @@ For each batch of related issues (see grouping, below):
    agent (reads the actual diff, explains it in plain language, ends with one
    `Closes #N` per issue in the batch).
 4. Request a **Copilot code review** on the PR and wait for it (up to 20 minutes).
-5. Run **one revision round**: feed Copilot's review back to the orchestrator, let it
-   address what's actually called for, re-run the local gate, push.
+5. **Revise and re-review, up to `REVIEW_MAX_ROUNDS` (default 3) rounds**: feed Copilot's
+   comments back to the orchestrator, let it address what's actually called for, re-run the
+   local gate, push, and wait for a fresh review. Stops early once a round's inline comments
+   are identical to the previous round's (nothing new left to say). Copilot's review **never**
+   reaches an "Approve" state — only ever `COMMENTED` — so this loop tracks a fingerprint of
+   its comments, not the review state, as the convergence signal.
 6. Wait for **GitHub Actions checks** on the PR to go green.
 7. **Squash-merge.** Every issue in the batch closes via the `Closes #N` lines. Each
    issue (and the PR) gets the same scientist-facing closing message, again drafted by
@@ -105,9 +109,25 @@ gh auth status
 Also verify the Copilot reviewer login once by hand (open any PR in the GitHub UI,
 check who "Copilot" resolves to as a requested reviewer) — `gaia_run_queue.sh` hardcodes
 `copilot-pull-request-reviewer[bot]` at the top; update it there if your org differs.
-And confirm branch protection on `main` actually permits this token to merge — if it
-doesn't, the merge step fails loudly, which is the safe outcome, but you won't get the
-close-the-loop behavior until it's allowed.
+
+If `main` has a ruleset/branch-protection rule requiring an approving review, note that
+**Copilot's code review never submits "Approve"** — only ever `COMMENTED` — so a plain
+`required_approving_review_count` will block this pipeline's merge step forever, no matter
+how many revision rounds run. The fix used on this repo: add the automation's GitHub
+identity (the same account/token `gh auth login` uses) as a **bypass actor** on the
+ruleset, with `bypass_mode: "pull_request"` (bypasses the review/status-check requirement
+on merge only — direct-push protections like `deletion`/`non_fast_forward` still apply to
+that identity). Via the API:
+
+```bash
+gh api user --jq '.id'   # numeric actor_id for the account gaia_run_queue.sh authenticates as
+# then PUT the ruleset (see its current rules via `gh api repos/{owner}/{repo}/rulesets/{id}`)
+# with bypass_actors: [{"actor_id": <id>, "actor_type": "User", "bypass_mode": "pull_request"}]
+```
+
+Confirm the merge step actually works end-to-end once — if the bypass isn't configured, or a
+CODEOWNERS file later makes `require_code_owner_review` bite, the merge fails loudly, which
+is the safe outcome, but you won't get the close-the-loop behavior until it's resolved.
 
 ## Running it
 
