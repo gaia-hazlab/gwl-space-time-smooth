@@ -45,6 +45,37 @@ TOPIC_LABEL_PRIORITY = [
     "enhancement",
 ]
 
+# Execution sequence for milestoned batches: all P0 batches run first (globally,
+# across every milestone/topic), then the queue proceeds one milestone at a time
+# in THIS order. It follows the operating-loop spine in ROADMAP.md: cross-cutting
+# infrastructure and the advance/correct foundations first (they unblock the rest),
+# then the represent->propagate versioned ladder, then the Act hazards that consume
+# it all. Reorder this single list to change the milestone sequence. Titles must
+# match the GitHub milestone titles EXACTLY. Batches whose milestone is absent here
+# (or which have no milestone -- topic/solo batches) sort after all listed milestones.
+MILESTONE_ORDER = [
+    "Software: CI, tests, reproducibility, scale",
+    "Water budget: vadose-zone physics & calibration",
+    "Applied math: DA estimator correctness",
+    "v0.2 — Hydrogeologic realism",
+    "v0.3 — Vs30 densification (SVM → 90 m, obs-anchored)",
+    "v0.4 — Domain extension: western Cascades (gauged-basin coverage)",
+    "v0.5 — Eastern Cascades: Stehekin (rain shadow, snow-dominated)",
+    "v0.6 — Memory & disturbance (hysteresis + coseismic/wildfire/agricultural)",
+    "v0.7 — Probabilistic nowcast and ensemble forecast",
+    "Hazard: LandLab landslide handoff",
+    "Hazard: Sanger-Maurer liquefaction framework",
+    "Hazard: flood / inundation handoff",
+]
+
+
+def milestone_rank(milestone):
+    """Position in MILESTONE_ORDER; unlisted/None sorts after all listed milestones."""
+    try:
+        return MILESTONE_ORDER.index(milestone)
+    except ValueError:
+        return len(MILESTONE_ORDER)
+
 # Direct blockers only (not transitively expanded) -- an issue is held back
 # if ANY of its listed blockers is still open. Transitive blocking falls
 # out naturally: #188 blocks on #187, and #192 blocks on #188, so #192
@@ -149,7 +180,15 @@ def main():
                     "issues": [{"number": m["number"], "title": m["title"]} for m in chunk],
                 })
 
-    batches.sort(key=lambda b: (b["rank"], b["key"], b["branch"]))
+    # P0 batches first (globally), then one milestone at a time in MILESTONE_ORDER;
+    # within a milestone, higher priority first, then a stable key/branch tiebreak.
+    batches.sort(key=lambda b: (
+        0 if b["rank"] == 0 else 1,
+        milestone_rank(b["milestone"]),
+        b["rank"],
+        b["key"],
+        b["branch"],
+    ))
     for b in batches:
         print(json.dumps(b))
 
