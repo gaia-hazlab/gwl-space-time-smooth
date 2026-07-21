@@ -59,14 +59,11 @@ therefore enters the estimator on **two axes**, not one (`lagged_observation`):
 - its **effective noise grows** by a drift term $\sigma_m^2(1-\rho^2)$ on top of the instrument
   noise $\sigma_{d,i}^2$ — uncertainty accrued while the state evolved, unobserved, over $\Delta t$.
 
-(An earlier version of this treatment inflated $\sigma_{d,i}^2$ by $1/\exp(-\Delta t/2\tau)$ while
-leaving the gain at 1 and adding no drift term — silently overweighting stale data, and borrowing its
-factor of 2 from the unrelated spatial squared-exponential kernel rather than deriving it from the OU
-process. `temporal_resolution` in the [evaluation chapter](05-state-evaluation.qmd) is $\rho^2$, the
-special case of a perfectly-measured lagged datum, and is the one place the factor-of-2 form never
-belonged.) The continuous seismic array and the sub-daily probes therefore carry the *timing* of a
-soil-moisture event, while the satellite carries its *spatial extent*; assimilation combines them on
-the axis each is strong on.
+`temporal_resolution` in the [evaluation chapter](05-state-evaluation.qmd) is $\rho^2$ — the same OU
+derivation specialised to a perfectly-measured lagged datum ($\sigma_{d,i}=0$), so the two expressions
+are one treatment viewed at two points, not two independent formulas. The continuous seismic array and
+the sub-daily probes therefore carry the *timing* of a soil-moisture event, while the satellite carries
+its *spatial extent*; assimilation combines them on the axis each is strong on.
 
 ## The estimator: what exactly is minimised
 
@@ -278,6 +275,174 @@ transition), not license to drop the probabilistic bookkeeping. A DBN inference 
 variational) is also materially more expensive than the closed-form BLUE/Kalman update above, and needs
 more data to fit transition/emission distributions reliably — reasons to reach for it only where a
 diagnosed failure, not a hunch, calls for it.
+
+## Linear versus nonlinear observation operators, and where a particle filter belongs
+
+Every stream discussed so far has gone through the same `blue_update` — a **linear**, Gaussian
+estimator. That read is exact for two of the three sensor families, and an approximation for the third
+that the physics chapter ([Hydromechanics](03b-physics-hydromechanics.qmd)) already documents as a
+linearization.
+
+### Wells and soil-moisture probes: linear in the state, linear in the noise
+
+NWIS wells and SNOTEL/SCAN/USCRN probes observe the state variable the twin actually carries — head
+(→ water-table depth) and volumetric soil moisture $\theta$ — through a footprint operator $g_i$ that is
+a fixed weighted average (`point_footprint`). $g_i^\top m$ is linear in $m$ by construction, and the
+instrument noise enters additively. No physical model stands between the sensor and the state it
+measures, so `blue_update`'s closed-form Gaussian solution is exact for these two families, not merely
+convenient.
+
+### dv/v: linear *today*, because the operational relation is a linearization of a nonlinear chain
+
+dv/v is different in kind, not only in footprint. The sensor never measures $\Delta h$ or $\Delta\theta$
+directly — it measures a coda-averaged $\delta v/v$, related to those states through the petrophysical
+chain of [Hydromechanics](03b-physics-hydromechanics.qmd):
+
+$$
+\{\theta, S_w, h, \text{history}\} \;\to\;
+P_e = \sigma_g' + P_c^{\rm eq}(S_w) + \tau(S_w)\,\partial_t S_w \;\to\;
+\mu_{\rm eff}\propto P_e^{1/3} \;\to\; V_S=\sqrt{\mu_{\rm eff}/\rho} \;\to\;
+\delta v/v = H_i\big[V_S(z,t)\big].
+$$
+
+Every arrow is nonlinear: the Hertz–Mindlin contact modulus scales as $P_e^{1/3}$, the capillary term
+$P_c^{\rm eq}(S_w)$ is a retention curve rather than a line, and the dynamic term
+$\tau(S_w)\,\partial_t S_w$ makes the relation **hysteretic** — path-dependent, so the same $\delta v/v$
+can correspond to more than one $(\theta, \text{wetting/drying history})$ pair.
+
+What actually reaches `blue_update` today is not this chain — it is its **local linearization**,
+$\delta v/v = k_{sat}\,\Delta h$ (saturated band) and $\delta v/v = S_\theta\,\Delta\theta$ (vadose band):
+two calibrated constants standing in for $\partial(\delta v/v)/\partial h$ and
+$\partial(\delta v/v)/\partial\theta$ at one operating point. So the honest statement is: **dv/v is
+assimilated through a linear operator in the current pipeline**, but that operator is a linearization of
+a genuinely nonlinear, hysteretic forward model — not a first-principles linear relation the way a
+well's footprint is. Read "once dv/v is properly accounted for in the inversion framework" as *replacing
+$k_{sat}$/$S_\theta$ with the actual forward chain* — the common forward/inverse petrophysical operator
+already flagged as planned (issue #198). Once that operator lands, $H_i$ becomes nonlinear in the state
+and `blue_update`'s closed form no longer applies to dv/v rows.
+
+### What changes when dv/v becomes genuinely nonlinear
+
+A nonlinear $H_i$ breaks the BLUE gain algebra in two ways that matter differently:
+
+- **Local curvature** ($P_e^{1/3}$, a smooth nonlinearity) is handled by linearizing about the current
+  best estimate each cycle — an **extended Kalman filter** (recompute $k_{sat},S_\theta$ as the local
+  Jacobian of the real chain rather than fixed constants), or, more robustly for a chain this deep, an
+  **ensemble transform** (the unscented Kalman filter, or the ensemble-Kalman machinery already planned
+  for the Rung-3 emulator) that propagates the nonlinearity by evaluating $H_i$ at each ensemble member
+  rather than differentiating it.
+- **Path-dependence and multimodality** (the hysteresis loop) is not curvature — it is a forward map that
+  is not invertible pointwise. A single $\delta v/v$ reading is consistent with a *ridge* of
+  $(\theta,\text{history})$ values, not a point plus Gaussian spread, and no linearization at any single
+  operating point recovers that. A Gaussian posterior — linear or extended — cannot represent this by
+  construction, because it is unimodal.
+
+### Where a particle filter fits — and where it should not
+
+A **particle filter** (sequential Monte Carlo) replaces the Gaussian $(m, C)$ pair with a weighted sample
+$\{x^{(k)}, w^{(k)}\}$, propagates each particle through the *actual* nonlinear, hysteretic forward model
+with no linearization at all, and reweights by the true (possibly non-Gaussian, possibly multimodal)
+likelihood. It is the right tool for exactly the failure mode above: the one filter family that can hold
+two live hypotheses — "wetting branch" and "drying branch" — simultaneously and let the next observation
+collapse them, instead of forcing a single Gaussian mean through a nonlinearity it cannot represent.
+
+It is not, however, a drop-in replacement for `blue_update` across the full ~2.96M-cell state. A generic
+particle filter's required particle count grows steeply with effective state dimension — importance
+weights collapse onto a single particle as dimension grows (weight degeneracy) — which is exactly why the
+near-term plan for the bulk hydrologic state is an ensemble Kalman filter, not a particle filter. The
+design consistent with this book's existing rule of adding non-Gaussian machinery only where a diagnosed
+failure demands it (the DBN discussion above) is a **Rao-Blackwellized particle filter**: keep GWL and
+soil moisture — genuinely linear-Gaussian in their observation operators — in the EnKF/Kalman sub-filter
+where the closed form is exact and cheap, and run particles *only* over the low-dimensional
+nonlinear/hysteretic node: the petrophysical state $(S_w, \text{branch})$ that maps to $\delta v/v$, and,
+once built, the discrete damage/healing memory state of
+[Memory & disturbance](03c-memory-disturbance.qmd). That node is small enough — a handful of state
+variables per cell or per region, not the full grid — for a particle representation to be tractable, and
+it is precisely the node whose forward map is provably non-Gaussian rather than merely a modeling
+convenience.
+
+### The concrete two-tier filter: EnKF for the linear state, an RBPF for the nonlinear petrophysical/damage state
+
+Split the twin's full state at exactly the seam the analysis above identifies —
+
+$$
+x = \big(x_{\rm lin},\; x_{\rm nl}\big), \qquad
+x_{\rm lin} = \{h(\mathbf{s},t),\ \theta(\mathbf{s},t)\}, \qquad
+x_{\rm nl} = \{S_w(\mathbf{s},t),\ \text{branch}(\mathbf{s},t),\ D(\mathbf{s},t)\},
+$$
+
+with $D$ the coseismic/disturbance damage-healing state of
+[Memory & disturbance](03c-memory-disturbance.qmd) — and run **two coupled filters, not one**:
+
+1. **An ensemble Kalman filter over $x_{\rm lin}$** — the water-table and soil-moisture field, forecast
+   by Rung-2 TFN (linear-Gaussian) or the Rung-3 ParFlow-ML emulator (nonlinear, handled by the ensemble
+   transform rather than a linearized Jacobian). NWIS wells and SNOTEL/SCAN/USCRN update this filter
+   exactly as `blue_update` already does — the EnKF is precisely `blue_update` with the ensemble
+   covariance standing in for $B$, per the [recursion](#recursion-in-time-from-one-analysis-to-a-filter)
+   above.
+2. **A Rao-Blackwellized particle filter over $x_{\rm nl}$**, run *conditionally* on the EnKF above. Each
+   particle $k$ carries a realization of the hysteresis branch and damage/healing trajectory
+   $x_{\rm nl}^{(k)}$, evolved through the *actual* nonlinear, path-dependent petrophysical and
+   damage/healing dynamics — no linearization. Conditional on that trajectory, the dv/v sensitivity
+   coefficients $k_{sat}^{(k)} = \partial(\delta v/v)/\partial h\big|_{x_{\rm nl}^{(k)}}$ and
+   $S_\theta^{(k)} = \partial(\delta v/v)/\partial\theta\big|_{x_{\rm nl}^{(k)}}$ are fixed numbers, so
+   **the dv/v observation is linear in $x_{\rm lin}$ given the particle** — the same structural fact that
+   makes wells and SNOTEL linear. This is what makes the split Rao-Blackwellized rather than a bare
+   particle filter over everything: the high-dimensional field $x_{\rm lin}$ never needs its own
+   particles, only its own (E)nKF conditioned on $x_{\rm nl}^{(k)}$, and the particle weights update from
+   the exact conditional likelihood of the *whole* data vector (wells, SNOTEL, and dv/v alike) at that
+   trajectory, $w^{(k)} \propto w^{(k)}\,p\big(d \mid x_{\rm nl}^{(k)}\big)$, followed by systematic
+   resampling when the effective sample size drops.
+
+Two honesty notes on where this departs from the textbook Rao-Blackwellized particle filter (Doucet, de
+Freitas, Murphy & Russell, *Rao-Blackwellised particle filtering for dynamic Bayesian networks*, UAI
+2000 — not yet in `references.bib`; add and verify before this design is implemented, not merely
+planned): first, the textbook construction is exact only when $x_{\rm lin}$'s *forecast* model is
+itself linear-Gaussian (true for Rung-2, an ensemble approximation for Rung-3) — so the linear sub-filter
+here is, honestly, a **conditional EnKF**, not a conditional Kalman filter, once Rung-3 is in the loop;
+that is a controlled approximation, not the exact marginalization the name promises. Second, $x_{\rm nl}$
+must be **localized**, not sampled jointly over the whole domain: reuse the terrain-aware `region_id`
+blocking already built for $B$ (`GaussianPrior`, issue #163) to run independent (or weakly
+prior-coupled) particle sets per hydrologic region rather than one joint particle over millions of
+cells — the same dimensionality argument that rules out a domain-wide particle filter applies to
+$x_{\rm nl}$ alone unless it is blocked this way, even though $x_{\rm nl}$ is far lower-dimensional than
+the full state.
+
+**Why this design, and not the alternatives:**
+
+- **Why not a joint particle filter over $x$?** Ruled out above by dimension — millions of cells' worth
+  of $x_{\rm lin}$ would degenerate the particle weights immediately.
+- **Why not a joint EnKF over $x$, ignoring the hysteresis?** This is what happens implicitly today
+  ($k_{sat}$, $S_\theta$ as fixed constants) — it is exactly the linearization this section starts by
+  naming as dishonest once the hysteresis loop is real; a Gaussian ensemble cannot hold the
+  wetting/drying branch as two live hypotheses.
+- **Why not an extended Kalman filter on the whole state?** An EKF linearizes $H_i$ once per cycle about
+  the current mean, which repairs the *curvature* ($P_e^{1/3}$) but not the *multimodality* — it still
+  reports one Gaussian branch, silently discarding the other, which is precisely the failure mode the
+  particle tier exists to fix.
+- **Why keep the EnKF for $x_{\rm lin}$ at all, rather than particles for everything?** Because the
+  diagnostic standard this book already applies to the DBN escalation applies here too: add non-Gaussian
+  machinery only where the state is genuinely non-Gaussian. $x_{\rm lin}$'s observation operators are
+  linear and its forecast is (approximately) linear-Gaussian; paying the particle cost there buys nothing
+  and only reintroduces the dimensionality problem the split was designed to avoid.
+
+::: {.callout-important}
+## Summary: linear where the sensor is a footprint, nonlinear where it is a petrophysical inversion
+**Linear, exact today:** NWIS wells, SNOTEL/SCAN/USCRN — the observation operator is a footprint average
+of the state variable itself. Filter: EnKF (equivalently, `blue_update` with the ensemble covariance for
+$B$).
+
+**Linear today, nonlinear once the forward/inverse petrophysics lands:** seismic dv/v — the operational
+$k_{sat}\Delta h$ / $S_\theta\Delta\theta$ relations are linearizations of a Hertz–Mindlin,
+hysteresis-bearing chain (issue #198); the honest nonlinearity appears only once that chain replaces the
+constants.
+
+**The particle filter's place:** a Rao-Blackwellized particle filter over the small,
+localized, genuinely non-Gaussian petrophysical/damage node $x_{\rm nl}$ (hysteresis branch,
+damage/healing state), run conditionally on — and feeding sensitivity coefficients into — the EnKF that
+still carries the linear, high-dimensional GWL/soil-moisture field. Not a wholesale replacement for the
+EnKF; a second, small filter coupled to it at exactly the seam where linearity stops being honest.
+:::
 
 ## Confidence mask and honest masking
 
