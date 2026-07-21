@@ -110,11 +110,12 @@ def main():
     fig.plot(x=gnss.lon, y=gnss.lat, style="a0.30c", fill="139/159/198",
              pen=pen_for("GNSS-IR / GNSS-TEC precipitable water"),
              label=f"GNSS-IR/TEC PWV ({len(gnss)})")
-    # Same physical stations as "Seismic dv/v" above -- a thin gray HALO marks the subset of them
-    # that could ALSO serve as a streamflow proxy (Illien et al., seis-hydro-2-sed), not a new
-    # point set. Deviation from the real gauge is expected to grow specifically during intense
-    # atmospheric-river events, not gradually -- see the caption in 05-state-evaluation.qmd.
-    fig.plot(x=seis.lon, y=seis.lat, style="s0.34c", fill=None, pen="0.9p,gray45,-",
+    # Same physical stations as "Seismic dv/v" above -- a thin HALO marks the subset of them that
+    # could ALSO serve as a streamflow proxy (Illien et al., seis-hydro-2-sed), not a new point set.
+    # Blue, not gray/EarthScope-red: the halo denotes a WATER function (streamgage-by-proxy), not the
+    # hosting consortium. Deviation from the real gauge is expected to grow specifically during
+    # intense atmospheric-river events, not gradually -- see the caption in 05-state-evaluation.qmd.
+    fig.plot(x=seis.lon, y=seis.lat, style="s0.34c", fill=None, pen="0.9p,41/121/255,-",
              label="Seismic as streamgage proxy")
 
     fig.basemap(region=region, projection="M14c", map_scale="jBL+w50k+o0.6c/0.6c+f+lkm")
