@@ -49,6 +49,8 @@ website:
             href: 06-forecast.qmd
           - text: "10 · Hazard integration"
             href: 07-hazard-integration.qmd
+          - text: "11 · Resolution requirements"
+            href: 07b-resolution-requirements.qmd
 
       - section: "Reference"
         contents:

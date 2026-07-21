@@ -1,0 +1,152 @@
+---
+title: "11 · Resolution requirements for actionable hazards"
+---
+
+The twin runs at 90 m. Is that the resolution these hazards need? The honest answer is that there is
+no single number — **landslide, liquefaction, and flood each have a different generation scale, a
+different actionable scale, and a different upstream driver that must be resolved before the hazard
+model ever sees data.** This page states those scales explicitly, cites the evidence for them, and
+lays out a workflow so the twin can hand off to whichever finer-resolution consumer a given hazard and
+a given user actually need — without redesigning the twin itself around any one of them.
+
+## Why "actionable" is not "characterized"
+
+Two different questions get conflated:
+
+- **Where is the hazard elevated, region-wide?** — a screening question. Coarse products (90 m–1 km)
+  answer this well, and this is what the twin is actually built for.
+- **Should we evacuate this street, retrofit this bridge, close this specific road?** — an
+  actionability question, about one asset or a handful of them. This almost always requires
+  finer-than-twin resolution, because the physics that flips a decision (a specific hollow's pore
+  pressure, a specific parcel's soil facies, a specific culvert's capacity) lives below 90 m.
+
+Below, "generation scale" is where the physical process that causes the hazard actually operates;
+"actionable scale" is what a decision about a specific asset needs; "upstream driver" is the coarser
+process that has to be right *before* either of those can be, because errors made there propagate
+downstream and cannot be recovered by refining the hazard model alone.
+
+## Landslides
+
+| | scale | why |
+|---|---|---|
+| **Generation** | 1–10 m, ideally lidar-grade (1–3 m) | Shallow-landslide initiation is controlled by convergent topography — colluvial hollows and first-order channel heads that concentrate subsurface flow and pore pressure [@montgomery1994shalstab]. These features are typically 10–50 m wide; coarsening the DEM measurably degrades shallow-landslide hazard prediction because it smooths exactly this convergent structure away [@claessens2005demresolution]. |
+| **Actionable** | parcel/road scale — effectively the DEM resolution above | "This slope above mile marker X" requires resolving that slope, not a 90 m average of it. Washington DNR's own landslide-hazard mapping guidance is built on lidar DEMs for this reason [@wadnr2016landslidemapping]. |
+| **Upstream driver** | pore pressure / water table at the *same* 1–10 m footprint | A coarse water-table field averages away the local pore-pressure spikes that trigger failure — the twin's 90 m antecedent state is a reasonable regional input but not a substitute for a hillslope-scale hydromechanical model. |
+
+This repo's own backlog already reflects this: **#135** calls for a ≤10 m slope layer with an explicit
+cut-slope treatment for shallow failures, and the LandLab handoff (**#12**, **#64**) is exactly the
+"hand off the twin's coarse antecedent state to a finer hillslope model" pattern this page is arguing
+for generally, not a one-off.
+
+## Liquefaction
+
+| | scale | why |
+|---|---|---|
+| **Regional screening** | 100 m–1 km | The standard geospatial liquefaction susceptibility models operate at this resolution by design, as rapid-response/regional tools, not site-specific ones [@zhu2015geospatial; @zhu2017geospatial]. |
+| **Actionable (site-specific)** | point-scale, via CPT/SPT | Liquefaction triggering depends on facies-level grain-size/density variability (paleochannels, point bars) that no gridded product resolves. Standard semi-empirical triggering procedures are built on point-scale borehole/CPT data for exactly this reason [@idriss2006liquefaction] — this is a site-investigation problem, not a resolution problem a finer raster can solve. |
+| **Upstream driver** | depth to the seasonal-high water table, **vertically**, not horizontally | A few tens of centimetres of error in depth-to-water can flip a cell between "liquefiable" and "not" — the lever that matters is vertical accuracy of the water-table estimate, not horizontal grid spacing. |
+
+The repo's own scoping is already honest about this: **#147** explicitly frames the current 90 m
+product (itself built from a 200 m SVM) as a susceptibility screen, not an LPI estimate, because it
+cannot resolve facies; **#142** targets sub-1.5 m *vertical* accuracy on the seasonal-high water table
+as the right lever; **#146** tracks the depth-resolved CPT/SPT + Vs(z) path that would be needed for
+genuine site-specific triggering.
+
+## Flooding
+
+| | scale | why |
+|---|---|---|
+| **Antecedent state / water budget** | 90 m–1 km | How much water is already in the basin, and when, is a volume-and-timing question that coarse hydrologic modelling answers well — this is what the twin's GWL/soil-moisture state is for. |
+| **Actionable (local inundation depth)** | 1–5 m, especially in developed areas | Local flood depth — which building floods, by how much — depends on micro-topography (road crowns, culverts, berms) invisible at 90 m; DEM resolution and source are shown to materially change inundation-extent accuracy in detailed/urban studies [@cook2009floodmapping]. |
+| **Upstream driver** | orographic precipitation enhancement at ridge scale | Precipitation over the Cascades is tightly coupled to ridge-scale topography [@roe2003orographic]; a forcing product that has already lost that structure (e.g. a coarse global forecast resampled bilinearly) cannot regain it downstream, however fine the flood model that consumes it is. |
+
+This repo tracks the forcing-side half of this directly: **#31** calls for a data-informed or
+model-driven downscaler beyond the bilinear resampling baseline — bilinear resampling adds no new
+fine-scale information, so an AR event's orographic enhancement is exactly what it cannot recover.
+**#55** (closed) already reframed the forecast path's scope honestly: the twin delivers the
+*antecedent* hydrologic state, not a flood hydrograph — routing that state through a surface-water
+model into local inundation depth is an explicitly separate, external step.
+
+## The telescope: why upstream resolution matters more than the hazard's own footprint
+
+A model that is fine at the *bottom* of a hazard's causal chain but coarse upstream of it produces a
+precise-looking wrong answer, because the error that mattered was made before the fine model ever ran:
+
+```
+precipitation forcing (ridge-scale orographic enhancement)
+   -> runoff generation (hillslope-scale: convergent topography, variable source area)
+      -> channel routing / basin discharge (reach-scale)
+         -> local flood depth (1-5 m)  |  landslide triggering (1-10 m)  |  liquefaction screening (100 m-1 km, refined by point CPT)
+```
+
+A 1 m flood-inundation model fed by a 90 m, bilinearly-downscaled precipitation forcing will produce a
+beautifully detailed *wrong* answer, because the orographic enhancement that generated the flood was
+already lost two steps upstream (#31). The same logic applies to landslides: a hillslope model run at
+3 m resolution is only as good as the coarser water-table field feeding it pore pressure.
+
+**Consequence for the twin:** 90 m is a defensible resolution for what it is actually built to do —
+regional antecedent-state estimation and susceptibility screening, prioritising *where* to look. It is
+not, and is not trying to be, the "protect this specific asset" layer. That layer is a **nested,
+finer-resolution handoff**, seeded by the twin's state rather than a rebuild of the twin at finer
+resolution.
+
+## A workflow that accommodates all three, without three different twins
+
+The existing LandLab handoff (`src.io.landlab_export`, **#64**) already establishes the right pattern:
+this repo owns the *dynamic* state at its native 90 m grid with per-cell uncertainty; the downstream
+consumer owns its own *static* stack at whatever finer resolution it needs, and the two meet on a
+shared grid via an explicit export contract that records native-vs-delivered resolution so a
+downscaled cell is never mistaken for a native observation. Generalising that pattern gives a
+three-tier workflow:
+
+- **Tier 0 — this twin (built).** 90 m regional antecedent state (water table, soil moisture, Vs30)
+  plus per-cell uncertainty, updated as data assimilate. Answers the screening question: where is a
+  hazard class elevated, region-wide?
+- **Tier 1 — AOI-scoped finer physics modules (partially built).** Consume Tier 0 state as boundary/
+  initial conditions, run at 1–10 m over a specific area of interest, not the whole domain. The
+  LandLab landslide chain (**#64**, **#12**) is the working example of this tier today; a surface
+  routing/hydraulic model consuming the twin's antecedent state (per **#55**'s scoping) and a
+  liquefaction refinement module consuming the sub-1.5 m water-table product (**#142**, **#146**)
+  are the same shape, not yet built.
+- **Tier 2 — site/point data assimilation (not built, and arguably not this repo's job).** CPT/SPT
+  boreholes, lidar micro-topography, or met-station data for one specific asset, layered on top of a
+  Tier 1 output. This is inherently site-investigation work, not a resolution this repo's gridded
+  products can ever supply on their own (#147's point exactly).
+
+Running the AOI-scoped Tier 1 modules **only where requested**, rather than trying to run the whole
+domain at 1–10 m, is what keeps this manageable: the compute cost of a fine hazard model scales with
+the area it's asked to cover, and most Tier 1 consumers only need one watershed, one route corridor, or
+one facility footprint at a time — not the full ~3.3M-cell domain.
+
+## Modularizing the twin around this
+
+The twin already has the right primitive for this: the modular downscaling registry
+(`src.models.downscale`, **register_downscaler**/**downscale(method=...)**) lets a smarter, data-
+informed downscaler replace the bilinear baseline **without touching any call site** — exactly the
+kind of swap Tier 1 needs, just currently scoped to within-twin fields rather than hazard handoffs.
+Extending the same idea to hazard consumers means every Tier 1 module declares, once, the same three
+things `landlab_export` already declares for the landslide chain:
+
+1. **What Tier 0 fields it needs, and at what native resolution/uncertainty** (e.g. water-table mean
+   and seasonal-high, with σ) — so a consumer never silently treats a downscaled cell as an observation.
+2. **What resolution and area it operates at** — an AOI and grid spacing set by the consumer's own
+   need (a road corridor for landslide risk, a facility footprint for liquefaction, a floodplain reach
+   for inundation), not by the twin's native grid.
+3. **What it hands back**, if anything — a refined hazard probability, an updated confidence mask, or
+   nothing (a one-way handoff, as LandLab currently is).
+
+This is also how the twin serves genuinely different **users** without three separate products: a
+county emergency manager wants Tier 0 alone (where is risk elevated this season); a bridge or pipeline
+engineer wants Tier 0 handed to a Tier 2 site investigation for one structure; a DOT maintenance
+planner wants Tier 0 handed to a Tier 1 landslide module scoped to their route network. The tiering is
+the modularity — the same 90 m core, with the resolution mismatch made explicit at each handoff rather
+than hidden inside a single "one true resolution" grid.
+
+::: {.callout-note}
+## What's built vs. what's a target here
+Tier 0 (this twin) is real and evaluated elsewhere in this book. Of Tier 1, only the LandLab landslide
+export is operational; the flood-routing and liquefaction-refinement modules are open, tracked issues
+(**#55**'s scope note, **#142**, **#146**), not implemented pipelines. Tier 2 is described here to make
+the full chain explicit, not because this repo intends to build site-investigation tooling. Treat the
+tiering above as the target architecture this page is arguing for, not a claim that it all exists today.
+:::
