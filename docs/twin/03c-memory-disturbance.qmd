@@ -112,14 +112,15 @@ reason the twin instruments the subsurface with seismic velocity in the first pl
 
 ## Status
 
-**Capillary hysteresis is implemented and integrated** (`src/models/hysteresis.py`,
-`tests/test_hysteresis.py`). The loop in @fig-hysteresis is its output, coupled to the twin's own
-Hertz–Mindlin velocity map; and the memory is now carried through the **integrated** state — the
-forecast advances the per-cell reversal point along the modelled moisture trajectory, so the vadose
-dv/v is path-dependent (the same θ reached by drying versus wetting gives a different velocity). It is
-on by default in `forecast_soil_state`. The remaining pieces — the petrophysical map's coseismic damage
-term and any carried surface-disturbance variable — are the identified hooks and are not yet built. The
-build order — hysteresis (**done**), then coseismic damage-and-healing, then the surface-disturbance
-classes, then the augmented-attribution assimilation, fed by a disturbance event catalog on the data
-plane — is tracked under the **memory-and-disturbance epic** and its sub-issues in the
-[roadmap](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/119).
+**Implemented.** Capillary hysteresis (`src/models/hysteresis.py`, `tests/test_hysteresis.py`) is
+integrated and on by default in `forecast_soil_state`. The loop in @fig-hysteresis is its output,
+coupled to the twin's own Hertz–Mindlin velocity map, and the memory is carried through the
+**integrated** state — the forecast advances the per-cell reversal point along the modelled moisture
+trajectory, so the vadose dv/v is path-dependent (the same θ reached by drying versus wetting gives a
+different velocity).
+
+**Planned (milestone: v0.6 — Memory & disturbance).** The remaining pieces are identified hooks, not
+yet built, in this order: the petrophysical map's coseismic damage-and-healing term; the
+surface-disturbance property classes (wildfire, agricultural, landslide); a disturbance event catalog
+on the data plane; and the augmented-attribution assimilation that partitions a dv/v anomaly among
+hydrology, damage, and disturbance.

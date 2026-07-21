@@ -28,6 +28,12 @@ anywhere (no GPU) ────────────────────�
 consumes a `ForecastForcing` (`src/models/forecast.py`) and is indifferent to whether the rain came
 from an AI model, a reanalysis, or a scenario. Substituting the source changes one flag.
 
+**Implemented and running**: the hindcast path, driven by observed PRISM daily rainfall — this is what
+produces @fig-twin below. **Implemented as code, not yet executed operationally** (milestone: v0.7 —
+Probabilistic nowcast and ensemble forecast): the FuXi/earth2studio adapter that supplies the forecast
+(rather than observed) forcing — the file-boundary architecture and the water-budget consumer are both
+written, but a live FuXi run on GPU has not yet been produced end-to-end.
+
 This boundary is what makes the forecast *source-agnostic*: the same engine produces a hindcast from
 observed PRISM rainfall (a perfect-forcing baseline that isolates the physics from weather-forecast
 error) and a forecast from an AI model. The deployment mechanics — model selection, GPU execution,

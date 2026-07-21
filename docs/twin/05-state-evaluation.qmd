@@ -192,10 +192,11 @@ terrain-driven hydraulic head or moisture field, which has kinks at drainage div
 contacts, actually has. It also takes an optional per-cell `region_id` (e.g. a drainage-basin label)
 that forces correlation to zero across regions, so a ridge cell and a valley cell 90 m apart are not
 implicitly assumed to communicate just because they are close in Euclidean distance — the figures above
-do not yet pass one in, so they still assume within-basin isotropy. What remains open is scalability at
-the full 90 m domain: the dense $(n,n)$ `C` is only tractable on the coarsened assimilation grid the
-twin actually solves on (`notebooks/make_twin_gif.py`); a sparse GMRF/SPDE precision representation —
-which would give both the terrain-awareness and the scalability at once — is future work.
+do not yet pass one in, so they still assume within-basin isotropy — **implemented** at the coarsened
+assimilation grid the twin actually solves on (`notebooks/make_twin_gif.py`); the dense $(n,n)$ `C` is
+not tractable at the full 90 m domain. **Planned** (milestone: Applied math — DA estimator
+correctness): a sparse GMRF/SPDE precision representation, which would give both the terrain-awareness
+and the scalability at once.
 :::
 
 ## The static layers resolve space; the sensor network resolves the rest
