@@ -74,7 +74,7 @@ def main():
     fig.basemap(region=region, projection="M14c", frame=["af", f"WSne+t{title}"])
     pygmt.makecpt(cmap="gray", series=[-1500, 4400], reverse=True)
     shade = pygmt.grdgradient(grid=relief, radiance=[315, 45], normalize="t0.2")
-    fig.grdimage(grid=relief, cmap=True, shading=shade, region=region, projection="M14c", transparency=45)
+    fig.grdimage(grid=relief, cmap=True, shading=shade, region=region, projection="M14c", transparency=68)
     fig.coast(region=region, projection="M14c", water="gray75", resolution="f", area_thresh=0,
              rivers="r/0.4p,gray55")
     fig.coast(shorelines="1/0.4p,gray30", borders="2/0.6p,gray40", area_thresh=100,
@@ -96,7 +96,7 @@ def main():
     fig.plot(x=ghcn.lon, y=ghcn.lat, style="d0.16c", fill="200/200/200",
              pen=pen_for("GHCN-Daily weather stations"),
              label=f"GHCN-Daily stations ({len(ghcn)})")
-    fig.plot(x=gnss.lon, y=gnss.lat, style="a0.26c", fill="150/110/200",
+    fig.plot(x=gnss.lon, y=gnss.lat, style="a0.26c", fill="230/20/140",
              pen=pen_for("GNSS-IR / GNSS-TEC precipitable water"),
              label=f"GNSS-IR/TEC PWV ({len(gnss)})")
     # Same physical stations as "Seismic dv/v" above -- a thin gray HALO marks the subset of them
