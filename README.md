@@ -117,7 +117,7 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   │   ├── fetch_public.py       ← same layers from ORIGINAL public hosts (SOLUS100 full set, PRISM) — GAIA-independent
 │   │   ├── fetch_vs30.py         ← Vs30: Wald-Allen slope proxy / USGS grid / Sanger-Maurer + NEHRP class prob.
 │   │   ├── fetch_terraclimate.py ← TerraClimate P/PET/soil monthly driver (~4 km)
-│   │   ├── fetch_prism_monthly.py← PRISM monthly obs driver (ppt+tmean → Hamon PET)
+│   │   ├── fetch_prism_monthly.py← PRISM monthly obs driver (ppt+tmax/tmin/tmean → Hargreaves-Samani PET)
 │   │   ├── fetch_{snotel,uscrn}.py ← in-situ soil-moisture station networks (anchors + validation)
 │   │   ├── fetch_{smap,merra2}.py  ← satellite / reanalysis soil moisture (native-scale checks)
 │   │   ├── fetch_seismic.py      ← UW + CC seismic station metadata / waveforms (seisfetch)
@@ -363,7 +363,7 @@ pixi run soil-moisture         # → soil_hydraulic_envelope_90m.zarr, soil_mois
 # 3. 90 m time-varying products — statistical downscaling → GWL + θ GIFs + tracked σ budget.
 pixi run products-90m          # → figures/demo/{gwl_90m,theta_90m}.gif, uncertainty_budget.png, provenance.json
 
-# 3b. Alternative forcing (PRISM obs + Hamon PET) for the forcing ensemble; dv/v-coupling figs.
+# 3b. Alternative forcing (PRISM obs + Hargreaves-Samani PET) for the forcing ensemble; dv/v-coupling figs.
 pixi run prism && pixi run ensemble-dvv
 
 # 3c. Independent θ validation vs SNOTEL in-situ soil moisture (uplands; NRCS AWDB, no auth).

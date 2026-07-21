@@ -6,9 +6,18 @@ for the gaia-soil-hydromechanics soil-moisture bucket, complementing TerraClimat
 
   * PRISM precipitation is observation-based (station-anchored), not a reanalysis, and is
     available at higher native resolution — a more independent forcing.
-  * PRISM ships temperature but **no reference ET**, so PET is derived here from monthly mean
-    temperature via the Hamon (1961) temperature–daylength method — keeping the forcing fully
-    observation-driven. (Hargreaves is available when tmin/tmax are fetched.)
+  * PRISM ships temperature but **no reference ET**, so PET is derived here from monthly
+    tmax/tmin/tmean via the Hargreaves–Samani (1985) equation — keeping the forcing fully
+    observation-driven. This is FAO-56's own recommended substitute for full Penman-Monteith
+    reference ET when radiation, wind, and humidity are not measured (Allen et al. 1998, FAO
+    Irrigation and Drainage Paper 56, Ch. 3) — the formulation actually used for reference ET in
+    Shi et al. 2026 (agroseismology) is full FAO-56 Penman-Monteith, which additionally needs net
+    radiation, soil heat flux, wind speed, and vapor pressure deficit; PRISM does not carry any
+    of those, so full Penman-Monteith is not computable from this forcing alone (tracked in #58).
+    Hargreaves-Samani needs only Tmax/Tmin/Tmean + latitude, and is the standard, far more widely
+    validated choice for that data-limited case than the previously used Hamon (1961) method,
+    which needs temperature alone and is comparatively rarely used outside Thornthwaite-family
+    monthly water-balance schemes.
 
 Running the same Thornthwaite–Mather bucket under both PRISM and TerraClimate yields a
 **forcing ensemble**: the spread across forcings is an explicit *forcing-uncertainty* term for
@@ -64,40 +73,58 @@ def _fetch_month_element(elem: str, yyyymm: str, res: str, bbox, raw_dir: Path) 
     return da.rename({"x": "lon", "y": "lat"}) if "x" in da.dims else da
 
 
-def hamon_pet_mm(tmean_c: xr.DataArray, times: pd.DatetimeIndex, lat: np.ndarray) -> np.ndarray:
-    """Monthly Hamon (1961) potential ET (mm) from mean temperature + daylength.
+def extraterrestrial_radiation_mm(doy: np.ndarray, lat_deg: np.ndarray) -> np.ndarray:
+    r"""Daily extraterrestrial radiation :math:`R_a`, in mm/day equivalent (FAO-56 Eq. 21).
 
-    PET_day = 0.1651 * (N/12) * rho_sat * K, with rho_sat the saturated vapour density
-    (g m^-3) at tmean, N the mean daylight hours (from latitude + day-of-year), K≈1.2.
-    Monthly total = PET_day * days_in_month. Vectorised over (time, lat, lon).
+    ``doy`` and ``lat_deg`` broadcast against each other (typically ``doy`` shaped ``(time, 1, 1)``
+    and ``lat_deg`` shaped ``(1, lat, 1)``). :math:`R_a` is converted from MJ m\ :sup:`-2` day\
+    :sup:`-1` to mm/day via the 0.408 mm/MJ latent-heat-of-vaporisation factor, matching the units
+    ``hargreaves_samani_pet_mm`` expects.
     """
-    T = np.asarray(tmean_c.values, dtype="float64")            # (time, lat, lon)
-    latg = np.broadcast_to(lat[None, :, None], T.shape)        # latitude per cell (deg)
-    doy = np.array([t.dayofyear for t in times], dtype="float64")
+    phi = np.radians(lat_deg)
+    dr = 1.0 + 0.033 * np.cos(2 * np.pi * doy / 365.0)                       # inverse Earth-Sun distance
+    decl = 0.409 * np.sin(2 * np.pi * doy / 365.0 - 1.39)                    # solar declination
+    ws = np.arccos(np.clip(-np.tan(phi) * np.tan(decl), -1.0, 1.0))          # sunset hour angle
+    gsc = 0.0820                                                            # solar constant, MJ m^-2 min^-1
+    ra_mj = ((24.0 * 60.0 / np.pi) * gsc * dr
+             * (ws * np.sin(phi) * np.sin(decl) + np.cos(phi) * np.cos(decl) * np.sin(ws)))
+    return 0.408 * ra_mj                                                    # mm/day
+
+
+def hargreaves_samani_pet_mm(tmax_c: xr.DataArray, tmin_c: xr.DataArray, tmean_c: xr.DataArray,
+                             times: pd.DatetimeIndex, lat: np.ndarray) -> np.ndarray:
+    r"""Monthly Hargreaves–Samani (1985) reference ET (mm), FAO-56 Eq. 52.
+
+    :math:`ET_0 = 0.0023\,(T_{mean} + 17.8)\,\sqrt{T_{max} - T_{min}}\;R_a`, with :math:`R_a` the
+    extraterrestrial radiation in mm/day equivalent. FAO-56 (Allen et al. 1998, Ch. 3) recommends
+    this specific equation as the substitute for full Penman-Monteith reference ET when radiation,
+    wind, and humidity are not measured — which is the case for PRISM (temperature + precipitation
+    only). Monthly total = per-day :math:`ET_0` (evaluated once at the month's mean Tmax/Tmin/Tmean
+    and mid-month day-of-year) times days-in-month. Vectorised over (time, lat, lon).
+    """
+    tmax = np.asarray(tmax_c.values, dtype="float64")          # (time, lat, lon)
+    tmin = np.asarray(tmin_c.values, dtype="float64")
+    tmean = np.asarray(tmean_c.values, dtype="float64")
+    latg = np.broadcast_to(lat[None, :, None], tmean.shape)    # latitude per cell (deg)
+    doy = np.array([t.dayofyear for t in times], dtype="float64")[:, None, None]
     days = np.array([t.days_in_month for t in times], dtype="float64")
 
-    # Daylight hours N from solar declination + sunset hour angle.
-    phi = np.radians(latg)
-    decl = 0.409 * np.sin(2 * np.pi * doy[:, None, None] / 365.0 - 1.39)
-    x = np.clip(-np.tan(phi) * np.tan(decl), -1.0, 1.0)
-    N = 24.0 / np.pi * np.arccos(x)                            # daylight hours
-
-    # Saturated vapour density (g/m^3): e_s (hPa) via Tetens, then ideal-gas.
-    es = 6.108 * np.exp(17.27 * T / (T + 237.3))               # hPa
-    rho_sat = 216.7 * es / (T + 273.3)                         # g/m^3
-
-    pet_day = 0.1651 * (N / 12.0) * rho_sat * 1.2
-    pet_month = np.where(T > 0.0, pet_day, 0.0) * days[:, None, None]  # no PET below freezing
+    ra_mm = extraterrestrial_radiation_mm(doy, latg)           # latg in degrees; converted inside
+    dtr = np.clip(tmax - tmin, 0.0, None)                      # diurnal temperature range, >= 0
+    pet_day = 0.0023 * (tmean + 17.8) * np.sqrt(dtr) * ra_mm
+    pet_month = np.where(tmean > -273.0, pet_day, 0.0) * days[:, None, None]
     return np.clip(pet_month, 0.0, None).astype("float32")
 
 
 def fetch_prism_monthly(bbox, start: str, end: str, res: str, output: Path, raw_dir: Path) -> Path:
     months = pd.period_range(start=start, end=end, freq="M")
-    ppt_list, tmean_list = [], []
+    ppt_list, tmean_list, tmax_list, tmin_list = [], [], [], []
     for i, m in enumerate(months):
         ym = f"{m.year}{m.month:02d}"
         ppt_list.append(_fetch_month_element("ppt", ym, res, bbox, raw_dir))
         tmean_list.append(_fetch_month_element("tmean", ym, res, bbox, raw_dir))
+        tmax_list.append(_fetch_month_element("tmax", ym, res, bbox, raw_dir))
+        tmin_list.append(_fetch_month_element("tmin", ym, res, bbox, raw_dir))
         if i % 24 == 0:
             logger.info("PRISM %s (%d/%d)", ym, i + 1, len(months))
 
@@ -106,18 +133,25 @@ def fetch_prism_monthly(bbox, start: str, end: str, res: str, output: Path, raw_
     lon = ppt_list[0].lon.values
     precip = np.stack([d.values for d in ppt_list], axis=0).astype("float32")
     tmean = np.stack([d.values for d in tmean_list], axis=0).astype("float32")
+    tmax = np.stack([d.values for d in tmax_list], axis=0).astype("float32")
+    tmin = np.stack([d.values for d in tmin_list], axis=0).astype("float32")
 
     ds = xr.Dataset(
         {"precip_mm": (("time", "lat", "lon"), precip),
-         "tmean_c": (("time", "lat", "lon"), tmean)},
+         "tmean_c": (("time", "lat", "lon"), tmean),
+         "tmax_c": (("time", "lat", "lon"), tmax),
+         "tmin_c": (("time", "lat", "lon"), tmin)},
         coords={"time": times, "lat": lat, "lon": lon},
     )
-    ds["pet_mm"] = (("time", "lat", "lon"), hamon_pet_mm(ds["tmean_c"], times, lat))
+    ds["pet_mm"] = (("time", "lat", "lon"),
+                    hargreaves_samani_pet_mm(ds["tmax_c"], ds["tmin_c"], ds["tmean_c"], times, lat))
     ds["precip_mm"].attrs = {"units": "mm/month", "source": "PRISM (services.nacse.org)"}
-    ds["pet_mm"].attrs = {"units": "mm/month", "method": "Hamon (1961) from PRISM tmean"}
+    ds["pet_mm"].attrs = {"units": "mm/month",
+                          "method": "Hargreaves-Samani (1985), FAO-56 Eq. 52, from PRISM tmax/tmin/tmean"}
     ds.attrs.update(source="PRISM monthly (Daly et al.)", native_resolution=res,
                     role="alternative dynamic forcing for soil moisture (ensemble member)",
-                    pet_method="Hamon temperature-daylength")
+                    pet_method="Hargreaves-Samani temperature-radiation (FAO-56 substitute for "
+                               "Penman-Monteith when radiation/wind/humidity are not measured)")
 
     output = Path(output)
     if output.exists():
