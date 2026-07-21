@@ -106,7 +106,11 @@ def hargreaves_samani_pet_mm(tmax_c: xr.DataArray, tmin_c: xr.DataArray, tmean_c
     tmin = np.asarray(tmin_c.values, dtype="float64")
     tmean = np.asarray(tmean_c.values, dtype="float64")
     latg = np.broadcast_to(lat[None, :, None], tmean.shape)    # latitude per cell (deg)
-    doy = np.array([t.dayofyear for t in times], dtype="float64")[:, None, None]
+    # ``times`` are month-START timestamps (Period.to_timestamp() -> day 1); Ra is evaluated once at
+    # the month's MID-POINT (day 15), which is the day-of-year the formulation below assumes and is a
+    # better single representative than the first of the month (it matters most in the shoulder
+    # seasons at mid/high latitudes, where Ra changes fastest through the month).
+    doy = np.array([(t + pd.Timedelta(days=14)).dayofyear for t in times], dtype="float64")[:, None, None]
     days = np.array([t.days_in_month for t in times], dtype="float64")
 
     ra_mm = extraterrestrial_radiation_mm(doy, latg)           # latg in degrees; converted inside
