@@ -193,6 +193,25 @@ ${closes_lines}" --permission-mode acceptEdits --dangerously-skip-permissions 2>
 ${closes_lines}"
   fi
 
+  # Never trust the agent's prose to have transcribed every "Closes #N" line correctly -- append
+  # any issue from this batch whose closing line the drafted body doesn't already contain. A
+  # duplicate "Closes #N" is harmless to GitHub; a MISSING one silently breaks the whole point of
+  # this pipeline (the issue stays open after merge), so the script guarantees it, not the LLM.
+  missing_closes=""
+  while IFS= read -r number; do
+    [ -z "$number" ] && continue
+    if ! grep -qiE "(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)[[:space:]]+#${number}([^0-9]|$)" <<<"$pr_body"; then
+      missing_closes="${missing_closes}Closes #${number}
+"
+    fi
+  done <<< "$numbers"
+  if [ -n "$missing_closes" ]; then
+    echo "  pr body was missing closing keywords for some issues; appending them" | tee -a "$logfile"
+    pr_body="${pr_body}
+
+${missing_closes}"
+  fi
+
   pr_number="$(gh pr create --base main --head "$branch" \
     --title "gaia: ${readable_key} (${numbers_csv})" \
     --body "$pr_body" \
