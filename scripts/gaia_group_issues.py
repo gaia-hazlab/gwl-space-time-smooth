@@ -69,12 +69,13 @@ MILESTONE_ORDER = [
 ]
 
 
+# Precomputed once so sorting is a dict lookup, not a linear scan per batch.
+_MILESTONE_RANK = {title: i for i, title in enumerate(MILESTONE_ORDER)}
+
+
 def milestone_rank(milestone):
     """Position in MILESTONE_ORDER; unlisted/None sorts after all listed milestones."""
-    try:
-        return MILESTONE_ORDER.index(milestone)
-    except ValueError:
-        return len(MILESTONE_ORDER)
+    return _MILESTONE_RANK.get(milestone, len(MILESTONE_ORDER))
 
 # Direct blockers only (not transitively expanded) -- an issue is held back
 # if ANY of its listed blockers is still open. Transitive blocking falls
