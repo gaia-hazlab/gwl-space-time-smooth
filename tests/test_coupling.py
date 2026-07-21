@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from src.data.fetch_prism_monthly import hamon_pet_mm
+from src.data.fetch_prism_monthly import hargreaves_samani_pet_mm
 from src.models.downscale import (
     _DOWNSCALERS,
     bilinear_downscale,
@@ -28,11 +28,13 @@ from src.models.dvv_coupling import coupling_envelope, forward_dvv, invert_dvv
 from src.models.soil_moisture import snowmelt_liquid_input
 
 
-def test_hamon_pet_positive_and_seasonal():
+def test_hargreaves_samani_pet_positive_and_seasonal():
     times = pd.DatetimeIndex(["2015-01-01", "2015-07-01"])
     lat = np.array([47.5])
     tmean = xr.DataArray(np.array([[[2.0]], [[20.0]]]), dims=("time", "lat", "lon"))
-    pet = hamon_pet_mm(tmean, times, lat)
+    tmax = xr.DataArray(np.array([[[5.0]], [[27.0]]]), dims=("time", "lat", "lon"))
+    tmin = xr.DataArray(np.array([[[-1.0]], [[13.0]]]), dims=("time", "lat", "lon"))
+    pet = hargreaves_samani_pet_mm(tmax, tmin, tmean, times, lat)
     assert pet.shape == (2, 1, 1)
     assert np.all(pet >= 0)
     assert pet[1, 0, 0] > pet[0, 0, 0]        # July PET > January PET (warmer, longer days)
@@ -215,7 +217,7 @@ def test_upscale_and_native_scale_comparison():
 
 
 if __name__ == "__main__":
-    test_hamon_pet_positive_and_seasonal()
+    test_hargreaves_samani_pet_positive_and_seasonal()
     test_snow_module_conserves_and_redistributes()
     test_residual_anchor_pulls_to_obs_and_fades()
     test_loso_anchor_reduces_bias()

@@ -6,15 +6,23 @@
 #
 #   branch -> orchestrator resolves the whole batch together -> local
 #   pre-flight gate -> open ONE PR (Closes #a, #b, #c) -> request Copilot
-#   review -> wait -> ONE revision round addressing Copilot's comments ->
-#   wait for GitHub Actions checks green -> squash-merge -> every issue in
-#   the batch closes via "Closes #N", plus a scientist-facing close
-#   comment written by the gaia-lab-notebook agent on each issue and (if
-#   the batch belongs to a milestone) a progress note on that milestone's
-#   epic tracker -- the epic itself is never closed by this script.
+#   review -> wait -> revise-and-re-review, up to REVIEW_MAX_ROUNDS times,
+#   stopping early once Copilot has nothing new to say -> wait for GitHub
+#   Actions checks green -> squash-merge -> every issue in the batch closes
+#   via "Closes #N", plus a scientist-facing close comment written by the
+#   gaia-lab-notebook agent on each issue and (if the batch belongs to a
+#   milestone) a progress note on that milestone's epic tracker -- the epic
+#   itself is never closed by this script.
+#
+# Copilot's code review NEVER submits an "Approve" state -- only ever
+# COMMENTED -- so "converged" means its inline comments stopped changing
+# between rounds, not that it approved. The merge step therefore relies on
+# main's ruleset having a bypass_actor entry for this token (bypass_mode
+# pull_request, so direct-push protections on main still apply to it) --
+# without that, the required-approving-review rule blocks the merge forever.
 #
 # Any failure at any stage leaves the PR/issues OPEN for a human and does
-# NOT merge. Exactly one revision round is attempted.
+# NOT merge.
 #
 # Requires: branch protection on main must actually allow this token to
 # merge (or the merge step will just fail loudly, which is fine); jq.
@@ -26,14 +34,29 @@ set -euo pipefail
 REPO_DIR="${REPO_DIR:-$HOME/gwl-space-time-smooth}"
 LOG_DIR="$REPO_DIR/.gaia-runs"
 COPILOT_REVIEWER="copilot-pull-request-reviewer[bot]"   # verify this login on your org once by hand
-REVIEW_WAIT_TRIES=40      # 40 * 30s = 20 min max wait for Copilot's first pass
+REVIEW_WAIT_TRIES=40      # 40 * 30s = 20 min max wait for each Copilot pass
 REVIEW_WAIT_INTERVAL=30
+REVIEW_MAX_ROUNDS=3       # cap on revise-and-re-review rounds; see the convergence note above
 
 : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}"
 
 cd "$REPO_DIR"
 mkdir -p "$LOG_DIR"
 REPO_SLUG="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+
+# A stable fingerprint of stdin, for the convergence check below -- NOT a security primitive, so
+# any of these is fine; `shasum` is macOS/Perl-native and not guaranteed on a fresh Linux box (the
+# actual unattended target per docs/gaia-automation.md), where `sha256sum` (coreutils) is standard.
+# `cksum` (POSIX, always present) is the last-resort fallback so this never hard-fails on a minimal image.
+fingerprint() {
+  if command -v shasum >/dev/null; then
+    shasum -a 256 | cut -d' ' -f1
+  elif command -v sha256sum >/dev/null; then
+    sha256sum | cut -d' ' -f1
+  else
+    cksum | cut -d' ' -f1
+  fi
+}
 
 # Every failure path below calls this: it prints WHY inline (exit code + the tail of the actual
 # claude/pixi/quarto output) so a failure is diagnosable from the console alone, not only by
@@ -61,19 +84,27 @@ abandon_branch() {
 }
 
 wait_for_copilot_review() {
-  local pr_number="$1" logfile="$2"
+  # $3 (optional): an ISO8601 "since" timestamp -- only accept a review SUBMITTED AFTER this. Needed
+  # on every round after the first: dismiss_stale_reviews_on_push + copilot_code_review's
+  # review_on_push retrigger a fresh review on every push, but the *previous* review is still "last"
+  # until the new one lands -- without this filter, round 2+ would immediately re-return round 1's
+  # stale review instead of waiting for Copilot to actually look at the revision.
+  local pr_number="$1" logfile="$2" since="${3:-}"
   for ((i = 0; i < REVIEW_WAIT_TRIES; i++)); do
     # A transient gh api hiccup here must not kill the whole script mid-poll -- fall through to
     # the sleep-and-retry rather than let a single failed request propagate under `set -e`.
     body="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/reviews" \
       --jq "[.[] | select(.user.login == \"${COPILOT_REVIEWER}\")] | last" 2>>"$logfile")" || body=""
     if [ -n "$body" ] && [ "$body" != "null" ]; then
-      echo "$body"
-      return 0
+      submitted_at="$(jq -r '.submitted_at // empty' <<<"$body")"
+      if [ -z "$since" ] || [ -z "$submitted_at" ] || [[ "$submitted_at" > "$since" ]]; then
+        echo "$body"
+        return 0
+      fi
     fi
     sleep "$REVIEW_WAIT_INTERVAL"
   done
-  echo "  no Copilot review received within timeout" >> "$logfile"
+  echo "  no (fresh) Copilot review received within timeout" >> "$logfile"
   return 1
 }
 
@@ -126,10 +157,14 @@ Do not commit -- leave the working tree dirty for the pipeline to check."
 
   # `cmd && rc=0 || rc=$?` (not a bare `cmd; rc=$?`) is required here: under `set -e`, a plain
   # failing command exits the script immediately, before a following `rc=$?` line ever runs.
+  # Streamed through `tee` (not `>>` alone) so the orchestrator's work is visible on the console
+  # live, before the pre-flight gate/commit/push below ever touch GitHub. `set -o pipefail` (from
+  # the script's `set -euo pipefail`) keeps `orchestrator_rc` reflecting claude's exit code, not tee's.
+  echo "  running gaia orchestrator on ${numbers_csv} (live below, also logged to $logfile)..." | tee -a "$logfile"
   claude -p "$impl_prompt" \
       --permission-mode acceptEdits \
       --dangerously-skip-permissions \
-      >> "$logfile" 2>&1 && orchestrator_rc=0 || orchestrator_rc=$?
+      2>&1 | tee -a "$logfile" && orchestrator_rc=0 || orchestrator_rc=$?
   if [ "$orchestrator_rc" -ne 0 ]; then
     report_failure "orchestrator failed on ${numbers_csv}; discarding" "$logfile" "$orchestrator_rc"
     abandon_branch "$branch" "$logfile"
@@ -169,6 +204,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
   # script (not just this batch) if `cmd` fails -- there is no later stage to report or recover.
   # Guard it, and fall back to a minimal body/message (still carrying the Closes lines) so a
   # lab-notebook drafting failure never blocks the actual PR from opening or merging.
+  echo "  drafting PR description via gaia-lab-notebook (logged to $logfile)..." | tee -a "$logfile"
   pr_body="$(claude -p "Use the gaia-lab-notebook agent to write a clear, scientist-facing pull
 request description for the change on branch ${branch} in ${REPO_DIR}, which together
 resolves this batch of related issues (grouped under '${readable_key}'):
@@ -188,6 +224,25 @@ ${closes_lines}" --permission-mode acceptEdits --dangerously-skip-permissions 2>
 ${closes_lines}"
   fi
 
+  # Never trust the agent's prose to have transcribed every "Closes #N" line correctly -- append
+  # any issue from this batch whose closing line the drafted body doesn't already contain. A
+  # duplicate "Closes #N" is harmless to GitHub; a MISSING one silently breaks the whole point of
+  # this pipeline (the issue stays open after merge), so the script guarantees it, not the LLM.
+  missing_closes=""
+  while IFS= read -r number; do
+    [ -z "$number" ] && continue
+    if ! grep -qiE "(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)[[:space:]]+#${number}([^0-9]|$)" <<<"$pr_body"; then
+      missing_closes="${missing_closes}Closes #${number}
+"
+    fi
+  done <<< "$numbers"
+  if [ -n "$missing_closes" ]; then
+    echo "  pr body was missing closing keywords for some issues; appending them" | tee -a "$logfile"
+    pr_body="${pr_body}
+
+${missing_closes}"
+  fi
+
   pr_number="$(gh pr create --base main --head "$branch" \
     --title "gaia: ${readable_key} (${numbers_csv})" \
     --body "$pr_body" \
@@ -203,17 +258,58 @@ ${closes_lines}"
     -f "reviewers[]=${COPILOT_REVIEWER}" >> "$logfile" 2>&1 \
     || echo "  could not request Copilot review via API; add it once by hand and re-run" | tee -a "$logfile"
 
-  echo "  waiting for Copilot's review..." | tee -a "$logfile"
-  if ! review="$(wait_for_copilot_review "$pr_number" "$logfile")"; then
-    echo "  leaving PR #$pr_number open for a human; no Copilot review yet" | tee -a "$logfile"
-    continue
-  fi
-  echo "$review" >> "$logfile"
+  # Iterate-until-convergence, not one fixed round: Copilot's code review NEVER submits an
+  # "Approve" state (confirmed empirically -- it only ever leaves a COMMENTED review), so waiting
+  # for approval would hang forever. "Converged" here means Copilot has nothing NEW left to say --
+  # tracked as a fingerprint of its inline comments AND its review body, not the review's (permanently
+  # COMMENTED) state -- Copilot can leave actionable feedback in the body with zero inline comments, so
+  # inline comments alone are not the whole signal.
+  # Merging past a merely-COMMENTED review relies on the repo's ruleset bypass_actor for this token
+  # (scoped to bypass_mode=pull_request only -- direct-push protections on main still apply).
+  gate_ok=1
+  prev_round_fingerprint=""
+  round_since=""
+  for ((review_round = 1; review_round <= REVIEW_MAX_ROUNDS; review_round++)); do
+    echo "  waiting for Copilot's review (round ${review_round}/${REVIEW_MAX_ROUNDS})..." | tee -a "$logfile"
+    if ! review="$(wait_for_copilot_review "$pr_number" "$logfile" "$round_since")"; then
+      echo "  leaving PR #$pr_number open for a human; no Copilot review yet" | tee -a "$logfile"
+      gate_ok=0
+      break
+    fi
+    echo "$review" >> "$logfile"
+    round_since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-  review_comments="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/comments" --jq '.[] | "- \(.path):\(.line // .original_line): \(.body)"' 2>>"$logfile")" || review_comments="(could not fetch inline comments; see $logfile)"
+    # A FAILED fetch of inline comments must not masquerade as "no comments": the old placeholder made a
+    # stable fingerprint that false-converged us straight into a merge. `if !` distinguishes a genuine
+    # request failure (non-zero exit) from a legitimately empty comment set (exit 0, empty output) --
+    # gh returns success with empty output when a PR simply has no inline comments.
+    if ! review_comments="$(gh api "repos/${REPO_SLUG}/pulls/${pr_number}/comments" --jq '.[] | "- \(.path):\(.line // .original_line): \(.body)"' 2>>"$logfile")"; then
+      echo "  could not fetch inline comments for PR #$pr_number; leaving it open for a human rather than risk a false-converge merge" | tee -a "$logfile"
+      gate_ok=0
+      break
+    fi
+    review_body="$(jq -r '.body // ""' <<<"$review" 2>>"$logfile")" || review_body=""
 
-  revise_prompt="Use the gaia orchestrator to address this Copilot code review on PR #${pr_number}
-(branch ${branch}, resolving ${numbers_csv}) in ${REPO_DIR}.
+    # "Nothing to say" requires BOTH no inline comments AND no review body -- otherwise body-only
+    # feedback would be silently dropped. Convergence otherwise means the WHOLE payload (inline comments
+    # + review body) is byte-identical to the previous round, not just the inline comments.
+    if [ -z "$review_comments" ] && [ -z "$review_body" ]; then
+      echo "  converged: Copilot left no inline comments and no review body (round ${review_round})" | tee -a "$logfile"
+      break
+    fi
+    round_fingerprint="$(printf '%s\n--- review body ---\n%s' "$review_comments" "$review_body" | fingerprint)"
+    if [ -n "$prev_round_fingerprint" ] && [ "$round_fingerprint" = "$prev_round_fingerprint" ]; then
+      echo "  converged: Copilot's inline comments and review body are unchanged since the previous round (round ${review_round})" | tee -a "$logfile"
+      break
+    fi
+    if [ "$review_round" -eq "$REVIEW_MAX_ROUNDS" ]; then
+      echo "  hit the ${REVIEW_MAX_ROUNDS}-round cap with unresolved Copilot comments; proceeding to the gate/merge step anyway (CI green + the bypass actor are the real gate here, not Copilot's approval, which never comes) -- see $logfile for what's still open" | tee -a "$logfile"
+      break
+    fi
+    prev_round_fingerprint="$round_fingerprint"
+
+    revise_prompt="Use the gaia orchestrator to address this Copilot code review on PR #${pr_number}
+(branch ${branch}, resolving ${numbers_csv}) in ${REPO_DIR}. This is revision round ${review_round}.
 
 Review summary:
 ${review}
@@ -225,25 +321,32 @@ Make the changes the review actually calls for -- don't pad the diff. If a comme
 wrong or out of scope, leave a note explaining why instead of blindly complying.
 Do not commit -- leave the working tree dirty."
 
-  claude -p "$revise_prompt" \
-    --permission-mode acceptEdits \
-    --dangerously-skip-permissions \
-    >> "$logfile" 2>&1 || echo "  revision pass errored; continuing to gate check" | tee -a "$logfile"
+    echo "  running gaia orchestrator's revision pass on PR #${pr_number} round ${review_round} (live below, also logged to $logfile)..." | tee -a "$logfile"
+    claude -p "$revise_prompt" \
+      --permission-mode acceptEdits \
+      --dangerously-skip-permissions \
+      2>&1 | tee -a "$logfile" || echo "  revision pass errored; continuing to gate check" | tee -a "$logfile"
 
-  if ! git diff --quiet || ! git diff --cached --quiet; then
-    echo "  re-running gate after revision" | tee -a "$logfile"
-    if pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; then
-      git add -A
-      git commit -m "gaia: address Copilot review on #${pr_number}
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+      echo "  re-running gate after revision round ${review_round}" | tee -a "$logfile"
+      if pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; then
+        git add -A
+        git commit -m "gaia: address Copilot review round ${review_round} on #${pr_number}
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
-      git push
+        git push
+      else
+        echo "  revision broke the gate for ${numbers_csv}; leaving PR #$pr_number open for a human" | tee -a "$logfile"
+        gate_ok=0
+        break
+      fi
     else
-      echo "  revision broke the gate for ${numbers_csv}; leaving PR #$pr_number open for a human" | tee -a "$logfile"
-      continue
+      echo "  no revision needed/produced this round" | tee -a "$logfile"
+      break     # nothing changed and comments weren't empty -- no point looping again on the same diff
     fi
-  else
-    echo "  no revision needed/produced" | tee -a "$logfile"
+  done
+  if [ "$gate_ok" -eq 0 ]; then
+    continue
   fi
 
   echo "  waiting for GitHub Actions checks..." | tee -a "$logfile"

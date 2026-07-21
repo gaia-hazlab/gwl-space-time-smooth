@@ -19,7 +19,7 @@ Replaces the earlier synthetic HAND ramp (issue #54) with defensible Vs30 from f
 
 Output: ``data/processed/vs30_90m.tif`` (EPSG:5070, 90 m). Unlike the HAND ramp, this is a real
 site-condition estimate suitable (with its uncertainty) for NEHRP site class -- see the geotechnical
-review in ``docs/peer_review.md``.
+review in ``docs/reviews/peer_review.md``.
 """
 
 from __future__ import annotations

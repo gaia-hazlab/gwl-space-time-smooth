@@ -119,7 +119,10 @@ plane; earth2studio compatibility keeps it usable from the AI-weather ecosystem 
 
 `src/data/fetch_prism_daily.py` reads the `gaia-hazlab/prism-stac` catalog via `odc.stac`, falling back
 to the PRISM service directly for windows the catalog does not cover. It pulls precipitation and
-`tmean` — the latter required by the snow partition — and adds Hamon PET per day.
+`tmean` — the latter required by the snow partition — plus `tmax`/`tmin` from the PRISM service (the
+STAC catalog does not carry them), and adds Hargreaves-Samani (1985) reference ET per day — FAO-56's
+own recommended substitute for full Penman-Monteith ET when radiation, wind, and humidity are not
+measured, which is the case for PRISM.
 
 `pixi run stage-mvp` stages the four streams of an analysis window together, because only together do
 they close the budget:

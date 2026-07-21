@@ -147,6 +147,8 @@ validation-figure = "python notebooks/make_validation_figure.py"
 twin-gif = "python notebooks/make_twin_gif.py"
 sensor-figure = "python notebooks/make_sensor_figure.py"
 observability-figure = "python notebooks/make_observability_figure.py"
+# spatial resolution from the static layers alone vs. the sensor network vs. both combined
+static-resolution-figure = "python notebooks/make_static_resolution_figure.py"
 observing-system-figure = "python notebooks/make_observing_system_figure.py"
 spacetime-figure = "python notebooks/make_spacetime_figure.py"
 # standard checkerboard resolution test: recovery of a regular anomaly pattern, network by network

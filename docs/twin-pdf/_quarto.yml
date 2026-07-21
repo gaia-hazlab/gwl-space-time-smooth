@@ -25,6 +25,7 @@ book:
         - ../twin/05-state-evaluation.qmd
         - ../twin/06-forecast.qmd
         - ../twin/07-hazard-integration.qmd
+        - ../twin/07b-resolution-requirements.qmd
     - part: "Reference"
       chapters:
         - ../twin/02-evaluation-data.qmd

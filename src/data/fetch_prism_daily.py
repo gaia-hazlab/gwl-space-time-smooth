@@ -6,7 +6,10 @@ Mirrors ``gaia-hazlab/gaia-cli`` (``src/gaia_cli/prism.py``): the same STAC cata
   - gaia-cli loads only ``ppt``; the catalog also carries ``tmean``, which we need for the degree-day
     snow partition (a Cascade December is snow-dominated -- treating snowfall as rain would fabricate
     an immediate soil-moisture and Vs response that physically waits for melt).
-  - we add Hamon PET **per day** (``fetch_prism_monthly.hamon_pet_mm`` only returns monthly totals).
+  - we add Hargreaves-Samani PET **per day** (``fetch_prism_monthly.hargreaves_samani_pet_mm`` only
+    returns monthly totals) from tmax/tmin/tmean fetched straight from the PRISM service (the STAC
+    catalog only carries ppt/tmean) -- FAO-56's own recommended substitute for full Penman-Monteith
+    reference ET when radiation/wind/humidity aren't measured -- which PRISM does not carry.
 
 This is the *observed* daily forcing, so it gives us two things the AI forecast cannot yet:
 a **hindcast** (drive the soil state with what actually fell -- a perfect-forcing baseline that
@@ -21,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -35,21 +39,21 @@ PRISM_STAC = ("https://raw.githubusercontent.com/gaia-hazlab/prism-stac/"
 # Domain is defined ONCE in src.config.domain (issue #92). Do not re-declare a bbox here.
 from src.config.domain import PUGET_CASCADES_BBOX  # noqa: E402
 
-def hamon_pet_per_day_mm(tmean_c, times, lat):
-    """Hamon (1961) PET in **mm/day** (the same formula as fetch_prism_monthly, without x days)."""
-    T = np.asarray(tmean_c, dtype="float64")                   # (time, lat, lon)
-    latg = np.broadcast_to(np.asarray(lat)[None, :, None], T.shape)
-    doy = np.array([t.dayofyear for t in pd.DatetimeIndex(times)], dtype="float64")
+def hargreaves_samani_pet_per_day_mm(tmax_c, tmin_c, tmean_c, times, lat):
+    """Hargreaves-Samani (1985) PET in **mm/day**, FAO-56 Eq. 52 (see fetch_prism_monthly for the
+    monthly-total form and the rationale for using this rather than Hamon)."""
+    from src.data.fetch_prism_monthly import extraterrestrial_radiation_mm
 
-    phi = np.radians(latg)
-    decl = 0.409 * np.sin(2 * np.pi * doy[:, None, None] / 365.0 - 1.39)
-    x = np.clip(-np.tan(phi) * np.tan(decl), -1.0, 1.0)
-    N = 24.0 / np.pi * np.arccos(x)                            # daylight hours
+    tmax = np.asarray(tmax_c, dtype="float64")                 # (time, lat, lon)
+    tmin = np.asarray(tmin_c, dtype="float64")
+    tmean = np.asarray(tmean_c, dtype="float64")
+    latg = np.broadcast_to(np.asarray(lat)[None, :, None], tmean.shape)
+    doy = np.array([t.dayofyear for t in pd.DatetimeIndex(times)], dtype="float64")[:, None, None]
 
-    es = 6.108 * np.exp(17.27 * T / (T + 237.3))               # hPa (Tetens)
-    rho_sat = 216.7 * es / (T + 273.3)                         # g/m^3
-    pet = 0.1651 * (N / 12.0) * rho_sat * 1.2
-    return np.clip(np.where(T > 0.0, pet, 0.0), 0.0, None).astype("float32")   # no PET below freezing
+    ra_mm = extraterrestrial_radiation_mm(doy, latg)
+    dtr = np.clip(tmax - tmin, 0.0, None)
+    pet = 0.0023 * (tmean + 17.8) * np.sqrt(dtr) * ra_mm
+    return np.clip(pet, 0.0, None).astype("float32")
 
 
 PRISM_SERVICE = "https://services.nacse.org/prism/data/get/us/{res}/{elem}/{yyyymmdd}"
@@ -88,25 +92,31 @@ def open_prism_daily_service(start, end, bbox=PUGET_CASCADES_BBOX, res="4km",
 
     raw_dir = _P(raw_dir or "data/raw/prism_daily")
     days = pd.date_range(start, end, freq="D")
-    logger.info("fetching %d days of PRISM daily (ppt + tmean) from the PRISM service", len(days))
-    ppt, tmn = [], []
+    logger.info("fetching %d days of PRISM daily (ppt + tmax/tmin/tmean) from the PRISM service", len(days))
+    ppt, tmn, tmx, tmi = [], [], [], []
     for i, d in enumerate(days):
         ppt.append(_fetch_prism_day("ppt", d, res, bbox, raw_dir))
         tmn.append(_fetch_prism_day("tmean", d, res, bbox, raw_dir))
+        tmx.append(_fetch_prism_day("tmax", d, res, bbox, raw_dir))
+        tmi.append(_fetch_prism_day("tmin", d, res, bbox, raw_dir))
         if (i + 1) % 30 == 0:
             logger.info("  %d/%d days", i + 1, len(days))
     ds = xr.Dataset({
         "precip_mm": xr.concat(ppt, dim=pd.Index(days, name="time")),
         "tmean_c": xr.concat(tmn, dim=pd.Index(days, name="time")),
+        "tmax_c": xr.concat(tmx, dim=pd.Index(days, name="time")),
+        "tmin_c": xr.concat(tmi, dim=pd.Index(days, name="time")),
     })
     return ds.rename({"x": "x", "y": "y"})
 
 
 def open_prism_daily(start, end, bbox=PUGET_CASCADES_BBOX, catalog_url=PRISM_STAC, source="auto"):
-    """Daily PRISM precip + tmean + Hamon PET, clipped to ``bbox``. Returns an xarray Dataset.
+    """Daily PRISM precip + tmean + Hargreaves-Samani PET, clipped to ``bbox``. Returns an xarray Dataset.
 
     ``source='auto'`` uses the gaia prism-stac catalog when it covers the window (it currently holds
     only 2025-12-01..12-31) and otherwise falls back to the PRISM service, which covers any window.
+    The STAC catalog only carries ppt/tmean, so tmax/tmin (needed for Hargreaves-Samani PET) are
+    always fetched from the PRISM service directly, regardless of which source supplied the rest.
     """
     import odc.stac
     import pystac
@@ -132,13 +142,25 @@ def open_prism_daily(start, end, bbox=PUGET_CASCADES_BBOX, catalog_url=PRISM_STA
     ds = ds.where(ds.precip_mm > -9000).where(ds.tmean_c > -9000)
     ds = ds.sortby("time").load()
 
+    if "tmax_c" not in ds or "tmin_c" not in ds:
+        days = pd.DatetimeIndex(ds["time"].values)
+        raw_dir = Path("data/raw/prism_daily")
+        tmx = xr.concat([_fetch_prism_day("tmax", d, "4km", bbox, raw_dir) for d in days],
+                       dim=pd.Index(days, name="time"))
+        tmi = xr.concat([_fetch_prism_day("tmin", d, "4km", bbox, raw_dir) for d in days],
+                       dim=pd.Index(days, name="time"))
+        ds["tmax_c"] = tmx.where(tmx > -9000)
+        ds["tmin_c"] = tmi.where(tmi > -9000)
+
     lat = ds["y"].values
-    pet = hamon_pet_per_day_mm(ds["tmean_c"].values, ds["time"].values, lat)
+    pet = hargreaves_samani_pet_per_day_mm(ds["tmax_c"].values, ds["tmin_c"].values,
+                                           ds["tmean_c"].values, ds["time"].values, lat)
     ds["pet_mm"] = (ds["tmean_c"].dims, pet)
 
     ds["precip_mm"].attrs.update(units="mm/day", long_name="PRISM daily precipitation")
     ds["tmean_c"].attrs.update(units="degC", long_name="PRISM daily mean temperature")
-    ds["pet_mm"].attrs.update(units="mm/day", long_name="Hamon (1961) potential ET")
+    ds["pet_mm"].attrs.update(units="mm/day",
+                              long_name="Hargreaves-Samani (1985) reference ET (FAO-56 Eq. 52)")
     ds.attrs.update(source="PRISM daily via gaia-hazlab/prism-stac", dt_days=1.0,
                     role="OBSERVED forcing -- hindcast / verification truth, not a forecast",
                     catalog=catalog_url)

@@ -1,0 +1,120 @@
+---
+title: "11 · Resolution requirements for actionable hazards"
+---
+
+The twin runs at 90 m. Is that the resolution these hazards need? The honest answer is that there is
+no single number — **landslide, liquefaction, and flood each have a different generation scale, a
+different actionable scale, and a different upstream driver that must be resolved before the hazard
+model ever sees data.** This page states those scales explicitly and grounds each one in the
+literature, then asks what workflow and what twin architecture actually accommodate three different
+answers at once.
+
+## Why "actionable" is not "characterized"
+
+Two different questions get conflated:
+
+- **Where is the hazard elevated, region-wide?** — a screening question. Coarse products (90 m–1 km)
+  answer this well.
+- **Should we evacuate this street, retrofit this bridge, close this specific road?** — an
+  actionability question, about one asset or a handful of them. This almost always requires
+  finer-than-regional resolution, because the physics that flips a decision (a specific hollow's pore
+  pressure, a specific parcel's soil facies, a specific culvert's capacity) lives below what any
+  regional product resolves.
+
+Below, **generation scale** is where the physical process that causes the hazard actually operates;
+**actionable scale** is what a decision about a specific asset needs; **upstream driver** is the
+coarser process that has to be right *before* either of those can be, because errors made there
+propagate downstream and cannot be recovered by refining the hazard model alone.
+
+## Landslides
+
+| | scale | why |
+|---|---|---|
+| **Generation** | 1–10 m, ideally lidar-grade (1–3 m) | Shallow-landslide initiation is controlled by convergent topography — colluvial hollows and first-order channel heads that concentrate subsurface flow and pore pressure [@montgomery1994shalstab]. These features are typically 10–50 m wide; coarsening the DEM measurably degrades shallow-landslide hazard prediction because it smooths exactly this convergent structure away [@claessens2005demresolution]. |
+| **Actionable** | parcel/road scale — effectively the DEM resolution above | "This slope above mile marker X" requires resolving that slope, not a coarse average of it. Washington DNR's own landslide-hazard mapping guidance is built on lidar DEMs for this reason [@wadnr2016landslidemapping]. |
+| **Upstream driver** | pore pressure / water table at the *same* 1–10 m footprint | A coarse water-table field averages away the local pore-pressure spikes that trigger failure — a regional-scale antecedent-state estimate is a reasonable input to a hillslope-scale hydromechanical model, but not a substitute for one. |
+
+## Liquefaction
+
+| | scale | why |
+|---|---|---|
+| **Regional screening** | 100 m–1 km | The standard geospatial liquefaction susceptibility models operate at this resolution by design, as rapid-response/regional tools, not site-specific ones [@zhu2015geospatial; @zhu2017geospatial]. |
+| **Actionable (site-specific)** | point-scale, via CPT/SPT | Liquefaction triggering depends on facies-level grain-size/density variability (paleochannels, point bars) that no gridded product resolves. Standard semi-empirical triggering procedures are built on point-scale borehole/CPT data for exactly this reason [@idriss2006liquefaction] — this is a site-investigation problem, not one a finer raster can solve. |
+| **Upstream driver** | depth to the seasonal-high water table, **vertically**, not horizontally | A few tens of centimetres of error in depth-to-water can flip a cell between "liquefiable" and "not" — the lever that matters is vertical accuracy of the water-table estimate, not horizontal grid spacing. |
+
+## Flooding
+
+| | scale | why |
+|---|---|---|
+| **Antecedent state / water budget** | 90 m–1 km | How much water is already in the basin, and when, is a volume-and-timing question that coarse hydrologic modelling answers well. |
+| **Actionable (local inundation depth)** | 1–5 m, especially in developed areas | Local flood depth — which building floods, by how much — depends on micro-topography (road crowns, culverts, berms) invisible at coarse resolution; DEM resolution and source are shown to materially change inundation-extent accuracy in detailed/urban studies [@cook2009floodmapping]. |
+| **Upstream driver** | orographic precipitation enhancement at ridge scale | Precipitation over mountainous terrain like the Cascades is tightly coupled to ridge-scale topography [@roe2003orographic]; a forcing product that has already lost that structure (e.g. a coarse global forecast resampled without orographic physics) cannot regain it downstream, however fine the flood model that consumes it is. |
+
+## The telescope: why upstream resolution matters more than the hazard's own footprint
+
+A model that is fine at the *bottom* of a hazard's causal chain but coarse upstream of it produces a
+precise-looking wrong answer, because the error that mattered was made before the fine model ever ran:
+
+```
+precipitation forcing (ridge-scale orographic enhancement)
+   -> runoff generation (hillslope-scale: convergent topography, variable source area)
+      -> channel routing / basin discharge (reach-scale)
+         -> local flood depth (1-5 m)  |  landslide triggering (1-10 m)  |  liquefaction screening (100 m-1 km, refined by point CPT)
+```
+
+A 1 m flood-inundation model fed by a coarse precipitation forcing that never resolved ridge-scale
+orographic enhancement will produce a beautifully detailed *wrong* answer, because the error that
+generated the flood was made two steps upstream of where the fine model is looking. The same logic
+applies to landslides: a hillslope model run at 3 m resolution is only as good as the coarser
+water-table field feeding it pore pressure, and to liquefaction: a facies-resolving site investigation
+cannot fix a seasonal-high water table that was wrong by a meter before it ever reached the site.
+
+**The general result:** a single uniform resolution is the wrong target for any of these hazards. Each
+needs (a) a coarse, regional product that gets the *volume and timing* of the driving process right,
+and (b) a fine, local model that gets the *threshold-crossing* physics right for one asset — and the
+fine model is only as good as the coarse one feeding it.
+
+## A workflow that accommodates all three, without three different models
+
+The three hazards above do not need three separate, independently-built systems — they need the same
+three-tier structure, instantiated once per hazard:
+
+- **Tier 0 — regional state.** A coarse (90 m–1 km) antecedent-state and susceptibility product,
+  updated as observations arrive, covering the whole domain. Answers the screening question: where is
+  a hazard class elevated, region-wide, and by how much has recent forcing changed that?
+- **Tier 1 — area-scoped fine physics.** A finer (1–10 m) model run only over the specific area of
+  interest a decision requires — one watershed, one route corridor, one facility footprint — using
+  Tier 0's state as boundary/initial conditions rather than re-deriving it. This is where the
+  hazard-specific threshold physics (pore pressure on a hollow, inundation depth at a culvert, LPI at a
+  borehole) actually lives.
+- **Tier 2 — site data.** Point measurements for one specific asset (a CPT/SPT log, a lidar
+  micro-topography survey, a met station) that refine a Tier 1 output further. This tier is inherently
+  site-investigation work; no gridded regional product, however fine, replaces it.
+
+Running Tier 1 **only where requested**, rather than everywhere at fine resolution, is what keeps this
+computationally manageable: the cost of a fine hazard model scales with the area it covers, and most
+real decisions only need one watershed, one corridor, or one footprint at a time, not a fine-resolution
+rebuild of the whole regional domain.
+
+## Modularizing a system around this
+
+The architectural consequence is a clean separation of concerns rather than one resolution serving
+every purpose:
+
+1. **A Tier 0 producer** that owns the coarse, whole-domain dynamic state and its uncertainty, and
+   commits to nothing about how any downstream consumer will use it.
+2. **Tier 1 consumers**, each declaring three things once: what Tier 0 fields it needs (and at what
+   native resolution and uncertainty, so a downscaled value is never mistaken for an observation);
+   what finer resolution and area it operates at (set by its own decision, not by Tier 0's grid); and
+   what, if anything, it hands back upstream (a refined hazard probability, an updated confidence mask,
+   or nothing at all — a one-way handoff is a legitimate design).
+3. **A boundary contract between the two** that always records native-vs-delivered resolution, so
+   provenance survives the handoff even when the consumer's grid is much finer than the producer's.
+
+This also explains how the same regional system serves genuinely different users without three
+separate products: a regional risk manager wants Tier 0 alone; an engineer responsible for one
+structure wants Tier 0 handed to a Tier 2 site investigation; a corridor or network planner wants
+Tier 0 handed to a Tier 1 model scoped to their specific route or footprint. The tiering *is* the
+modularity — one coarse core, with the resolution mismatch made explicit at each handoff rather than
+hidden inside a single "one true resolution" grid that tries, and fails, to be simultaneously right for
+a regional screen and a site-specific decision.

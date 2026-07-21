@@ -16,12 +16,23 @@ priority) member, P0 first.
 
 Issues labeled "epic" are trackers, never work items, and are excluded.
 
+Cross-issue dependencies (BLOCKED_BY, below) come from the probabilistic
+nowcast/forecast dependency graph in
+docs/probabilistic-nowcast-forecast-roadmap.md. An issue with an open
+blocker is held out of this run's batches entirely -- it never gets
+chunked alongside ready work, regardless of milestone/topic grouping --
+so the automated queue can't dispatch e.g. #188 (cycling DA) before #187
+(the canonical contract it's built on) merely because grouping put them
+in the same milestone batch. Held-back issues are logged to stderr, not
+silently dropped.
+
 Emits one JSON object per line (JSONL) to stdout:
   {"key": "...", "branch": "gaia/...", "issues": [{"number": N, "title": "..."}]}
 """
 import json
 import re
 import subprocess
+import sys
 
 MAX_BATCH = 4
 
@@ -33,6 +44,29 @@ TOPIC_LABEL_PRIORITY = [
     "uncertainty", "validation", "peer-review", "documentation", "bug",
     "enhancement",
 ]
+
+# Direct blockers only (not transitively expanded) -- an issue is held back
+# if ANY of its listed blockers is still open. Transitive blocking falls
+# out naturally: #188 blocks on #187, and #192 blocks on #188, so #192
+# stays held back for as long as #187 does too, without needing to list
+# #187 again under #192.
+BLOCKED_BY = {
+    187: [186, 52, 89, 137, 171, 172],   # canonical contract needs corrected UQ, theta, water/timestep fixes
+    189: [187],                          # operational obs records need the canonical contract
+    188: [154, 187, 189],                # cycling DA needs scale, contract, and obs records
+    192: [188],                          # B/Q/R diagnosis needs a running cycling DA to diagnose
+    194: [192],                          # withheld-sensor value-added needs calibrated B/Q/R
+    191: [188],                          # ensemble forecast needs the DA posterior it initializes from
+    190: [187],                          # probabilistic mechanical memory needs the canonical contract
+    193: [191],                          # joint hazard handoff needs stable member identity from #191
+    195: [191, 193, 194],                # release-gate validation needs forecast, hazard, and DA value-added
+    # Opus 2026-07-21 strategy review: new issues #199-#205 (see docs/reviews/opus-...).
+    203: [187],                           # Earth2Studio wrapper needs the canonical (E2S-shaped) contract
+    205: [194],                           # regime-switching tau is a diagnostic-gated follow-on of #194
+    200: [187, 191],                      # flood source-term export needs the member contract + ensemble members
+    201: [200],                           # routing pilot needs the source-term export contract
+    202: [201],                           # gauge-hydrograph validation needs a routed hydrograph
+}
 
 
 def slug(text):
@@ -63,11 +97,21 @@ def topic_of(labels):
 
 def main():
     issues = fetch_issues()
+    open_numbers = {issue["number"] for issue in issues}
     groups = {}
 
     for issue in issues:
         labels = [l["name"] for l in issue["labels"]]
         if "epic" in labels:
+            continue
+
+        blockers = [b for b in BLOCKED_BY.get(issue["number"], []) if b in open_numbers]
+        if blockers:
+            print(
+                f"holding back #{issue['number']} ({issue['title']}): "
+                f"blocked by open {', '.join('#' + str(b) for b in blockers)}",
+                file=sys.stderr,
+            )
             continue
 
         milestone = issue["milestone"]["title"] if issue.get("milestone") else None
