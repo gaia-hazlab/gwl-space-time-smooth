@@ -60,6 +60,12 @@ BLOCKED_BY = {
     190: [187],                          # probabilistic mechanical memory needs the canonical contract
     193: [191],                          # joint hazard handoff needs stable member identity from #191
     195: [191, 193, 194],                # release-gate validation needs forecast, hazard, and DA value-added
+    # Opus 2026-07-21 strategy review: new issues #199-#205 (see docs/reviews/opus-...).
+    203: [187],                           # Earth2Studio wrapper needs the canonical (E2S-shaped) contract
+    205: [194],                           # regime-switching tau is a diagnostic-gated follow-on of #194
+    200: [187, 191],                      # flood source-term export needs the member contract + ensemble members
+    201: [200],                           # routing pilot needs the source-term export contract
+    202: [201],                           # gauge-hydrograph validation needs a routed hydrograph
 }
 
 

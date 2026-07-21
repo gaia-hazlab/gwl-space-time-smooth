@@ -8,6 +8,35 @@ command that produced it is named.
 
 ---
 
+## The operating loop (the project's spine)
+
+The twin is one repeating loop. Every milestone serves a stage of it; this is the axis the book, the
+milestones, and this roadmap should all be read against (not the subsystem inventory, which is a
+consequence, not the spine). Derived from the codex editorial review and set out in
+[`docs/reviews/opus-digital-twin-evolution-review-2026-07-21.md`](docs/reviews/opus-digital-twin-evolution-review-2026-07-21.md).
+
+> **Represent → advance → observe → correct → propagate → evaluate → act.**
+>
+> The scientific claim: **the state lives at 90 m; every observation retains its own footprint** — and
+> its mirror: **every hazard consumes at its own scale, too.** *Native support in (observations), native
+> support out (hazards); 90 m is the common ledger, neither the finest input nor the finest product.*
+
+| Loop stage | Job | Milestones |
+|---|---|---|
+| **Represent** | state at the scale each hazard needs; prior uncertainty | v0.2 · v0.3 (Vs30) · v0.4/v0.5 (domain) |
+| **Advance** | evolve water & stiffness, conserving mass | Water budget · v0.6 (memory) |
+| **Observe** | predict each sensor at its native support | DA correctness (operators) |
+| **Correct** | data update the state, reduce uncertainty | DA correctness (estimator) |
+| **Propagate** | posterior distribution → forecast | v0.7 |
+| **Evaluate** | score in observation space, held-out | v0.7 · DA correctness |
+| **Act** | state distribution → hazard probability, at the hazard's scale | Landslide (≤10 m) · Liquefaction (90 m screen) · **Flood (reach/link network)** |
+
+*Cross-cutting:* Software (CI, tests, reproducibility, scale) underpins every stage.
+
+Milestone descriptions carry a `[loop: …]` tag recording their stage.
+
+---
+
 ## Where we actually are
 
 | component | status |
