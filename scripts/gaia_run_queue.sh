@@ -77,13 +77,15 @@ abandon_branch() {
   {
     echo "  abandoning branch ${branch}:"
     git diff --stat 2>&1
-    git checkout -f main 2>&1
-    # Discard the orchestrator's uncommitted work so it can't leak onto main's working tree and get
-    # swept into the NEXT batch's commits (the bug that polluted earlier runs). reset drops tracked
-    # edits; clean drops new untracked files, but `-e .gaia-runs` preserves the run logs (which are
-    # NOT gitignored, so a bare `git clean` would delete this very logfile).
+    # Clean the working tree FIRST, while still on $branch: reset drops tracked edits, clean drops
+    # new untracked files (but `-e .gaia-runs` preserves the run logs, which are NOT gitignored, so
+    # a bare `git clean` would delete this very logfile). Doing this BEFORE switching means the
+    # subsequent `git checkout main` can't be aborted by untracked files that would be overwritten
+    # -- otherwise, under set -e, a failed checkout would kill the script mid-cleanup and the
+    # orchestrator's uncommitted work would leak onto main and get swept into the next batch.
     git reset --hard HEAD 2>&1 || true
     git clean -fd -e .gaia-runs 2>&1 || true
+    git checkout main 2>&1 || git checkout -f main 2>&1 || true
     git branch -D "$branch" 2>&1 || true
     git push origin --delete "$branch" 2>&1 || true
   } >> "$logfile" 2>&1
@@ -182,23 +184,41 @@ Do not commit -- leave the working tree dirty for the pipeline to commit." \
       continue
     fi
     git add -A
+    # Guard commit AND push explicitly: under `set -euo pipefail` a bare failing git command (a
+    # commit hook, missing identity, a transient push error) would kill the WHOLE script before
+    # abandon_branch/report_failure ever run, leaving partial batch state behind. Convert either
+    # failure into the controlled batch_failed path instead.
     git commit -m "gaia: resolve #${number} (${title})
 
 Closes #${number}
 
 Automated change by the gaia orchestrator; the whole batch is gated before review.
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Co-Authored-By: Claude <noreply@anthropic.com>" >> "$logfile" 2>&1 && commit_rc=0 || commit_rc=$?
+    if [ "$commit_rc" -ne 0 ]; then
+      report_failure "git commit failed for #${number}; abandoning batch ${numbers_csv}" "$logfile" "$commit_rc"
+      batch_failed=1
+      break
+    fi
     any_committed=1
 
     # Push this commit; on the FIRST commit of the batch open the PR as a DRAFT so the per-issue
     # commits stream onto it as they land. It is NOT marked ready-for-review (and Copilot is NOT
-    # requested) until every issue is committed AND the batch gate passes, further below.
-    git push -u origin "$branch" >> "$logfile" 2>&1
+    # requested) until every issue is committed AND the batch gate passes, further below. The draft
+    # body carries the ${closes_lines} up front so issue closure is guaranteed even if the
+    # ready-for-review body swap below fails and the placeholder body has to stand.
+    git push -u origin "$branch" >> "$logfile" 2>&1 && push_rc=0 || push_rc=$?
+    if [ "$push_rc" -ne 0 ]; then
+      report_failure "git push failed for #${number}; abandoning batch ${numbers_csv}" "$logfile" "$push_rc"
+      batch_failed=1
+      break
+    fi
     if [ -z "$pr_number" ]; then
       pr_number="$(gh pr create --draft --base main --head "$branch" \
         --title "gaia: ${readable_key} (${numbers_csv})" \
-        --body "Draft -- the gaia orchestrator is resolving ${numbers_csv} (${readable_key}), one commit per issue. Marked ready for review once every issue in the batch is committed and the local gate (test + check-dois + quarto render) passes." \
+        --body "Draft -- the gaia orchestrator is resolving ${numbers_csv} (${readable_key}), one commit per issue. Marked ready for review once every issue in the batch is committed and the local gate (test + check-dois + quarto render) passes.
+
+${closes_lines}" \
         --json number -q .number 2>>"$logfile" || gh pr view "$branch" --json number -q .number 2>>"$logfile")" \
         && draft_rc=0 || draft_rc=$?
       if [ "$draft_rc" -ne 0 ] || [ -z "$pr_number" ]; then
@@ -220,9 +240,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
     continue
   fi
 
-  # Gate the accumulated batch ONCE (one quarto render per batch, not per issue). main only ever
-  # receives squash-merged, whole-branch-gated code, so a per-issue commit that isn't green on its
-  # own is fine -- this batch-level gate is the real guarantee before anything is pushed.
+  # Gate the accumulated batch ONCE (one quarto render per batch, not per issue). The per-issue
+  # commits have already been pushed to the DRAFT PR above; this whole-branch gate is what must
+  # pass before the PR is flipped to ready-for-review below. On failure the batch is abandoned
+  # (draft PR + branch deleted), so a not-yet-green draft never reaches review or the --merge.
   echo "  pre-flight gate: pixi run test && pixi run check-dois" | tee -a "$logfile"
   { pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; } && test_rc=0 || test_rc=$?
   if [ "$test_rc" -ne 0 ]; then
