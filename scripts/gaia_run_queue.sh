@@ -77,7 +77,13 @@ abandon_branch() {
   {
     echo "  abandoning branch ${branch}:"
     git diff --stat 2>&1
-    git checkout main 2>&1
+    git checkout -f main 2>&1
+    # Discard the orchestrator's uncommitted work so it can't leak onto main's working tree and get
+    # swept into the NEXT batch's commits (the bug that polluted earlier runs). reset drops tracked
+    # edits; clean drops new untracked files, but `-e .gaia-runs` preserves the run logs (which are
+    # NOT gitignored, so a bare `git clean` would delete this very logfile).
+    git reset --hard HEAD 2>&1 || true
+    git clean -fd -e .gaia-runs 2>&1 || true
     git branch -D "$branch" 2>&1 || true
     git push origin --delete "$branch" 2>&1 || true
   } >> "$logfile" 2>&1
@@ -145,38 +151,78 @@ while IFS= read -r batch_json; do
 
   git checkout -B "$branch" main
 
-  impl_prompt="Use the gaia orchestrator to resolve this batch of related GitHub issues in
-${REPO_SLUG}, grouped under '${readable_key}':
+  # Resolve the batch ONE ISSUE AT A TIME so each fix lands as its own commit that names the issue
+  # it closes, pushed onto a DRAFT PR as it lands; the PR is flipped to ready-for-review only once
+  # every issue is committed and the batch gate passes. The PR is merged with `--merge` (below), so
+  # these per-issue commits are preserved in main's history. Issue CLOSURE is driven by the
+  # "Closes #N" lines in the PR *body* (guaranteed below), not by these commit messages.
+  # `cmd && rc=0 || rc=$?` (not a bare `cmd; rc=$?`) is required under `set -e`: a plain failing
+  # command exits the whole script before a following `rc=$?` line runs. `tee` (not `>>`) keeps the
+  # orchestrator's work visible live; `set -o pipefail` keeps issue_rc as claude's code, not tee's.
+  any_committed=0
+  batch_failed=0
+  pr_number=""
+  while IFS= read -r number; do
+    [ -z "$number" ] && continue
+    title="$(jq -r --arg n "$number" '.issues[] | select((.number|tostring)==$n) | .title' <<<"$batch_json")"
+    echo "  resolving #${number} (${title}) [live below, also logged to $logfile]..." | tee -a "$logfile"
+    claude -p "Use the gaia orchestrator to resolve GitHub issue #${number} (\"${title}\") in ${REPO_SLUG}.
+Follow /gaia:ground-rules. Make the minimal correct change (code, tests, and/or docs) for THIS issue only.
+Do not commit -- leave the working tree dirty for the pipeline to commit." \
+        --permission-mode acceptEdits \
+        --dangerously-skip-permissions \
+        2>&1 | tee -a "$logfile" && issue_rc=0 || issue_rc=$?
+    if [ "$issue_rc" -ne 0 ]; then
+      report_failure "orchestrator failed on #${number}; discarding the whole batch ${numbers_csv}" "$logfile" "$issue_rc"
+      batch_failed=1
+      break
+    fi
+    if git diff --quiet && git diff --cached --quiet; then
+      echo "  no changes produced for #${number}; skipping its commit (see $logfile)" | tee -a "$logfile"
+      continue
+    fi
+    git add -A
+    git commit -m "gaia: resolve #${number} (${title})
 
-${issue_bullets}
+Closes #${number}
 
-Follow /gaia:ground-rules. These are related -- solve them together as one coherent
-change where that makes sense, rather than as unrelated patches stapled together.
-Make the minimal correct change (code, tests, and/or docs) for the whole batch.
-Do not commit -- leave the working tree dirty for the pipeline to check."
+Automated change by the gaia orchestrator; the whole batch is gated before review.
 
-  # `cmd && rc=0 || rc=$?` (not a bare `cmd; rc=$?`) is required here: under `set -e`, a plain
-  # failing command exits the script immediately, before a following `rc=$?` line ever runs.
-  # Streamed through `tee` (not `>>` alone) so the orchestrator's work is visible on the console
-  # live, before the pre-flight gate/commit/push below ever touch GitHub. `set -o pipefail` (from
-  # the script's `set -euo pipefail`) keeps `orchestrator_rc` reflecting claude's exit code, not tee's.
-  echo "  running gaia orchestrator on ${numbers_csv} (live below, also logged to $logfile)..." | tee -a "$logfile"
-  claude -p "$impl_prompt" \
-      --permission-mode acceptEdits \
-      --dangerously-skip-permissions \
-      2>&1 | tee -a "$logfile" && orchestrator_rc=0 || orchestrator_rc=$?
-  if [ "$orchestrator_rc" -ne 0 ]; then
-    report_failure "orchestrator failed on ${numbers_csv}; discarding" "$logfile" "$orchestrator_rc"
+Co-Authored-By: Claude <noreply@anthropic.com>"
+    any_committed=1
+
+    # Push this commit; on the FIRST commit of the batch open the PR as a DRAFT so the per-issue
+    # commits stream onto it as they land. It is NOT marked ready-for-review (and Copilot is NOT
+    # requested) until every issue is committed AND the batch gate passes, further below.
+    git push -u origin "$branch" >> "$logfile" 2>&1
+    if [ -z "$pr_number" ]; then
+      pr_number="$(gh pr create --draft --base main --head "$branch" \
+        --title "gaia: ${readable_key} (${numbers_csv})" \
+        --body "Draft -- the gaia orchestrator is resolving ${numbers_csv} (${readable_key}), one commit per issue. Marked ready for review once every issue in the batch is committed and the local gate (test + check-dois + quarto render) passes." \
+        --json number -q .number 2>>"$logfile" || gh pr view "$branch" --json number -q .number 2>>"$logfile")" \
+        && draft_rc=0 || draft_rc=$?
+      if [ "$draft_rc" -ne 0 ] || [ -z "$pr_number" ]; then
+        report_failure "could not open draft PR for ${numbers_csv}; abandoning batch" "$logfile" "$draft_rc"
+        batch_failed=1
+        break
+      fi
+      echo "  opened DRAFT PR #${pr_number} for ${numbers_csv}" | tee -a "$logfile"
+    fi
+  done <<< "$numbers"
+
+  if [ "$batch_failed" -ne 0 ]; then
+    abandon_branch "$branch" "$logfile"
+    continue
+  fi
+  if [ "$any_committed" -eq 0 ]; then
+    echo "  no changes produced for any issue in ${numbers_csv}; skipping (see $logfile)" | tee -a "$logfile"
     abandon_branch "$branch" "$logfile"
     continue
   fi
 
-  if git diff --quiet && git diff --cached --quiet; then
-    echo "  no changes produced for ${numbers_csv}; skipping (see $logfile for what the orchestrator said)" | tee -a "$logfile"
-    abandon_branch "$branch" "$logfile"
-    continue
-  fi
-
+  # Gate the accumulated batch ONCE (one quarto render per batch, not per issue). main only ever
+  # receives squash-merged, whole-branch-gated code, so a per-issue commit that isn't green on its
+  # own is fine -- this batch-level gate is the real guarantee before anything is pushed.
   echo "  pre-flight gate: pixi run test && pixi run check-dois" | tee -a "$logfile"
   { pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; } && test_rc=0 || test_rc=$?
   if [ "$test_rc" -ne 0 ]; then
@@ -184,21 +230,12 @@ Do not commit -- leave the working tree dirty for the pipeline to check."
     abandon_branch "$branch" "$logfile"
     continue
   fi
-  quarto render docs/twin --to html >> "$logfile" 2>&1 && quarto_rc=0 || quarto_rc=$?
+  pixi run quarto render docs/twin --to html >> "$logfile" 2>&1 && quarto_rc=0 || quarto_rc=$?
   if [ "$quarto_rc" -ne 0 ]; then
     report_failure "quarto render failed for ${numbers_csv}; discarding" "$logfile" "$quarto_rc"
     abandon_branch "$branch" "$logfile"
     continue
   fi
-
-  git add -A
-  git commit -m "gaia: resolve ${numbers_csv} (${readable_key})
-
-Automated change by the gaia orchestrator. Local test + check-dois gates
-and the quarto book render passed before opening this PR.
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-  git push -u origin "$branch"
 
   # A bare `var="$(cmd)"` with no exit-code guard would, under `set -e`, silently kill the WHOLE
   # script (not just this batch) if `cmd` fails -- there is no later stage to report or recover.
@@ -243,16 +280,13 @@ ${closes_lines}"
 ${missing_closes}"
   fi
 
-  pr_number="$(gh pr create --base main --head "$branch" \
-    --title "gaia: ${readable_key} (${numbers_csv})" \
-    --body "$pr_body" \
-    --json number -q .number 2>>"$logfile" || gh pr view "$branch" --json number -q .number 2>>"$logfile")" \
-    && pr_create_rc=0 || pr_create_rc=$?
-  if [ "$pr_create_rc" -ne 0 ] || [ -z "$pr_number" ]; then
-    report_failure "could not open (or find) a PR for ${numbers_csv}; branch ${branch} left pushed for manual follow-up" "$logfile" "$pr_create_rc"
-    continue
-  fi
-  echo "  opened PR #$pr_number for ${numbers_csv}" | tee -a "$logfile"
+  # The draft PR already exists (opened on the first commit above). Now that the whole batch is
+  # committed and gated, swap the placeholder body for the real one and mark it ready for review.
+  gh pr edit "$pr_number" --title "gaia: ${readable_key} (${numbers_csv})" --body "$pr_body" >> "$logfile" 2>&1 \
+    || echo "  could not update PR #${pr_number} body; the draft placeholder stands" | tee -a "$logfile"
+  gh pr ready "$pr_number" >> "$logfile" 2>&1 \
+    && echo "  marked PR #${pr_number} ready for review (${numbers_csv})" | tee -a "$logfile" \
+    || echo "  could not mark PR #${pr_number} ready; mark it by hand" | tee -a "$logfile"
 
   gh api "repos/${REPO_SLUG}/pulls/${pr_number}/requested_reviewers" \
     -f "reviewers[]=${COPILOT_REVIEWER}" >> "$logfile" 2>&1 \
@@ -371,7 +405,7 @@ closing comment on each issue in the batch." \
     close_message="Resolved via PR #${pr_number}. Closing-message drafting failed; see ${logfile}."
   fi
 
-  gh pr merge "$pr_number" --squash --delete-branch --body "$close_message" >> "$logfile" 2>&1 \
+  gh pr merge "$pr_number" --merge --delete-branch --body "$close_message" >> "$logfile" 2>&1 \
     && merge_rc=0 || merge_rc=$?
   if [ "$merge_rc" -ne 0 ]; then
     report_failure "merge of PR #${pr_number} failed for ${numbers_csv} -- PR left open, issues NOT closed" "$logfile" "$merge_rc"
