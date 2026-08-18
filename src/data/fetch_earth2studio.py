@@ -110,6 +110,18 @@ def ai_precip_forecast(start_time, lead_days=15, bbox=PUGET_CASCADES_BBOX,
     Returns an ``xarray.Dataset`` with ``precip_mm`` (mm/day) and ``tmean_c`` on the model's native
     grid, clipped to ``bbox``. Raises rather than returning a degenerate field.
     """
+    from src.data.preconditions import require_importable
+
+    # Neither is a declared pixi dependency (see module docstring: GPU-only, not
+    # osx-arm64/osx-64-installable, so it cannot go in the main environment). Without this check,
+    # `pixi run ai-precip` fails on a bare ModuleNotFoundError that names neither package.
+    require_importable("torch", task="ai-precip",
+                       install_hint="Install a CUDA build of torch for your platform.")
+    require_importable("earth2studio", task="ai-precip",
+                       install_hint='Run `pip install "earth2studio[graphcast]"` on a Linux+NVIDIA '
+                                    "host (see this module's docstring); it is not installed by "
+                                    "`pixi install`.")
+
     import torch
     import xarray as xr
     from earth2studio.data import GFS
