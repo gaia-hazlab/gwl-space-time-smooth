@@ -115,11 +115,20 @@ def pair_kernel(x_km: NDArray[np.float64], y_km: NDArray[np.float64],
     r2 = np.hypot(x_km - s2[0], y_km - s2[1])
     r12 = float(np.hypot(s1[0] - s2[0], s1[1] - s2[1]))
 
-    # convolution over the time the wave spends getting from r1 to s and then s to r2
-    u = (np.arange(n_quad) + 0.5) * (t_lapse / n_quad)
-    num = np.zeros_like(r1, dtype="float64")
-    for ui in u:
-        num += _intensity_2d(r1, ui, d) * _intensity_2d(r2, t_lapse - ui, d)
+    # convolution over the time the wave spends getting from r1 to s and then s to r2, evaluated at
+    # all n_quad midpoint nodes at once. Broadcasting over the nodes costs an (n_quad, n_cell)
+    # temporary, so the grid is walked in blocks sized to cap that temporary; each cell still sums
+    # over the whole node axis, so the result does not depend on the block size.
+    max_temp_elems = 1 << 20
+    u = ((np.arange(n_quad) + 0.5) * (t_lapse / n_quad))[:, None]
+    r1_flat, r2_flat = np.ravel(r1), np.ravel(r2)
+    num = np.empty(r1_flat.shape, dtype="float64")
+    block = max(1, max_temp_elems // n_quad)
+    for start in range(0, r1_flat.size, block):
+        sl = slice(start, start + block)
+        num[sl] = np.sum(_intensity_2d(r1_flat[sl], u, d)
+                         * _intensity_2d(r2_flat[sl], t_lapse - u, d), axis=0)
+    num = num.reshape(np.shape(r1))
     num *= t_lapse / n_quad
 
     den = _intensity_2d(np.array(r12), t_lapse, d)

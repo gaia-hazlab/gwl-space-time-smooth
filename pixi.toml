@@ -72,9 +72,9 @@ check-dois = "python scripts/check_doi_integrity.py"
 
 # === Primary pipeline ===
 data = "python -m src.data.download_nwis --start-date 2000-01-01 --output-dir data/raw/nwis"
-qc = "python -m src.data.qc_nwis --input-dir data/raw/nwis --output data/processed/nwis_gwlevels_monthly.parquet"
+qc = { cmd = "python -m src.data.qc_nwis --input-dir data/raw/nwis --output data/processed/nwis_gwlevels_monthly.parquet", depends-on = ["data"] }
 3dep = "python -m src.data.download_3dep --output-dir data/raw/dem"
-terrain = "python -m src.features.compute_terrain --dem data/raw/dem/3dep_10m_5070.tif --output-dir data/processed"
+terrain = { cmd = "python -m src.features.compute_terrain --dem data/raw/dem/3dep_10m_5070.tif --output-dir data/processed", depends-on = ["3dep"] }
 gaia-data = "python -m src.data.fetch_gaia --output-dir data/processed"
 climate = "python -m src.data.fetch_climate --output-dir data/processed"
 grid = "python -m src.features.compute_grid --output-dir data/processed"
@@ -118,6 +118,11 @@ dvv-demo = "python old/notebooks/make_dvv_figures.py"
 vs30 = "python -m src.data.fetch_vs30 --source svm --output data/processed/vs30_90m.tif"
 # AI weather -> rainfall forcing. Needs earth2studio[graphcast] on a Linux+NVIDIA host
 # (jax[cuda13]); will not run on macOS/arm64. Writes data/forecast/graphcast_precip.nc
+# earth2studio/torch are deliberately NOT in [dependencies]/[pypi-dependencies]: they are
+# GPU-only and would break the osx-arm64/osx-64 platforms declared above (line 6). Install them
+# out-of-band on a GPU host with `pip install "earth2studio[graphcast]"` into this pixi env; the
+# task checks for this at runtime (src/data/preconditions.require_importable) instead of
+# failing on a bare ModuleNotFoundError.
 ai-precip = "python -m src.data.fetch_earth2studio --start 2024-12-01 --lead-days 15"
 forecast-leadtime = "python old/notebooks/make_forecast_leadtime.py"
 # stage the 6.2 GB SVM netCDF as chunked Zarr (local, or s3://gaia/... on Kopah)
@@ -144,7 +149,20 @@ domain-figures = "python notebooks/make_domain_figures.py"
 # same static-layer catalog, one full-size frame per layer (3s each), animated GIF
 domain-layers-gif = "python notebooks/make_static_layers_gif.py"
 validation-figure = "python notebooks/make_validation_figure.py"
-twin-gif = "python notebooks/make_twin_gif.py"
+# Direct, unguarded open on vs30_domain_90m.tif; its producer (vs30-domain) is the only one of this
+# script's inputs whose task string carries an explicit --output/--out CLI arg matching that exact
+# path, so it is the only edge declared here. The script also directly opens soil_domain_90m.zarr
+# (solus-domain), baseline_wt_domain_90m.zarr (baseline-wt-domain), and terrain_hand/slope_domain_90m.tif
+# (terrain-domain), but those three tasks are bare `python -m ...` invocations with no CLI args at
+# all -- the matching filenames are only argparse defaults inside those scripts, not something visible
+# in the pixi task string, so those edges are NOT declared (would require reading producer-script
+# internals rather than the task strings, which is a guess this file shouldn't encode). Two more
+# inputs it reads -- NWIS-domain wells, in-situ SM -- are opened with a fallback/`.exists()` guard,
+# so they are not hard dependencies either way. PRISM daily IS opened unguarded
+# (`prism_daily_2025-09_2026-06.zarr`), but the only PRISM task, `prism-daily`, writes a
+# DIFFERENT file (`prism_daily_puget.zarr` -- see its task string above); that mismatch means
+# there is no producing task to declare, not that the read is safely guarded.
+twin-gif = { cmd = "python notebooks/make_twin_gif.py", depends-on = ["vs30-domain"] }
 sensor-figure = "python notebooks/make_sensor_figure.py"
 observability-figure = "python notebooks/make_observability_figure.py"
 # spatial resolution from the static layers alone vs. the sensor network vs. both combined

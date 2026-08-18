@@ -29,6 +29,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from src.data.preconditions import require_netrc
+
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -57,6 +59,10 @@ def _cache_month(granule, bbox, cache: Path) -> Path:
 
 
 def fetch_merra2_monthly(bbox, start, end, output: Path, raw_dir: Path) -> Path:
+    require_netrc("urs.earthdata.nasa.gov", task="merra2",
+                  note="Also confirm the GES DISC application is authorised for this account "
+                       "(https://disc.gsfc.nasa.gov/earthdata-login) -- a netrc entry alone does "
+                       "not guarantee that authorisation.")
     import earthaccess
 
     for noisy in ("fsspec", "earthaccess", "h5netcdf", "urllib3"):
