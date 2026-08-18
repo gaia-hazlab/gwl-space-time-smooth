@@ -567,8 +567,13 @@ SNOTEL, and seismic geometry are real. **Data**: NWIS wells, NRCS SNOTEL, UW+CC 
 3DEP, TerraClimate/PRISM forcing, MERRA-2/SMAP validation. **Assumptions**: dv/v depth sensitivity
 `L≈Vs/3f`; poroelastic head for GWL (relative, not absolute); dynamic-capillary stiffening for soil
 moisture; `Vs30(t)=base·(1+⟨dVs/Vs⟩_0-30m)`; precision-weighted assimilation reverting to the model
-off-station. **Evaluation**: GWL block-CV RMSE ≈18.5 m, soil moisture vs MERRA-2 r=0.85 (bias −0.08,
-RMSE 0.095), dv/v band recovery r>0.95, assimilation σ reduction ~53% (WTD) / ~91% (θ) near stations.
+off-station. **Evaluation** — each number tagged by its basis: GWL block-CV RMSE ≈18.5 m (**REAL** — held-out
+wells); soil moisture vs MERRA-2 r=0.85 (bias −0.08, RMSE 0.095) (**MODEL cross-check** — another
+model's reanalysis; consistency, not validation); dv/v band recovery r>0.95 (**SYNTHETIC** — the
+inverse operator recovering an imposed signal); assimilation σ reduction ~53% (WTD) / ~91% (θ) near
+stations (**SYNTHETIC**). The SYNTHETIC entries are pipeline demonstrations, not skill: they show the
+machinery runs end to end and recovers what it was given, not how well the twin tracks the real
+subsurface.
 **Next**: real multi-year waveform dv/v, borehole poroelastic calibration to head in metres, SNOTEL
 SWE assimilation, and Earth2Studio weather-forecast forcing to turn the twin forward in time.
 
