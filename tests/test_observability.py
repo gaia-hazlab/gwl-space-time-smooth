@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from src.models import observability as obs_module
 from src.models.observability import (
+    TEMPORAL_TAU_DAYS,
     GaussianPrior,
     channel_footprints,
     information_gain,
@@ -24,6 +26,7 @@ from src.models.observability import (
     blue_update,
     resolution,
     satellite_footprints,
+    screening_observability,
     temporal_resolution,
 )
 
@@ -40,6 +43,37 @@ def _grid(n=16, span=20.0):
     a = np.linspace(0, span, n)
     xx, yy = np.meshgrid(a, a)
     return np.column_stack([xx.ravel(), yy.ravel()])
+
+
+def _joint_gaussian_resolution(C, G, lag_days, tau_days, obs_var):
+    r"""``R_truth(x)``: the exact posterior variance-reduction ratio, from the joint Gaussian ONLY.
+
+    Issue #166: this is the independent reference the screening claims are checked against, and it is
+    built from the separable space-time prior directly -- ``Cov(m(x,t), m(x',t')) = C(x,x') rho(|t-t'|)``
+    -- with NO decomposition into an "effective operator plus drift noise". It deliberately does NOT
+    call :func:`lagged_observation`, which is the routine under suspicion.
+
+    For data ``y_i = g_i' m(t - dt_i) + eps_i`` the joint Gaussian of ``(m(t), y)`` has
+
+        Cov(m(t), y) = C G' D,   D = diag(rho(dt_i))
+        Var(y) = M   = (G C G') o rho_pair + diag(sigma_d^2),   rho_pair_ij = rho(|dt_i - dt_j|)
+
+    (``o`` = Hadamard product), so the variance removed at cell ``x`` is ``[C G' D M^-1 D G C]_xx`` and
+    ``R_truth(x)`` is that over ``C_xx``. Note ``rho_pair`` is the correlation of the LAG DIFFERENCES,
+    not the outer product ``rho_i rho_j`` -- they coincide only when ``min(dt_i, dt_j) = 0``.
+    """
+    C = np.asarray(C, dtype="float64")
+    G = np.atleast_2d(np.asarray(G, dtype="float64"))
+    lags = np.broadcast_to(np.asarray(lag_days, dtype="float64"), (G.shape[0],))
+    rho = ou_correlation(lags, tau_days)
+    rho_pair = ou_correlation(np.abs(lags[:, None] - lags[None, :]), tau_days)
+    sigma_d2 = np.broadcast_to(np.asarray(obs_var, dtype="float64"), (G.shape[0],))
+
+    CG = C @ G.T                                          # (n_cell, n_obs)
+    M = (G @ CG) * rho_pair + np.diag(sigma_d2)           # (n_obs, n_obs)
+    A = CG * rho[None, :]                                 # C G' D
+    reduction = np.einsum("ij,ji->i", A, np.linalg.solve(M, A.T))
+    return reduction / np.diag(C)
 
 
 def test_footprints_sum_to_one():
@@ -290,6 +324,164 @@ def test_information_gain_is_monotone_in_variance_reduction():
     assert ig[0] < ig[1] < ig[2] and ig[0] == 0.0
 
 
+def test_screening_observability_exists_under_its_new_name_and_the_old_name_is_gone():
+    # Issue #166: `effective_observability` was renamed to `screening_observability` because the old
+    # name asserted something the function is not -- an observability, i.e. a posterior-variance
+    # diagonal of an arbitrary observing system. The old name is GONE, not aliased: it had zero call
+    # sites, and keeping it would keep the false claim alive in every IDE completion list.
+    assert not hasattr(obs_module, "effective_observability")
+    assert hasattr(obs_module, "screening_observability")
+
+    # what the wrapper is FOR, without restating its one-line body: it must select tau by STATE, decay
+    # with revisit, be the identity at zero revisit, and be linear in the spatial factor.
+    rng = np.random.default_rng(3)
+    spatial = rng.random(40)
+    assert np.array_equal(screening_observability(spatial, 0.0, "gwl"), spatial)       # no lag, no loss
+    slow = screening_observability(spatial, 30.0, "gwl")                # tau = 120 d
+    fast = screening_observability(spatial, 30.0, "soil_moisture")      # tau = 5 d
+    assert np.all(slow[spatial > 0] > fast[spatial > 0])                # same revisit aliases the FAST state
+    assert np.all(screening_observability(spatial, 60.0, "gwl") < slow[:] + 1e-15)   # monotone in revisit
+    assert np.allclose(screening_observability(2.0 * spatial, 30.0, "gwl"), 2.0 * slow)  # linear in space
+    assert np.array_equal(screening_observability(0.5, 0.0, "gwl"), np.asarray(0.5))     # scalar input
+    assert _raises(lambda: screening_observability(spatial, 30.0, "no_such_state"))  # never silent
+
+
+def test_the_screening_product_is_the_exact_variance_reduction_of_one_lagged_datum_at_a_common_lag():
+    # Issue #166 (RETRACTED F1/F2/F3): an earlier round of these tests pinned the screening product as
+    # an "optimistic upper bound", tight only at zero lag or for a one-hot footprint. That was the
+    # arithmetic of a DEFECT in `lagged_observation` (see the known-defect pin below), not the physics.
+    # Derived from the joint Gaussian of (m(t), y) directly, a single datum at lag dt gives
+    #   Cov(m(t), y) = rho C g,   Var(y) = g'Cg + sigma_d^2   (rho_pair = 1 for one datum),
+    # so the reduction carries a clean factor rho^2 and R_truth = rho^2 * R_space EXACTLY -- for ANY
+    # footprint, at ANY lag. The product is not a bound; it is the answer.
+    c = _grid(n=8, span=20.0)
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    g = point_footprint(c, (10.0, 10.0), width_km=3.0)                  # spread over MANY cells
+    assert (g > 1e-6).sum() > 4 and float(g @ C @ g) < 1.0              # g'Cg < sigma_m^2: the old "gap"
+    lag = 60.0
+
+    r_space, _ = resolution(C, g[None, :], noise_var=0.05)
+    r_screen = screening_observability(r_space, lag, "gwl")
+    r_truth = _joint_gaussian_resolution(C, g[None, :], lag, TEMPORAL_TAU_DAYS["gwl"], 0.05)
+
+    lit = r_truth > 1e-12
+    assert lit.sum() > 10                                               # the comparison is not vacuous
+    assert np.max(np.abs(r_screen[lit] / r_truth[lit] - 1.0)) < 1e-14   # EXACT, not a bound
+    assert np.all(r_truth >= -1e-12) and np.all(r_truth <= 1.0 + 1e-12)
+    # and the temporal factor really is rho^2, not rho: the two differ by a lot at this lag
+    rho = ou_correlation(lag, TEMPORAL_TAU_DAYS["gwl"])
+    assert np.max(np.abs(r_truth[lit] / r_space[lit] - rho ** 2)) < 1e-14
+    assert abs(rho - rho ** 2) > 0.1
+
+
+def test_the_screening_product_stays_exact_for_several_mutually_correlated_data_at_a_common_lag():
+    # Issue #166 (RETRACTED F5): the old test claimed the product "is not a bound at all" once two
+    # footprints are prior-correlated. False -- at a COMMON lag rho_pair is the all-ones matrix, so
+    #   Cov(m(t), y) = rho C G',   Var(y) = G C G' + diag(sigma_d^2)
+    # and the rho factors out of the whole n_obs x n_obs solve untouched: R_truth = rho^2 * R_space,
+    # exactly, however strongly the data are correlated with one another.
+    c = _grid(n=8, span=20.0)
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    G = np.vstack([point_footprint(c, loc, width_km=2.0) for loc in [(8, 8), (10, 10), (9, 12)]])
+    assert np.all((G > 1e-6).sum(axis=1) > 20)         # spread footprints, not one-hot degenerate ones
+    cross = G @ C @ G.T
+    off = cross[~np.eye(3, dtype=bool)]
+    assert off.min() > 0.6 * np.diag(cross).min()      # these data ARE strongly mutually correlated
+    assert np.linalg.eigvalsh(cross).max() > 1.0       # the old "PSD condition" that supposedly broke it
+    lag = 45.0
+
+    r_space, _ = resolution(C, G, noise_var=0.05)
+    r_screen = screening_observability(r_space, lag, "gwl")
+    r_truth = _joint_gaussian_resolution(C, G, lag, TEMPORAL_TAU_DAYS["gwl"], 0.05)
+
+    lit = r_truth > 1e-12
+    assert lit.sum() > 10
+    assert np.max(np.abs(r_screen[lit] / r_truth[lit] - 1.0)) < 1e-14
+
+
+def test_a_signed_footprint_is_still_exactly_the_screening_product_at_a_common_lag():
+    # Issue #166 (RETRACTED F4): the old test claimed a signed footprint (a dv/v coda kernel with
+    # negative lobes, which `normalise_footprint` permits) "REVERSES the screening inequality". There is
+    # no inequality to reverse. Nothing in the joint-Gaussian derivation asks for g >= 0 or for
+    # g'Cg <= sigma_m^2 -- the rho^2 factors out regardless of the sign structure of g.
+    c = _grid(n=8, span=20.0)
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    g = 1.6 * point_footprint(c, (5.0, 5.0), width_km=2.0) - 0.6 * point_footprint(c, (18.0, 18.0),
+                                                                                   width_km=2.0)
+    assert abs(g.sum() - 1.0) < 1e-12 and g.min() < -0.05          # normalised, but SIGNED
+    assert float(g @ C @ g) > 1.0                                   # g'Cg > sigma_m^2: the retracted trigger
+    lag = 60.0
+
+    r_space, _ = resolution(C, g[None, :], noise_var=0.10)
+    r_screen = screening_observability(r_space, lag, "gwl")
+    r_truth = _joint_gaussian_resolution(C, g[None, :], lag, TEMPORAL_TAU_DAYS["gwl"], 0.10)
+
+    lit = r_truth > 1e-12
+    assert lit.sum() > 10
+    assert np.max(np.abs(r_screen[lit] / r_truth[lit] - 1.0)) < 1e-14
+
+
+def test_mixed_lags_admit_no_single_temporal_factor_while_a_common_lag_admits_exactly_one():
+    # Issue #166: THE justification for calling this a screening SCORE rather than a resolution. The
+    # `revisit_days` argument is a single scalar, and that restriction is load-bearing: with data at
+    # DIFFERENT lags, rho_pair_ij = rho(|dt_i - dt_j|) is not the outer product rho_i rho_j (equal only
+    # when min(dt_i, dt_j) = 0), so no scalar can be pulled out of the n_obs x n_obs solve. The sharp,
+    # measurable signature is the per-cell ratio R_truth / R_space: EXACTLY constant at a common lag,
+    # spread over most of the unit interval once the lags differ.
+    tau = TEMPORAL_TAU_DAYS["gwl"]
+    # the mechanism itself, in one line: rho(|7 - 30|) != rho(7) rho(30)
+    assert abs(ou_correlation(23.0, tau) - ou_correlation(7.0, tau) * ou_correlation(30.0, tau)) > 0.08
+
+    c = _grid(n=8, span=20.0)
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    G = np.vstack([point_footprint(c, loc, width_km=3.0)
+                   for loc in [(5, 5), (10, 10), (7, 12), (15, 6)]])
+    r_space, _ = resolution(C, G, noise_var=0.05)
+    lit = r_space > 1e-8
+    assert lit.sum() > 10
+
+    # (a) mixed lags: the ratio is NOT a constant -- it ranges from ~0.19 to ~1.00 across the grid
+    mixed = _joint_gaussian_resolution(C, G, [0.0, 7.0, 30.0, 90.0], tau, 0.05)[lit] / r_space[lit]
+    assert mixed.max() - mixed.min() > 0.5          # reference figure: 0.188 to 0.997, spread 0.81
+    assert mixed.min() < 0.35 and mixed.max() > 0.9
+    # so no `temporal_resolution(revisit, tau)` -- for ANY revisit -- reproduces this map
+    for revisit in (0.0, 7.0, 30.0, 90.0):
+        assert not np.allclose(mixed, temporal_resolution(revisit, tau), atol=0.05)
+
+    # (b) the SAME data at a COMMON lag: the spread collapses to machine precision, and the constant is
+    # exactly temporal_resolution -- i.e. screening_observability is the exact answer in this case only
+    common = _joint_gaussian_resolution(C, G, 30.0, tau, 0.05)[lit] / r_space[lit]
+    assert common.max() - common.min() < 1e-12      # EXACTLY constant, unlike (a)
+    assert np.max(np.abs(common - temporal_resolution(30.0, tau))) < 1e-14
+    screened = screening_observability(r_space, 30.0, "gwl")[lit]
+    assert np.max(np.abs(screened / (_joint_gaussian_resolution(C, G, 30.0, tau, 0.05)[lit]) - 1.0)) < 1e-14
+
+
+def test_lagged_observation_into_resolution_still_disagrees_with_the_truth_a_known_open_defect():
+    # KNOWN OPEN DEFECT, issue #166 -- this test pins a BUG, not physics. DELETE IT when the defect is
+    # repaired; it is here so the wrong number cannot be quoted as a result and so the repair announces
+    # itself loudly instead of silently changing every downstream map.
+    #
+    # `lagged_observation` charges a drift variance (1 - rho^2) * state_var, but the correct drift
+    # variance for a FOOTPRINT-AVERAGED datum is (1 - rho^2) * g'Cg. Since g'Cg < sigma_m^2 for a spread
+    # non-negative footprint, it over-charges the noise and is therefore PESSIMISTIC. (For n_obs > 1 the
+    # true drift is also CORRELATED across data, (1 - rho^2) g_i'C g_j, which `resolution`'s diagonal
+    # `noise_var` structurally cannot represent at all.) The direction and rough size are pinned; the
+    # exact number is not a physical quantity and must not be treated as one.
+    c = _grid(n=8, span=20.0)
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    g = point_footprint(c, (10.0, 10.0), width_km=3.0)
+    lag, obs_var = 60.0, 0.05
+
+    g_eff, nv_eff = lagged_observation(g[None, :], np.full(1, lag), TEMPORAL_TAU_DAYS["gwl"],
+                                       1.0, obs_var)
+    r_defect, _ = resolution(C, g_eff, nv_eff)
+    r_truth = _joint_gaussian_resolution(C, g[None, :], lag, TEMPORAL_TAU_DAYS["gwl"], obs_var)
+    lit = r_truth > 1e-12
+    assert np.all(r_defect[lit] < r_truth[lit])                  # pessimistic at EVERY lit cell
+    assert r_defect[lit].max() / r_truth[lit].max() < 0.7        # and by far more than roundoff
+
+
 if __name__ == "__main__":
     test_footprints_sum_to_one()
     test_resolution_is_a_fraction_in_the_unit_interval()
@@ -302,6 +494,13 @@ if __name__ == "__main__":
     test_channel_footprints_validate_lengths()
     test_channel_footprints_sit_only_on_low_hand_cells()
     test_temporal_resolution_captures_the_space_time_tradeoff()
+    test_lagged_observation_shrinks_gain_and_adds_drift_noise()
     test_blue_update_recovers_a_smooth_truth_and_reverts_off_support()
     test_information_gain_is_monotone_in_variance_reduction()
+    test_screening_observability_exists_under_its_new_name_and_the_old_name_is_gone()
+    test_the_screening_product_is_the_exact_variance_reduction_of_one_lagged_datum_at_a_common_lag()
+    test_the_screening_product_stays_exact_for_several_mutually_correlated_data_at_a_common_lag()
+    test_a_signed_footprint_is_still_exactly_the_screening_product_at_a_common_lag()
+    test_mixed_lags_admit_no_single_temporal_factor_while_a_common_lag_admits_exactly_one()
+    test_lagged_observation_into_resolution_still_disagrees_with_the_truth_a_known_open_defect()
     print("all observability tests passed")

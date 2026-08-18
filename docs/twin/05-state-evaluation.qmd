@@ -298,15 +298,28 @@ is therefore worth different amounts for the two states.
 
 For a state with temporal correlation time $\tau$, a stream sampling at interval $\Delta t$ resolves a
 fraction $\rho(\Delta t)^2=\exp(-2\Delta t / \tau)$ of its variability under the OU model
-(`ou_correlation`/`temporal_resolution`, [assimilation chapter](04-assimilation.qmd)), and a stream's
-observability of a *dynamic* field is the product $R_\text{space}\times R_\text{time}$
-(`src/models/observability.py`).
+(`ou_correlation`/`temporal_resolution`, [assimilation chapter](04-assimilation.qmd)). For a **single**
+stream — every datum at that stream's own lag — the two axes multiply *exactly*: under the separable
+space-time prior the posterior is $R = \rho^2\,R_\text{space}$ at every cell, for any number of data and
+any footprints, verified to machine precision against the joint Gaussian posterior. What has **no**
+factorisation is combining streams at **different** lags, which is what a real network is: the
+observation-space covariance then carries a Hadamard factor $\rho(|\Delta t_i-\Delta t_j|)$, and
+$\rho(|\Delta t_i-\Delta t_j|)\neq\rho_i\rho_j$ unless one of the lags is zero — 7 d and 30 d at
+$\tau=120$ d give 0.83 against 0.73 — so no scalar temporal factor exists at all. Across the streams
+tabulated here (revisits from 0.01 to 30 days) the per-cell ratio of the true mixed-lag resolution to
+the spatial one runs from roughly 0.2 to 1.0, against a spread of exactly zero at a common lag. That,
+and only that, is why $R_\text{space}\times R_\text{time}$ is labelled a *screening* score for ranking
+candidate streams rather than the observability itself (`screening_observability`, issue #166). The
+general mixed-lag posterior needs a dense observation-space covariance, which `resolution()`'s diagonal
+noise cannot express; building it is open work (issues #164/#166).
 
 ![**The observing system on both axes.** Left: each stream in the spatial-support / revisit-interval
 plane, with retrievals (satellites) as diamonds and measurements as circles. Streams above the
 soil-moisture decorrelation line alias the storm signal. Right: for the *fast* soil-moisture state, the
-temporal resolution discounts the coverage — a weekly satellite's fine pixels fall to a fraction of
-their nominal worth, while the continuous seismic array and the hourly probes keep theirs. **Great
+temporal resolution each stream retains, against an idealised unit coverage — a **per-stream**
+diagnostic on the time axis alone, exact for that stream at its own lag, but not a factor that can be
+carried over to a network combining streams at different lags. A weekly satellite keeps a fraction of
+its nominal worth, while the continuous seismic array and the hourly probes keep theirs. **Great
 space is not great time.**](assets/observing_spacetime.png){#fig-spacetime}
 
 This is the quantitative form of "dv/v sees the storm; the water table integrates it": the seismic array

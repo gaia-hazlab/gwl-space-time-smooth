@@ -172,10 +172,25 @@ def temporal_resolution(revisit_days: ArrayLike, tau_days: float) -> NDArray[np.
     faster than the state changes, ~0 when it aliases (revisit :math:`\gg \tau`). Continuous streams
     (``revisit_days`` :math:`\to 0`) give 1.
 
-    This is the temporal analogue of the spatial resolution, and the two multiply: a stream's
-    observability of a *dynamic* field is ``spatial_resolution * temporal_resolution``. It is why a
-    weekly satellite with domain-wide coverage still misses the soil-moisture *event* a continuous
-    seismic array or an hourly probe catches — great space, poor time.
+    This is the temporal analogue of the spatial resolution, and for a SINGLE stream — every datum at
+    that stream's own lag — the two multiply *exactly*: under this module's separable space-time prior
+    the common-lag posterior is :math:`R = \rho^2 R_\text{space}` at every cell, for any footprints,
+    signed or not (issue #166; see :func:`screening_observability` for the algebra). What has no
+    factorisation is COMBINING streams at DIFFERENT lags: the observation-space covariance then carries a
+    Hadamard factor :math:`\rho(|\Delta t_i-\Delta t_j|)\neq\rho_i\rho_j`, and no scalar temporal factor
+    exists. So this function is a per-stream diagnostic, not a multiplier for a mixed-cadence network.
+
+    **It is the end-of-cycle worst case, not the typical one.** Callers pass ``revisit_days`` *as* the
+    lag, but the age of the most recent datum at a randomly chosen analysis time is uniform on
+    :math:`[0, T]` for a revisit :math:`T`, so the typical factor is
+    :math:`\mathbb E[\rho^2] = \tau(1-e^{-2T/\tau})/(2T)`, not
+    :math:`\rho(T)^2`: for :math:`T=2.5` d and :math:`\tau=5` d that is 0.632 against 0.368, so the
+    quoted number is roughly 1.7x conservative (issue #166). Fine for design screening — it ranks streams
+    on the pessimistic end of their cycle — but it is not the cycle-average observability.
+
+    What survives untouched is the design point this function exists for: a weekly satellite with
+    domain-wide coverage still misses the soil-moisture *event* a continuous seismic array or an hourly
+    probe catches — great space, poor time.
     """
     return ou_correlation(revisit_days, tau_days) ** 2
 
@@ -184,19 +199,47 @@ def lagged_observation(g: ArrayLike, lag_days: ArrayLike, tau_days: float, state
                        obs_noise_var: ArrayLike) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     r"""Effective footprint and noise variance for a datum taken ``lag_days`` before the analysis time.
 
-    A raw observation is :math:`y = m(t-\Delta t) + \varepsilon`. Under the OU model, the state at the
-    analysis time relates to its past value as :math:`m(t-\Delta t) = \rho\, m(t) + w`, with
-    :math:`\rho=\exp(-\Delta t/\tau)` (:func:`ou_correlation`) and independent drift noise
-    :math:`w\sim\mathcal N(0,\ \sigma_m^2(1-\rho^2))` (``state_var`` :math:`=\sigma_m^2`, the field's own
-    variance at that location). So :math:`y = \rho\, g^\top m(t) + \eta`, :math:`\eta\sim\mathcal
+    .. warning::
+
+       **KNOWN OPEN DEFECT — the drift term below is mis-specified for a spread footprint, and this
+       function is NOT the rigorous path.** Found while resolving issue #166; deliberately left
+       unfixed here (behaviour, signature and return values are unchanged) because the repair is a
+       numerics change needing a human decision on approach. Specifically:
+
+       - The drift variance is computed as :math:`(1-\rho^2)\,\sigma_m^2` (``state_var``), which is the
+         drift of a POINT value. For a datum that averages the field over a footprint the correct drift
+         variance is :math:`(1-\rho^2)\,g^\top C g`, and :math:`g^\top C g < \sigma_m^2` whenever the
+         footprint spreads over cells that are not perfectly correlated. The result is therefore
+         **pessimistic**: it overstates the noise and understates the resolution (in a verified example,
+         0.11454 where the truth is 0.20842, low by a factor 0.55).
+       - For ``n_obs > 1`` the drift is **correlated across data** —
+         :math:`\mathrm{Cov}(g_i^\top w, g_j^\top w) = (1-\rho^2)\, g_i^\top C g_j`, reaching ~70% of the
+         diagonal in a 4-footprint example — which :func:`resolution`'s ``np.diag(nv)`` cannot represent
+         and which NO diagonal noise can fix even in principle (the off-diagonals of the true
+         observation-space covariance need a :math:`1/\rho^2` correction, e.g. 2.718 at
+         :math:`\Delta t=\tau`). A dense/block observation-error covariance is exactly what issue #164
+         asks for, so a general multi-datum lagged treatment is blocked on it.
+       - **At a common lag you do not need this function at all**: the exact answer is
+         ``rho**2 * resolution(C, G, sigma_d**2)[0]`` — do not touch ``G``, do not inflate the noise
+         (issue #166, see :func:`screening_observability`). At mixed lags the correct construction is the
+         Hadamard form :math:`M = (G C G^\top)\circ\rho_\text{pair} + \operatorname{diag}(\sigma_d^2)`
+         with :math:`C_\text{post} = C - C G^\top D M^{-1} D G C`, which this module does not yet build.
+
+    What the code does (unchanged, defect and all). A raw observation is
+    :math:`y = m(t-\Delta t) + \varepsilon`. Under the OU model, the state at the analysis time relates
+    to its past value as :math:`m(t-\Delta t) = \rho\, m(t) + w`, with
+    :math:`\rho=\exp(-\Delta t/\tau)` (:func:`ou_correlation`) and drift noise
+    :math:`w\sim\mathcal N(0,\ \sigma_m^2(1-\rho^2))` (``state_var`` :math:`=\sigma_m^2`) — the POINT
+    drift, which is the mis-specification the warning above describes. So :math:`y = \rho\, g^\top m(t) + \eta`, :math:`\eta\sim\mathcal
     N(0,\ \sigma_m^2(1-\rho^2)+\sigma_\varepsilon^2)`:
 
     - the **operator gain shrinks** to :math:`\rho\, g` (a stale datum is weak evidence about the
       *current* state, not full-strength evidence with merely larger noise);
     - the **effective noise gains a drift term** :math:`\sigma_m^2(1-\rho^2)` on top of the instrument
-      noise (uncertainty accrued while the state evolved, unobserved, over :math:`\Delta t`).
+      noise (uncertainty accrued while the state evolved, unobserved, over :math:`\Delta t`) — this is
+      the term that should be :math:`(1-\rho^2)\, g^\top C g`; see the warning above.
 
-    This replaces the earlier "inflate :math:`\sigma_\varepsilon^2` by :math:`1/\exp(-\Delta t/2\tau)`,
+    The gain-shrinkage half replaces the earlier "inflate :math:`\sigma_\varepsilon^2` by :math:`1/\exp(-\Delta t/2\tau)`,
     leave :math:`g` at unit gain" treatment, which had no state-noise term and so silently overweighted
     stale data through the untouched gain. Returns ``(g_eff, noise_var_eff)``, ready to feed a row (or
     rows) of ``G``/``noise_var`` into :func:`resolution` or :func:`blue_update`.
@@ -266,15 +309,57 @@ STREAMS: tuple[ObsStream, ...] = (
 )
 
 
-def effective_observability(spatial_res: ArrayLike, revisit_days: float, state: str) -> NDArray[np.float64]:
-    """Observability of a **dynamic** state: spatial resolution discounted by temporal resolution.
+def screening_observability(spatial_res: ArrayLike, revisit_days: float, state: str) -> NDArray[np.float64]:
+    r"""A **screening score** for a dynamic state — NOT a posterior-covariance diagonal, not :math:`C_a/C`.
 
-    ``spatial_res * temporal_resolution(revisit, tau_state)``. A stream with perfect coverage but a
-    revisit slower than the state's correlation time is discounted toward zero — the space-time
-    tradeoff, per cell.
+    ``spatial_res * temporal_resolution(revisit, tau_state)``: a cheap per-cell way to *rank* candidate
+    streams on the space-time tradeoff, where a stream with perfect coverage but a revisit slower than
+    the state's correlation time is pushed toward zero. Use it to sort a catalog; never quote it as a
+    variance reduction for a network whose streams report at DIFFERENT lags — which, here, is every
+    network worth screening (issue #166).
+
+    **At a common lag the factorisation is exact.** If every datum is taken the same :math:`\Delta t`
+    before the analysis time, the separable prior this module assumes
+    (:math:`\mathrm{Cov}(m(x,t),m(x',t')) = C(x,x')\,\rho(|t-t'|)`) collapses the observation-space
+    covariance to the lag-free :math:`M = G C G^\top + \operatorname{diag}(\sigma_d^2)`, and the
+    cross-covariance picks up a single scalar :math:`\rho`:
+
+    .. math::  C_\text{post} = C - \rho^2\, C G^\top \big(G C G^\top +
+               \operatorname{diag}(\sigma_d^2)\big)^{-1} G C
+               \quad\Longrightarrow\quad R_\text{exact}(x) = \rho^2\, R_\text{space}(x) ,
+
+    at every cell, for ANY number of data and ANY footprints, signed or not — verified to machine
+    precision (max relative difference :math:`\sim 10^{-15}`) against the joint Gaussian posterior built
+    directly, with no decomposition. So when ``spatial_res`` is ``resolution(C, G, sigma_d**2)[0]`` for
+    the SAME ``G`` and the SAME noise, this function returns a genuine posterior-variance ratio, and
+    issue #166's premise — "that product is not the diagonal of any posterior covariance" — is too
+    strong for the common-lag case, single datum or many.
+
+    **What actually breaks is mixing lags.** For data at lags :math:`\Delta t_i`, the observation-space
+    covariance is :math:`M = (G C G^\top)\circ\rho_\text{pair} + \operatorname{diag}(\sigma_d^2)` with
+    :math:`(\rho_\text{pair})_{ij} = \rho(|\Delta t_i - \Delta t_j|)`, and
+    :math:`C_\text{post} = C - C G^\top D M^{-1} D G C` with :math:`D=\operatorname{diag}(\rho_i)`.
+    Since :math:`\rho(|\Delta t_i-\Delta t_j|)\ne\rho_i\rho_j` unless :math:`\min(\Delta t_i,\Delta t_j)=0`
+    (lags of 7 d and 30 d at :math:`\tau=120` d give 0.8256 against 0.7347, a factor 1.124), no scalar
+    temporal factor can be pulled out of :math:`M^{-1}` at all, and no DIAGONAL noise :math:`N` makes the
+    per-row-gain form :math:`D(G C G^\top)D + N` equal :math:`M` either — the shortfall
+    :math:`W_{ij} = g_i^\top C g_j\,[\rho(|\Delta t_i-\Delta t_j|) - \rho_i\rho_j]` is off-diagonal
+    (up to 0.20 here) though PSD by the Schur product theorem. A *dense* :math:`N = W +
+    \operatorname{diag}(\sigma_d^2)` does reproduce the mixed-lag posterior exactly (verified to
+    :math:`3\times10^{-16}`), which is precisely the dense/block observation-error covariance issue #164
+    asks for and :func:`resolution`'s ``np.diag(nv)`` cannot hold. Measured, the per-cell ratio
+    :math:`R_\text{mixed}/R_\text{space}` runs 0.19 to 0.99 across the grid for lags (0, 7, 30, 90) d,
+    against a spread of exactly zero at a common lag.
+
+    **That is why the screening label stands** — for this one reason, not for any bound or inequality.
+    :data:`STREAMS` revisit intervals span 0.01 to 30 days, so any score that combines streams is a
+    mixed-lag score, and the lone scalar ``revisit_days`` argument quietly encodes the common-lag
+    restriction such a combination violates.
     """
-    return np.asarray(spatial_res, dtype="float64") * temporal_resolution(
-        revisit_days, TEMPORAL_TAU_DAYS[state])
+    tau_days = TEMPORAL_TAU_DAYS.get(state)
+    if tau_days is None:
+        raise ValueError(f"state must be one of {sorted(TEMPORAL_TAU_DAYS)}, got {state!r}")
+    return np.asarray(spatial_res, dtype="float64") * temporal_resolution(revisit_days, tau_days)
 
 
 def point_footprint(coords_km: NDArray[np.float64], loc_km: ArrayLike,

@@ -81,20 +81,29 @@ oversight nobody noticed.
 
 ## 3) What is the temporal error, and how is it handled?
 
-This is the strongest part of the design. Each state is modeled as a stationary Ornstein–Uhlenbeck
+The *model* here is the strongest part of the design; its implementation has a known defect (below).
+Each state is modeled as a stationary Ornstein–Uhlenbeck
 process with its own correlation time `τ` (`TEMPORAL_TAU_DAYS = {"soil_moisture": 5.0, "gwl": 120.0}`,
 `observability.py:138`), and a lagged datum enters the estimator on two axes derived from that model
 (`lagged_observation`, `observability.py:183`):
 
 - the operator gain **shrinks** to `ρ·g` with `ρ = exp(−Δt/τ)` — a stale reading is *weak* evidence about
   the current state, not full-strength evidence merely carrying more noise;
-- the effective noise **grows** by a drift term `σ_m²(1−ρ²)` — uncertainty accrued while the state
-  evolved, unobserved, over `Δt`.
+- the effective noise **grows** by a drift term for the uncertainty accrued while the state evolved,
+  unobserved, over `Δt`. **Correction (issue #166):** the code uses `σ_m²(1−ρ²)`, the drift of a
+  *point* value, where a footprint-averaged datum requires `(1−ρ²)·gᵀCg`. Since `gᵀCg < σ_m²` for any
+  spread footprint, `lagged_observation` is **pessimistic**, not rigorous, and for `n_obs > 1` the drift
+  is *correlated across data* (`(1−ρ²)·g_iᵀCg_j`), which `resolution()`'s diagonal noise cannot
+  represent at all — a dense/block `R`, i.e. [#164](https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/164).
+  At a **common lag** none of this machinery is needed: the exact posterior is
+  `ρ² · resolution(C, G, σ_d²)`, verified to machine precision. This is a known open defect, flagged in
+  the function's own docstring and not yet fixed.
 
 The code's own docstring records a prior, wrong version of this treatment (inflate `σ²` by
 `1/exp(−Δt/2τ)`, leave gain at unit, borrowing a factor of 2 from the unrelated spatial
 squared-exponential kernel) and documents the fix in place rather than silently overwriting it — a good
-sign for the project's rigor. The one real limitation: `τ` is a **single scalar per state, everywhere
+sign for the project's rigor. Besides the drift mis-specification above, the other real limitation:
+`τ` is a **single scalar per state, everywhere
 and always**. Recession behaves differently wet vs. dry, and recharge is threshold-like; `04-assimilation.qmd`
 itself names this as the first trigger condition for a regime-switching model, with a concrete diagnostic
 (check whether the innovation sequence `d − Gm_b` is heteroscedastic conditioned on wet/dry state). That
@@ -124,9 +133,12 @@ cosmetic precision the sensors cannot back. I'd expose two linked controls, not 
    `τ`), and
 2. desired update cadence —
 
-and have the twin echo back `temporal_resolution()` and `effective_observability()` for the actual
+and have the twin echo back `temporal_resolution()` and `screening_observability()` for the actual
 instrument mix at the requested cadence, so the user sees, e.g., "at daily cadence, dv/v/probes carry
-this, SMAP aliases the storm" instead of a falsely uniform-looking raster.
+this, SMAP aliases the storm" instead of a falsely uniform-looking raster. Displayed as a **ranking**
+across streams, which is what those two functions support: a mix of streams reporting at different lags
+admits no scalar space×time factorisation, so the echoed number must not be shown as a variance
+reduction (issue #166).
 
 **Gap.** Neither control currently drives an actual re-solve at query time — `resolution()`/
 `blue_update()` are analysis tools today, not yet wired to a request API. That is implementation work,

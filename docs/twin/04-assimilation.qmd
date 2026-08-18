@@ -59,6 +59,21 @@ therefore enters the estimator on **two axes**, not one (`lagged_observation`):
 - its **effective noise grows** by a drift term $\sigma_m^2(1-\rho^2)$ on top of the instrument
   noise $\sigma_{d,i}^2$ — uncertainty accrued while the state evolved, unobserved, over $\Delta t$.
 
+::: {.callout-warning}
+## Known defect: the drift term above is pessimistic for a spread footprint
+The drift $\sigma_m^2(1-\rho^2)$ used above is `lagged_observation`'s point-value variance; the exact
+drift for a footprint-averaged datum is $g_i^\top C g_i$, and $g_i^\top C g_i < \sigma_m^2$ whenever
+the footprint spans cells that are not perfectly correlated — so as implemented the drift term
+**overstates the noise and understates the resolution** for any footprint wider than one cell. For
+several data the drift is also **correlated across data**,
+$\mathrm{Cov}(g_i^\top w, g_j^\top w) = (1-\rho^2)\,g_i^\top C g_j$, which a diagonal
+observation-error covariance cannot express — the dense/block $R$ that issue #164 asks for. This is
+a known open defect, found while resolving issue #166 and deliberately left unrepaired (see the
+warning atop `lagged_observation`'s docstring). At a **common** lag none of this machinery is needed
+at all: the exact result is simply $\rho^2$ times the lag-free resolution,
+`resolution(C, G, sigma_d**2)[0]`.
+:::
+
 `temporal_resolution` in the [evaluation chapter](05-state-evaluation.qmd) is $\rho^2$ — the same OU
 derivation specialised to a perfectly-measured lagged datum ($\sigma_{d,i}=0$), so the two expressions
 are one treatment viewed at two points, not two independent formulas. The continuous seismic array and
@@ -110,6 +125,18 @@ The misfit $d - Gm$ is **evaluated in observation space** — each datum is comp
   $\sigma_m^2(1-\rho^2)$ (`lagged_observation()`) — so a week-old satellite retrieval barely moves fast
   soil moisture ($\tau\!\approx\!5$ d) while a day-old reading is still near-current for the slow water
   table ($\tau\!\approx\!120$ d).
+
+::: {.callout-warning}
+## Known defect: the drift term here overstates noise and cannot be dense across data
+As implemented, the drift term uses the point-value variance $\sigma_m^2$ rather than the correct
+footprint variance $g_i^\top C g_i$ (with $g_i^\top C g_i < \sigma_m^2$ for any footprint wider than
+one cell), so it is **pessimistic** — it overstates $R$ and understates resolution. Across several
+data the drift is also correlated, $\mathrm{Cov}(g_i^\top w, g_j^\top w) = (1-\rho^2)\,g_i^\top C
+g_j$, which the diagonal $R$ built here cannot represent — the dense/block $R$ that issue #164 asks
+for. This is a known open defect from issue #166, not yet repaired (see the fuller note above and
+the warning atop `lagged_observation`'s docstring). At a **common** lag the exact $R$ needs none of
+this: it reduces to $\rho^2$ times the lag-free resolution.
+:::
 
 So the homogenisation is the **forward operator**, not resampling: heterogeneous data are reconciled by
 predicting each one from the common fine state and differencing in its own footprint and at its own
