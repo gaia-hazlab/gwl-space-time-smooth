@@ -13,7 +13,7 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 | `scripts/gaia-launch/gaia_trace.py` | Renders a transcript into the HTML dashboard |
 | `scripts/gaia-launch/gaia_runs_site_index.py` | Builds the index over all published dashboards |
 
-> **The safety model, in four invariants.** Everything below follows from these:
+> **The safety model, in five invariants.** Everything below follows from these:
 >
 > 1. **Nothing is ever deleted.** Failure parks work — committed, pushed, renamed out of the
 >    way. The only automatic branch removal is after a successful merge.
