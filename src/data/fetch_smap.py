@@ -29,6 +29,8 @@ import pandas as pd
 import xarray as xr
 from pyproj import Transformer
 
+from src.data.preconditions import require_netrc
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,7 @@ def _grid_coords(r0, r1, c0, c1):
 
 
 def fetch_smap_monthly(bbox, start, end, max_per_month, output: Path) -> Path:
+    require_netrc("urs.earthdata.nasa.gov", task="smap")
     import earthaccess
     import h5py
 
