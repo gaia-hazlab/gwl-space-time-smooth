@@ -2,14 +2,17 @@
 
 Top row  : 90 m groundwater depth-to-water, soil moisture theta, and Vs30 (near-surface stiffness).
 Bottom row: their per-cell 1-sigma.
-Animated over one hydrologic year at ~5-day cadence. The static structure is real 90 m data; the
+Animated over one hydrologic year at ~5-day cadence. The GWL and soil-moisture static structure is
+real 90 m data; the Vs30 panel is real only when a Vs30 raster is staged on disk -- otherwise it is a
+SYNTHETIC HAND proxy and is labelled and watermarked as such (see ``_vs30_field``). The
 time evolution (and the high-frequency content) comes from assimilating the depth-separated dv/v
 onto those static fields with `assimilate_points`, so the animation literally shows the
 data-assimilation digital twin: fields update and sigma shrinks where/when sensors constrain them.
 
   GWL  : baseline_dtw_m.tif  +  dv/v deep-band -> ΔWTD (assimilated)
   theta: soil_hydraulic_envelope theta_fc  +  dv/v shallow-band -> Δtheta (assimilated)
-  Vs30 : vs30_90m.tif (fetched; else synth from HAND)  x (1 + top-30 m dv/v) (assimilated)
+  Vs30 : vs30_90m.tif if staged, ELSE a synthetic HAND ramp that is NOT a velocity model
+         x (1 + top-30 m dv/v) (assimilated)
 
 Ground sensors are drawn with distinct markers (wells / SNOTEL / seismic UW,CC); remote-sensing
 products are listed in a legend. The dv/v is a physically realistic synthetic (low freq -> slow
@@ -21,7 +24,9 @@ Run:  pixi run python notebooks/make_digital_twin.py   (or: pixi run digital-twi
 from __future__ import annotations
 
 import json
+import logging
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -38,6 +43,9 @@ from src.models import dvv
 from src.models.anchor import assimilate_points, assimilation_attribution
 from src.models.downscale import representativeness_sigma
 from src.viz.fonts import register_inter
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+logger = logging.getLogger("digital_twin")
 
 mpl.use("Agg")
 import matplotlib.pyplot as plt
@@ -66,6 +74,28 @@ REMOTE = [("SMAP", "9 km", "validation"), ("MERRA-2", "0.5°", "validation"),
           ("SOLUS100", "100 m", "static"), ("3DEP", "10 m", "static")]
 
 
+# --------------------------------------------------------------------------- Vs30 provenance
+@dataclass(frozen=True)
+class Vs30Provenance:
+    """Resolved provenance of the Vs30 static base.
+
+    ONE record is the single source of truth for the panel title, the on-figure watermark and the
+    ``vs30_source`` field of the summary JSON, so the figure and the metadata cannot disagree (the
+    earlier code hard-coded a label in the figure and recomputed the provenance string in ``main``).
+    ``watermark`` is None for a real raster on purpose: stamping "synthetic" over a real Vs30 grid
+    would be a new falsehood, so the caveat text is derived, never assumed.
+    """
+
+    source: str                      # machine-readable provenance -> summary JSON
+    label: str                       # Vs30 panel title
+    is_synthetic: bool               # True only for the HAND-ramp fallback
+    watermark: str | None = None     # drawn on the Vs30 field + sigma panels when set
+
+
+SYNTHETIC_VS30_WATERMARK = ("SYNTHETIC HAND proxy — NOT Vs30\n"
+                            "do not use for NEHRP site class")
+
+
 # --------------------------------------------------------------------------- static fields
 def _masked(sigma, base):
     """Keep sigma only where the base field has data (else NaN -> transparent panels over no-data)."""
@@ -73,7 +103,11 @@ def _masked(sigma, base):
 
 
 def _load_static():
-    """Real 90 m static base + per-cell static sigma for gwl (DTW m), theta, Vs30 (m/s), EPSG:5070.
+    """90 m static base + per-cell static sigma for gwl (DTW m), theta, Vs30 (m/s), EPSG:5070.
+
+    GWL and theta are real 90 m products. Vs30 is real ONLY when a Vs30 raster is staged; otherwise
+    ``_vs30_field`` returns the synthetic HAND proxy, and the resolved ``Vs30Provenance`` it hands
+    back drives the panel label, the watermark and the summary JSON alike.
 
     Sigma is masked to each field's data footprint so the uncertainty panels go transparent over
     no-data cells rather than fabricating a finite sigma there.
@@ -95,27 +129,50 @@ def _load_static():
     out["theta"] = dict(base=theta_ref, sigma=_masked(tsig, theta_ref),
                         cmap="YlGnBu", label="soil moisture θ (m³/m³)  ·  wet=blue", units="")
 
-    vs30 = _vs30_field(base)
+    vs30, vs30_prov = _vs30_field(base)
     v_ds = representativeness_sigma(vs30, 2000.0, 90.0)
     # Vs30: turbo -- the colorblind-improved "jet"/rainbow geotechnical engineers recognize for Vs30.
     vsig = np.sqrt((0.15 * np.nan_to_num(vs30.values)) ** 2 + np.nan_to_num(v_ds) ** 2)
-    out["vs30"] = dict(base=vs30, sigma=_masked(vsig, vs30),
-                       cmap="turbo", label="Vs30 (m/s)  ·  soft=blue, stiff=red", units="m/s")
+    out["vs30"] = dict(base=vs30, sigma=_masked(vsig, vs30), cmap="turbo",
+                       label=vs30_prov.label, units="m/s", prov=vs30_prov)
     return out
 
 
 def _vs30_field(like):
-    """Read the real vs30_90m.tif if present (fetch_vs30: Wald-Allen slope proxy by default; USGS /
-    Sanger-Maurer optional); else fall back to a synthetic HAND ramp with a clear provenance flag."""
+    """Return ``(field, Vs30Provenance)`` for the Vs30 static base.
+
+    Two branches, each of which MUST populate the provenance record:
+
+    * ``vs30_90m.tif`` on disk -> a real staged Vs30 estimate (written by ``pixi run vs30``:
+      ``src.data.fetch_vs30``, default source SVM; or by ``src.data.fetch_gaia``). The raster itself
+      carries no source tag, so the label names the file we actually read rather than asserting a
+      model we cannot verify. No synthetic watermark is drawn in this branch.
+    * no raster -> a SYNTHETIC ramp in the height-above-nearest-drainage index. HAND is a drainage
+      index, not a shear-wave velocity, so this branch warns loudly and hands back the watermark
+      text that the plotting code stamps on the Vs30 panels.
+    """
     tif = PROC / "vs30_90m.tif"
     if tif.exists():
         v = rxr.open_rasterio(tif, masked=True).squeeze("band", drop=True)
-        return v.rio.reproject_match(like)
+        prov = Vs30Provenance(
+            source=f"{tif.name} (staged Vs30 raster; producing source not recorded in the file)",
+            label=f"Vs30 (m/s)  ·  soft=blue, stiff=red  ·  src: {tif.name}",
+            is_synthetic=False, watermark=None)
+        return v.rio.reproject_match(like), prov
     hand = rxr.open_rasterio(PROC / "terrain_hand_90m.tif", masked=True).squeeze("band", drop=True)
     hand = hand.rio.reproject_match(like)
     h = np.asarray(hand.values, dtype="float64")             # keep HAND's NaN mask (no fabrication)
     vs = 180.0 + 520.0 * (1.0 - np.exp(-h / 30.0))           # NaN where HAND is no-data
-    return like.copy(data=vs.astype("float32")).rio.write_crs(like.rio.crs)
+    logger.warning(
+        "%s absent — the Vs30 panel is a SYNTHETIC HAND ramp 180 + 520*(1 - exp(-HAND/30)), a "
+        "drainage-index texture and NOT a shear-wave-velocity estimate. It must not be read as "
+        "Vs30, used for NEHRP site class, or attributed to any published Vs30 model. Stage a real "
+        "raster with `pixi run vs30` to replace it.", tif)
+    prov = Vs30Provenance(
+        source="synthetic-from-HAND (180 + 520*(1 - exp(-HAND/30)); NOT a velocity model)",
+        label="HAND proxy (scaled to m/s)  ·  NOT a Vs30 measurement",
+        is_synthetic=True, watermark=SYNTHETIC_VS30_WATERMARK)
+    return like.copy(data=vs.astype("float32")).rio.write_crs(like.rio.crs), prov
 
 
 # --------------------------------------------------------------------------- display grid
@@ -258,6 +315,16 @@ def _draw_markers(ax, kind, seis, wells, snotel):
                        linewidths=0.4, zorder=5)
 
 
+def _stamp_watermark(ax, text):
+    """Stamp a provenance caveat across one panel. Text only -- the caller decides WHICH panels get
+    it and WHAT it says, both read off the resolved Vs30Provenance, so the stamp cannot drift from
+    the data it describes. White bbox + dark red ink stays legible over `turbo` (and over `magma`
+    on the sigma row), where plain colored text would vanish into the ramp."""
+    ax.text(0.5, 0.5, text, transform=ax.transAxes, ha="center", va="center", zorder=6,
+            fontsize=12.5, fontweight="bold", color="#8B0000", linespacing=1.35,
+            bbox=dict(boxstyle="round,pad=0.35", fc="white", ec="#8B0000", lw=1.2, alpha=0.93))
+
+
 def _vlims(stack):
     v = stack[np.isfinite(stack)]
     return (float(np.percentile(v, 3)), float(np.percentile(v, 97))) if v.size else (0, 1)
@@ -297,6 +364,9 @@ def _build_figure(static, fields, sigmas, means, grid):
             ax.set_xticks([]); ax.set_yticks([])
             for sp in ax.spines.values():
                 sp.set_edgecolor(MUTED); sp.set_linewidth(0.6)
+            prov = static[p].get("prov")                        # only Vs30 carries a provenance record
+            if prov is not None and prov.watermark:             # -> synthetic branch only, both rows
+                _stamp_watermark(ax, prov.watermark)
             if r == 0:                                          # markers + mean insert on the field row
                 _draw_markers(ax, p, seis, wells, snotel)
                 if p in DELTA_PRODUCTS:
@@ -408,6 +478,9 @@ def make_attribution_figure(grid, static, fields, means, frame, path, L=25_000.0
     xy, cov = _sensor_xy(), _covariates(grid)
     order = ("gwl", "theta", "vs30")
     titles = {"gwl": "Groundwater (DTW)", "theta": "Soil moisture θ", "vs30": "Vs30"}
+    vs30_prov = static["vs30"].get("prov")                    # same record as the twin panels
+    if vs30_prov is not None and vs30_prov.is_synthetic:      # "Vs30 ~ 100% HAND" is then a tautology
+        titles["vs30"] = "Vs30 — synthetic HAND proxy"
     fig, axes = plt.subplots(2, 3, figsize=(13.8, 8.8), height_ratios=[1.5, 1.0],
                              constrained_layout=True)
     feat_out, sensor_out = {}, {}
@@ -487,10 +560,11 @@ def main():
     (ASSETS / "digital_twin_attribution.png").write_bytes(
         (OUT / "digital_twin_attribution.png").read_bytes())
 
+    vs30_prov = static["vs30"]["prov"]        # the record the figure labelled/watermarked itself from
     meta.update(n_frames=N_FRAMES, dt_days=DT_DAYS, span_days=DT_DAYS * (N_FRAMES - 1),
                 display_px=list(grid["shape"]), poster_frame=frame,
-                vs30_source=("vs30_90m.tif (fetch_vs30: Wald-Allen slope proxy)"
-                             if (PROC / "vs30_90m.tif").exists() else "synthetic-from-HAND"),
+                vs30_source=vs30_prov.source, vs30_is_synthetic=vs30_prov.is_synthetic,
+                vs30_panel_label=vs30_prov.label,
                 attribution=shares)
     (PROC / "digital_twin_summary.json").write_text(json.dumps(meta, indent=2))
     print("wrote twin + attribution; summary:", json.dumps(meta, indent=2))
