@@ -185,7 +185,7 @@ not.
 :::
 
 ::: {.callout-note}
-## The prior is Matern, not squared-exponential, and can be made terrain-aware
+## The prior is Matern, not squared-exponential, terrain-aware, and now scalable
 `GaussianPrior` defaults to a Matern-3/2 correlation (once-differentiable), not the earlier
 squared-exponential (issue #163) — a stationary Gaussian random field is smoother ($C^\infty$) than a
 terrain-driven hydraulic head or moisture field, which has kinks at drainage divides and lithologic
@@ -194,9 +194,23 @@ that forces correlation to zero across regions, so a ridge cell and a valley cel
 implicitly assumed to communicate just because they are close in Euclidean distance — the figures above
 do not yet pass one in, so they still assume within-basin isotropy — **implemented** at the coarsened
 assimilation grid the twin actually solves on (`notebooks/make_twin_gif.py`); the dense $(n,n)$ `C` is
-not tractable at the full 90 m domain. **Planned** (milestone: Applied math — DA estimator
-correctness): a sparse GMRF/SPDE precision representation, which would give both the terrain-awareness
-and the scalability at once.
+not tractable at the full 90 m domain. **Now implemented** (issue #163): `SparseMaternPrior`, a sparse GMRF/SPDE precision
+representation that gives the terrain-awareness and the scalability at once. The precision $Q$ has
+~13 non-zeros per row (measured 12.5–12.9 up to $n=10^5$), so the prior costs ~1.6 GB at $n=10^7$
+against ~800 TB for the dense $C$, and a drainage divide becomes a *severed graph edge* — a
+conditional-independence statement — so cross-region covariance is **exactly** zero rather than
+masked. Four honest caveats: it is a $\nu=1$ **sibling** of the dense $\nu=1.5$ kernel, not a
+bit-identical replacement (only integer $\alpha$ in $(\kappa^2-\Delta)^{\alpha/2}$ yields a sparse
+precision, and $\alpha=2$ fixes $\nu=\alpha-d/2=1$; at matched `length_km` the two correlations differ
+by at most 0.054 and carry identical total correlation mass); the reflecting (Neumann) boundary
+inflates marginal variance near the domain edge ($\times1.95$ edge, $\times3.83$ corner, under 1% one
+practical range $=2\,$`length_km` inward), so the analysis rectangle should be padded by at least one
+practical range, and small `region_id` regions are inflated by $4\pi/(\kappa^2 A)$ unless
+`standardize=True`; the $O(n)$ claim is about the **prior representation**, not the whole
+estimator — $X=Q^{-1}G^\top$ is still dense $(n, n_\text{obs})$; and the 5-point discretization needs
+at least ~8 cells per practical range ($\kappa\,\max(dx,dy)\le0.36$) — the coarsened 2 km assimilation
+grid the twin currently solves on sits at $\kappa\,dx\approx0.71$, about $2\times$ past that limit,
+where the correlation error is extrapolated rather than measured, so the constructor emits a warning.
 :::
 
 ## The static layers resolve space; the sensor network resolves the rest
