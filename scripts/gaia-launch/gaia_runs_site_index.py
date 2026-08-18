@@ -25,7 +25,10 @@ def find_dashboards(root):
     rows = []
     for path in glob.glob(pattern):
         rel = os.path.relpath(path, root)
-        issue_dir, stamp, _ = rel.split(os.sep)
+        parts = rel.split(os.sep)
+        if len(parts) != 3:
+            continue  # not the issue-*/<timestamp>/dashboard.html layout we expect
+        issue_dir, stamp, _ = parts
         issue = issue_dir[len("issue-"):] if issue_dir.startswith("issue-") else issue_dir
         rows.append((issue, stamp, rel))
     rows.sort(key=lambda r: r[1], reverse=True)  # timestamp sorts lexicographically

@@ -4,9 +4,9 @@ test_ticker.py — tests for gaia_ticker.py's stateful live reader.
 
 Usage
   python3 -m pytest scripts/gaia-launch/tests/test_ticker.py
-  python3 tests/test_ticker.py                 (also runnable standalone)
+  python3 scripts/gaia-launch/tests/test_ticker.py     (also runnable standalone)
 
-Fixture: tests/fixtures/sample_run.jsonl — a main agent that reads a file,
+Fixture: scripts/gaia-launch/tests/fixtures/sample_run.jsonl — a main agent that reads a file,
 spawns three subagents (two named via subagent_type, one falling back to
 description), edits a file, and reruns tests; one subagent hits a tool
 error; the stream ends with an unrecognised event type, a malformed line,
@@ -121,6 +121,48 @@ class TestCountsMatchArchivedTrace(unittest.TestCase):
                     for name, calls, errs, _ in gaia_trace.agent_rows(agents)}
 
         self.assertEqual(live, archived)
+
+
+class TestParsePlaceholderSubagentMerge(unittest.TestCase):
+    """A subagent's own events can arrive before its spawning Task block on a
+    reordered/corrupted transcript; parse() then creates a placeholder agent
+    to hold them (see the comment at the top of parse()'s loop). Once the
+    real Task block is later found, its steps must be kept (not dropped by
+    being overwritten with a fresh dict) and it must end up attached to its
+    real parent exactly once (not left duplicated under the placeholder's
+    guessed parent, "root")."""
+
+    def _event(self, ord_, etype, parent, content):
+        return {"_ord": ord_, "type": etype, "parent_tool_use_id": parent,
+                "message": {"content": content}}
+
+    def test_steps_survive_and_agent_is_reparented_once(self):
+        events = [
+            {"_ord": 0, "type": "system", "subtype": "init",
+             "session_id": "s", "model": "m"},
+            # root spawns an outer subagent
+            self._event(1, "assistant", None, [
+                {"type": "tool_use", "id": "toolu_outer", "name": "Task",
+                 "input": {"subagent_type": "outer-agent"}}]),
+            # a not-yet-known agent's own tool call arrives BEFORE its
+            # spawning Task block -- triggers the placeholder path
+            self._event(2, "assistant", "toolu_late", [
+                {"type": "tool_use", "id": "toolu_grep", "name": "Grep",
+                 "input": {"pattern": "x"}}]),
+            # the outer agent NOW spawns that same id, with its real parent
+            self._event(3, "assistant", "toolu_outer", [
+                {"type": "tool_use", "id": "toolu_late", "name": "Task",
+                 "input": {"subagent_type": "late-bound-agent"}}]),
+        ]
+        _, agents = gaia_trace.parse(events)
+
+        late = agents["toolu_late"]
+        self.assertEqual(len(late["steps"]), 1)  # the Grep step wasn't dropped
+        self.assertEqual(late["steps"][0]["tool"], "Grep")
+        self.assertEqual(late["name"], "late-bound-agent")
+        self.assertEqual(late["parent"], "toolu_outer")
+        self.assertIn("toolu_late", agents["toolu_outer"]["spawned"])
+        self.assertNotIn("toolu_late", agents["root"]["spawned"])
 
 
 if __name__ == "__main__":

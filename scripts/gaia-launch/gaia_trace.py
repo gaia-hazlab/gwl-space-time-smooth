@@ -27,6 +27,7 @@ import argparse
 import html
 import json
 import os
+import re
 import sys
 from collections import Counter, OrderedDict
 
@@ -166,13 +167,29 @@ def parse(events):
                 if name in TASK_TOOLS and tid:
                     label = (inp.get("subagent_type") or inp.get("agent_type")
                              or inp.get("description") or "subagent")
-                    agents[tid] = {
-                        "id": tid, "parent": agent_id, "name": str(label),
-                        "subagent_type": inp.get("subagent_type"),
-                        "prompt": inp.get("prompt") or inp.get("description"),
-                        "steps": [], "spawned": [], "depth": agent["depth"] + 1,
-                        "first": ordinal, "last": ordinal,
-                    }
+                    placeholder = agents.get(tid)
+                    if placeholder is not None:
+                        # A placeholder was created above (its own events arrived
+                        # before this, its spawning Task block, due to a
+                        # reordered/corrupted transcript) -- update it in place so
+                        # its already-collected steps aren't lost, and move it out
+                        # of the placeholder parent's spawned list into its real
+                        # one (it must appear exactly once in the tree).
+                        old_parent = agents.get(placeholder["parent"])
+                        if old_parent and placeholder["id"] in old_parent["spawned"]:
+                            old_parent["spawned"].remove(placeholder["id"])
+                        placeholder.update(
+                            name=str(label), subagent_type=inp.get("subagent_type"),
+                            prompt=inp.get("prompt") or inp.get("description"),
+                            parent=agent_id, depth=agent["depth"] + 1)
+                    else:
+                        agents[tid] = {
+                            "id": tid, "parent": agent_id, "name": str(label),
+                            "subagent_type": inp.get("subagent_type"),
+                            "prompt": inp.get("prompt") or inp.get("description"),
+                            "steps": [], "spawned": [], "depth": agent["depth"] + 1,
+                            "first": ordinal, "last": ordinal,
+                        }
                     agent["spawned"].append(tid)
                     step["spawns"] = tid
 
@@ -324,7 +341,8 @@ def markdown(session, agents):
             elif s["kind"] == "text":
                 out.append(f"{pad}{s['text'][:2000]}")
             else:
-                arg = json.dumps(s["input"], ensure_ascii=False)[:200]
+                arg = json.dumps(redacted_input(s["tool"], s["input"]),
+                                  ensure_ascii=False)[:200]
                 flag = " **ERROR**" if s["is_error"] else ""
                 out.append(f"{pad}- `{s['tool']}`{flag} `{arg}`")
                 if s["result"]:
@@ -340,6 +358,44 @@ def markdown(session, agents):
 
 
 PALETTE = ["#5FB0C4", "#D9A441", "#B27CC4", "#7FB069", "#D97A7A", "#8892C7"]
+
+# Best-effort scrub of common secret shapes from a Bash command before it's
+# embedded in output that may end up published (dashboard.html goes to GitHub
+# Pages via gaia_run_queue.sh). Not a guarantee -- the real fix is never
+# putting secrets on a command line -- but it catches the common accidental
+# token-in-a-curl/git-remote case.
+_SECRET_PATTERNS = [
+    re.compile(r'(?i)(authorization["\']?\s*[:=]\s*["\']?)(bearer\s+)?\S+'),
+    re.compile(r'(?i)\b(api[_-]?key|access[_-]?token|secret|password|passwd)'
+               r'(["\']?\s*[:=]\s*["\']?)\S+'),
+    re.compile(r'sk-[A-Za-z0-9_-]{10,}'),
+    re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}'),
+    re.compile(r'AKIA[0-9A-Z]{16}'),
+    re.compile(r'(https?://)[^:/\s]+:[^@/\s]+@'),  # userinfo embedded in a URL
+]
+
+
+def redact(text):
+    if not isinstance(text, str):
+        return text
+    out = text
+    out = _SECRET_PATTERNS[0].sub(r'\1[REDACTED]', out)
+    out = _SECRET_PATTERNS[1].sub(r'\1\2[REDACTED]', out)
+    for pat in _SECRET_PATTERNS[2:5]:
+        out = pat.sub('[REDACTED]', out)
+    out = _SECRET_PATTERNS[5].sub(r'\1[REDACTED]@', out)
+    return out
+
+
+def redacted_input(tool, inp):
+    """A copy of a tool_use's input with its Bash command scrubbed, for any
+    output that may be published. Other tools' inputs (file paths, patterns)
+    are a much smaller vector for literal secrets and are passed through."""
+    if tool != "Bash" or not isinstance(inp, dict) or "command" not in inp:
+        return inp
+    out = dict(inp)
+    out["command"] = redact(str(out["command"]))
+    return out
 
 
 def dashboard(session, agents, source_name):
@@ -363,7 +419,8 @@ def dashboard(session, agents, source_name):
                 continue
             cls = "tick err" if s["is_error"] else (
                 "tick spawn" if s["spawns"] else "tick")
-            arg = json.dumps(s["input"], ensure_ascii=False)[:180]
+            arg = json.dumps(redacted_input(s["tool"], s["input"]),
+                              ensure_ascii=False)[:180]
             ticks.append(
                 f'<span class="{cls}" style="left:{pct(s["ord"]):.3f}%" '
                 f'title="{html.escape(s["tool"] + "  " + arg, quote=True)}"></span>')
@@ -383,7 +440,8 @@ def dashboard(session, agents, source_name):
         log = []
         for s in a["steps"]:
             if s["kind"] == "tool_use":
-                arg = json.dumps(s["input"], ensure_ascii=False)[:220]
+                arg = json.dumps(redacted_input(s["tool"], s["input"]),
+                                  ensure_ascii=False)[:220]
                 log.append(f'<div class="ln t{" err" if s["is_error"] else ""}">'
                            f'<code>{html.escape(s["tool"])}</code>'
                            f'<span>{html.escape(arg)}</span></div>')
@@ -546,7 +604,8 @@ def record(session, agents, args):
     meta = {}
     if args.meta and os.path.exists(args.meta):
         try:
-            meta = json.load(open(args.meta, encoding="utf-8"))
+            with open(args.meta, encoding="utf-8") as f:
+                meta = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             print(f"note: could not read {args.meta}: {e}", file=sys.stderr)
 
@@ -597,7 +656,8 @@ def record(session, agents, args):
     if d:
         p = os.path.join(d, "prompt.txt")
         if os.path.exists(p):
-            rec["prompt"] = open(p, encoding="utf-8").read().strip()
+            with open(p, encoding="utf-8") as f:
+                rec["prompt"] = f.read().strip()
     return rec
 
 
