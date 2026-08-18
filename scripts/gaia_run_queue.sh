@@ -168,12 +168,22 @@ while IFS= read -r batch_json; do
     [ -z "$number" ] && continue
     title="$(jq -r --arg n "$number" '.issues[] | select((.number|tostring)==$n) | .title' <<<"$batch_json")"
     echo "  resolving #${number} (${title}) [live below, also logged to $logfile]..." | tee -a "$logfile"
+    # stream-json (piped through gaia_ticker.py) instead of plain text: gives a live, per-agent
+    # ticker in $logfile (same as before, just attributed by name instead of one undifferentiated
+    # stream) AND a raw transcript this loop can render into a dashboard below. Claude's own stderr
+    # goes straight to $logfile, same as it always did; only its stdout changes shape.
+    raw="$LOG_DIR/issue-${number}-${ts}.raw.jsonl"
     claude -p "Use the gaia orchestrator to resolve GitHub issue #${number} (\"${title}\") in ${REPO_SLUG}.
 Follow /gaia:ground-rules. Make the minimal correct change (code, tests, and/or docs) for THIS issue only.
 Do not commit -- leave the working tree dirty for the pipeline to commit." \
         --permission-mode acceptEdits \
         --dangerously-skip-permissions \
-        2>&1 | tee -a "$logfile" && issue_rc=0 || issue_rc=$?
+        --output-format stream-json \
+        --verbose \
+        2>>"$logfile" \
+      | python3 "$REPO_DIR/scripts/gaia-launch/gaia_ticker.py" 2>>"$logfile" \
+      | tee "$raw" >/dev/null \
+      && issue_rc=0 || issue_rc=$?
     if [ "$issue_rc" -ne 0 ]; then
       report_failure "orchestrator failed on #${number}; discarding the whole batch ${numbers_csv}" "$logfile" "$issue_rc"
       batch_failed=1
@@ -183,6 +193,17 @@ Do not commit -- leave the working tree dirty for the pipeline to commit." \
       echo "  no changes produced for #${number}; skipping its commit (see $logfile)" | tee -a "$logfile"
       continue
     fi
+
+    # Render this issue's dashboard from the transcript just captured, so it lands in the SAME
+    # commit as the code it documents. Only reached once we know a real diff exists (above), so a
+    # no-op issue never leaves an orphaned dashboard for `git add -A` to misattribute to whichever
+    # issue commits next. A render failure must never block the actual fix from being committed.
+    dash_rel="docs/gaia-runs/issue-${number}/${ts}/dashboard.html"
+    mkdir -p "$(dirname "$dash_rel")"
+    python3 "$REPO_DIR/scripts/gaia-launch/gaia_trace.py" "$raw" --html "$dash_rel" \
+      >> "$logfile" 2>&1 \
+      || echo "  could not build dashboard.html for #${number}; committing the code change without it" | tee -a "$logfile"
+
     git add -A
     # Guard commit AND push explicitly: under `set -euo pipefail` a bare failing git command (a
     # commit hook, missing identity, a transient push error) would kill the WHOLE script before
