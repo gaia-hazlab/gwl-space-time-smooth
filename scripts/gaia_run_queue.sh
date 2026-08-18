@@ -353,13 +353,21 @@ This verdict is advisory and was produced by an autonomous agent. **A human deci
     gh pr comment "$pr_number" --body "$note" >> "$logfile" 2>&1 || true
     gh pr comment "$rival_num" --body "$note" >> "$logfile" 2>&1 || true
 
+    # Block by LABEL, not by demoting to draft. A draft PR does not get a
+    # Copilot review, so demoting the loser would silently deny it the very
+    # review a human needs in order to adjudicate. Returning non-zero already
+    # stops the merge; the label makes the block visible and filterable.
+    gh label create needs-human-decision --color B60205 \
+      --description "Automated arbitration found a competing PR; a human must choose" >/dev/null 2>&1 || true
     case "$v" in
-      A) echo "  arbitrator favours THIS PR (#${pr_number}); #${rival_num} needs rework by a human" | tee -a "$logfile" ;;
-      B) echo "  arbitrator favours the rival (#${rival_num}); putting #${pr_number} back to draft" | tee -a "$logfile"
-         gh pr ready "$pr_number" --undo >> "$logfile" 2>&1 || true
+      A) echo "  arbitrator favours THIS PR (#${pr_number}); #${rival_num} needs rework by a human" | tee -a "$logfile"
+         gh pr edit "$rival_num" --add-label needs-human-decision >> "$logfile" 2>&1 || true ;;
+      B) echo "  arbitrator favours the rival (#${rival_num}); #${pr_number} blocked pending your decision" | tee -a "$logfile"
+         gh pr edit "$pr_number" --add-label needs-human-decision >> "$logfile" 2>&1 || true
          proceed=1 ;;
       *) echo "  arbitrator returned '${v}' -- both PRs left open for a human; not merging" | tee -a "$logfile"
-         gh pr ready "$pr_number" --undo >> "$logfile" 2>&1 || true
+         gh pr edit "$pr_number" --add-label needs-human-decision >> "$logfile" 2>&1 || true
+         gh pr edit "$rival_num" --add-label needs-human-decision >> "$logfile" 2>&1 || true
          proceed=1 ;;
     esac
   done <<< "$conflicts"
@@ -682,24 +690,41 @@ ${missing_closes}"
   # committed and gated, swap the placeholder body for the real one and mark it ready for review.
   gh pr edit "$pr_number" --title "gaia: ${readable_key} (${numbers_csv})" --body "$pr_body" >> "$logfile" 2>&1 \
     || echo "  could not update PR #${pr_number} body; the draft placeholder stands" | tee -a "$logfile"
-  gh pr ready "$pr_number" >> "$logfile" 2>&1 \
-    && echo "  marked PR #${pr_number} ready for review (${numbers_csv})" | tee -a "$logfile" \
-    || echo "  could not mark PR #${pr_number} ready; mark it by hand" | tee -a "$logfile"
+  # Mark ready, then VERIFY it took. A PR left in draft gets no Copilot review at
+  # all, so the whole review stage would silently no-op -- a failure that looks
+  # identical to "Copilot had nothing to say". Retry once, then say so loudly.
+  gh pr ready "$pr_number" >> "$logfile" 2>&1 || true
+  if [ "$(gh pr view "$pr_number" --json isDraft -q .isDraft 2>>"$logfile")" = "true" ]; then
+    echo "  PR #${pr_number} still in draft after 'gh pr ready'; retrying once" | tee -a "$logfile"
+    sleep 5
+    gh pr ready "$pr_number" >> "$logfile" 2>&1 || true
+  fi
+  if [ "$(gh pr view "$pr_number" --json isDraft -q .isDraft 2>>"$logfile")" = "true" ]; then
+    echo "  !!! PR #${pr_number} is STILL a draft -- Copilot will not review it. Mark it ready by hand: gh pr ready ${pr_number}" | tee -a "$logfile"
+    gh pr comment "$pr_number" --body "This PR could not be marked ready for review automatically, so **no code review was triggered**. Mark it ready by hand (\`gh pr ready ${pr_number}\`) to get one." >> "$logfile" 2>&1 || true
+  else
+    echo "  marked PR #${pr_number} ready for review (${numbers_csv})" | tee -a "$logfile"
+  fi
+
+  # Request review BEFORE arbitration. If this batch collides with a sibling PR,
+  # a human has to choose between them -- and they should have a code review of
+  # BOTH sides in front of them when they do. Requesting afterwards would skip
+  # review entirely on any PR that arbitration blocks.
+  gh api "repos/${REPO_SLUG}/pulls/${pr_number}/requested_reviewers" \
+    -f "reviewers[]=${COPILOT_REVIEWER}" >> "$logfile" 2>&1 \
+    || echo "  could not request Copilot review via API; add it once by hand and re-run" | tee -a "$logfile"
 
   # ARBITRATION. Batches are cut from main in parallel, so a sibling batch can
   # have proposed a COMPETING design for the same module without either agent
   # ever seeing the other. Test for a real merge conflict against every other
-  # open gaia PR and, on a hit, hand both diffs to an independent auditor. A PR
-  # that loses arbitration goes back to draft and is never auto-merged.
+  # open gaia PR and, on a hit, hand both diffs to an independent auditor. A
+  # blocked PR stays READY (so it still gets reviewed) and is labelled
+  # needs-human-decision; it simply never auto-merges.
   if ! arbitrate_against_rivals "$branch" "$pr_number" "$logfile"; then
-    echo "  arbitration blocked PR #${pr_number}; leaving it for a human and moving on" | tee -a "$logfile"
+    echo "  arbitration blocked PR #${pr_number}; left ready for review and labelled for a human" | tee -a "$logfile"
     git checkout main >> "$logfile" 2>&1 || true
     continue
   fi
-
-  gh api "repos/${REPO_SLUG}/pulls/${pr_number}/requested_reviewers" \
-    -f "reviewers[]=${COPILOT_REVIEWER}" >> "$logfile" 2>&1 \
-    || echo "  could not request Copilot review via API; add it once by hand and re-run" | tee -a "$logfile"
 
   # Iterate-until-convergence, not one fixed round: Copilot's code review NEVER submits an
   # "Approve" state (confirmed empirically -- it only ever leaves a COMMENTED review), so waiting

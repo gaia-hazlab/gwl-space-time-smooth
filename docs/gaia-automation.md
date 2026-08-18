@@ -23,6 +23,9 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 >    child-by-child.
 > 4. **Publication is verified before any work starts**, so a broken `gh`/auth path costs
 >    seconds rather than a full batch.
+> 5. **A PR is never left in draft.** Draft PRs get no code review, so the queue marks each
+>    PR ready, *verifies* it took, and requests review before anything can block it. Work
+>    that is held back is labelled, not hidden.
 
 ## What it does, end to end
 
@@ -43,7 +46,9 @@ For each batch of related issues (see grouping, below):
    a genuine conflict an **independent `gaia-auditor`** receives both diffs and both issue
    statements, is not told which side is "ours", and returns a verdict
    (`A` / `B` / `reconcile` / `escalate`). The verdict is posted on **both** PRs; the losing
-   side goes back to draft and never auto-merges.
+   side is labelled `needs-human-decision` and never auto-merges. It deliberately stays
+   **ready for review**, not demoted to draft: a draft PR gets no code review, and the
+   human adjudicating a design collision needs a review of *both* sides in front of them.
 5. Request a **Copilot code review** on the PR and wait for it (up to 20 minutes).
 6. **Revise and re-review, up to `REVIEW_MAX_ROUNDS` (default 3) rounds**: feed Copilot's
    comments back to the orchestrator, let it address what's actually called for, re-run the
