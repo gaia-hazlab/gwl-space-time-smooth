@@ -278,3 +278,9 @@ climate-response β-map (per-site regression on SPI-3, ΔSWE, PDO), which reprod
 memory; the higher rungs add a transfer-function/linear-reservoir memory (the same water table advanced
 above). The **residual** is ordinary kriging of the observed well anomalies, precision-weighted into the
 state ([Assimilation](04-assimilation.qmd)).
+
+That β-map's fourth term, the atmospheric-river coefficient β₄, is set to 0 today — a stated placeholder
+held there until the Stage IV intercomparison delivers a ranked precipitation product. So in the operative
+model, atmospheric rivers contribute nothing to the GWL estimate: the implemented Stage-2 dynamics are
+linear, memoryless, and AR-blind, and the transfer-function/linear-reservoir rungs above remain planned,
+not built.

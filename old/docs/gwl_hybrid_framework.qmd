@@ -37,11 +37,18 @@ abstract: |
   the resulting β-coefficient maps to the full 90 m grid, enabling reconstruction of
   monthly anomalies as a matrix multiply from climate indices alone. Stage 3 kriging of
   observation residuals closes the gap between the climate reconstruction and the actual
-  well record. The framework captures four PNW hydroclimatic signals: seasonal storm
-  recharge, late-season snowmelt, atmospheric river events, and multi-year ENSO/PDO
-  modulation. Outputs are formatted as GAIA HazLab xarray DataTree archives with
-  STAC provenance metadata, suitable for direct ingestion by Sanger et al. geotechnical
-  liquefaction models and LandLab geomorphological frameworks. We review prior hybrid
+  well record. We are explicit about what is demonstrated here versus what is built but
+  untested: the real-data 90 m monthly product reported below obtains its Stage-2/3
+  dynamic term by ordinary-kriging the *observed* per-well anomalies onto the static
+  baseline; the β-map path is implemented in the pipeline but has not yet been fit or
+  validated on the real well network, and the transfer-function-noise forecast model
+  discussed as its successor is not implemented at all. The framework is *designed* to
+  represent four PNW hydroclimatic signals: seasonal storm recharge, late-season snowmelt,
+  atmospheric river events, and multi-year ENSO/PDO modulation. It does not resolve them as
+  separate terms today — that attribution lives in the unfit β-map path, whose
+  atmospheric-river term is identically zero. Outputs are formatted as GAIA HazLab xarray
+  DataTree archives with STAC provenance metadata, suitable for direct ingestion by Sanger
+  et al. geotechnical liquefaction models and LandLab geomorphological frameworks. We review prior hybrid
   and data-driven DTW modeling work and situate our contribution relative to the two
   dominant paradigms — full numerical flow models and purely statistical interpolations.
   Finally, we show that the same design — a fine static envelope, a coarse dynamic driver,
@@ -249,9 +256,12 @@ properties (SOLUS100), and capture temporal variability through per-site climate
 response functions rather than solving any flow equation. The key innovation relative
 to @fan2013global is the replacement of raw DEM elevation with **Height Above Nearest
 Drainage (HAND)** [@nobre2011hand; @gharari2011toward] as the primary spatial predictor,
-and the addition of a **β-coefficient map** framework [@bloomfield2013analysis] that
-enables GWL forecasting from climate indices alone via a single matrix multiply —
-without re-running any kriging step.
+and the addition of a **β-coefficient map** framework [@bloomfield2013analysis] designed
+to enable GWL forecasting from climate indices alone via a single matrix multiply —
+without re-running any kriging step. That forecasting property is a design capability of
+the implemented β-map code rather than a demonstrated result: it has not yet been fit or
+validated on the real well network, and the real-data product presented in @sec-results
+takes its time variation from kriged observed well anomalies instead.
 
 Although we develop it here for groundwater level, this framework is one instance of a more
 general template — a **fine-resolution static envelope** (terrain and soil) combined with a
@@ -723,22 +733,27 @@ gaia = dict(hand=hand, slope=slope, twi=twi, vs30=vs30, clay=clay, sand=sand,
 
 This section details the pipeline for the **groundwater-level state** — the most mature of the three
 coupled states, and the operational instantiation of the hydrological ground (@sec-hydro-grounds). The
-stages below are the *statistical* backbone that anchors GWL to the well record: an observation-anchored
-random-forest baseline, per-site β-maps for the climate response, and kriging of the residuals. The
-closed pixel-wise **water budget** (@sec-hydro-grounds) then adds the *process* coupling — recharge,
+stages below are the *statistical* backbone, **as designed**, for anchoring GWL to the well record: an
+observation-anchored random-forest baseline, per-site β-maps for the climate response, and kriging of the
+residuals. The closed pixel-wise **water budget** (@sec-hydro-grounds) then adds the *process* coupling — recharge,
 capillary rise, and lateral flow — that ties GWL to the soil-moisture state (@sec-soilmoisture) and,
 through the petrophysical bridge (@sec-petro-grounds), to the seismically-sensed stiffness state; the
 three are assembled and animated together in the digital-twin demonstration (@sec-twin). The stage
 figure below is therefore the GWL spine of a wider coupled system, not the whole framework.
 
-@fig-pipeline shows the three-stage pipeline. The key design principle is that each
-stage is **physically motivated**, operates at a different timescale (climatological →
+@fig-pipeline shows the three-stage pipeline **as designed** — it is a diagram of the
+intended architecture, not of the delivered real-data product. In the product reported
+below (@sec-results), only the Stage-1 random-forest baseline is used as drawn: the entire
+dynamic term comes from ordinary kriging of the *observed* per-well anomalies
+(`gwl_dynamic_90m`), with no SPI-3, SWE, PDO or β term, because the Stage-2 β-map path has
+not been fit or validated on the real well network (@sec-stage2). The key design principle
+is that each stage is **physically motivated**, operates at a different timescale (climatological →
 interannual → sub-annual residual), and produces **spatially smooth** outputs that
 avoid the tiling artifacts of elevation-based products.
 
 ```{python}
 #| label: fig-pipeline
-#| fig-cap: "**Three-stage hybrid GWL framework.** Observations (blue) anchor all three stages. Stage 1 (green) establishes the climatological depth-to-water baseline using an observation-anchored, HAND-based random-forest regression and kriging of residuals. Stage 2 (teal) captures interannual and seasonal variability through per-site OLS β-maps. Stage 3 (purple) kriging closes the gap between the climate reconstruction and the well record. GAIA ecosystem data (orange dashed) flows into Stage 1 and Stage 2."
+#| fig-cap: "**Three-stage hybrid GWL framework, as designed.** This diagram is the *designed* pipeline, not the delivered real-data product. Observations (blue) anchor all three stages. Stage 1 (green) establishes the climatological depth-to-water baseline using an observation-anchored, HAND-based random-forest regression and kriging of residuals. Stage 2 (teal) is *designed* to capture interannual and seasonal variability through per-site OLS β-maps; that path has not been fit or validated on the real well network, and only three β terms are ever fitted (SPI-3, SWE, PDO) — the atmospheric-river term β₄ is a placeholder fixed at zero. Stage 3 (purple) kriging is designed to close the gap between the climate reconstruction and the well record. In the delivered product the whole dynamic term instead comes from ordinary kriging of the *observed* per-well anomalies (`gwl_dynamic_90m`, `src/models/gwl_dynamic.py`), and the uncertainty stack shipped with it carries three terms with no response term σ_resp, since no Stage-2 OLS fit was run on the real wells. GAIA ecosystem data (orange dashed) flows into Stage 1 and Stage 2."
 #| fig-width: 11
 #| fig-height: 6
 
@@ -1229,6 +1244,25 @@ $$\Delta\text{DTW}(x,y,t) = \beta_1(x,y)\cdot\text{SPI3}(x,y,t) +
 This property makes the framework compatible with Earth2Studio ensemble climate
 scenarios: a new GWL scenario requires only a matrix multiply, not a new kriging run.
 
+**What is actually operational today.** The β-map path above is implemented — per-site
+OLS, ordinary kriging of the fitted β coefficients to the 90 m grid, and the matrix
+multiply that reconstructs ΔDTW all live in `src/models/climate_response.py`
+(`:103-137`, `:140-176`, `:374-378`), and this is the pipeline's declared Stage 2
+(`Makefile:172`) — but it has **not been fit or validated on the real well network**.
+(The atmospheric-river β₄ term is separately a placeholder fixed at zero — see the
+caption of @fig-pnw-signals.) The Stage-2 illustration in
+@fig-climate-response is a *synthetic, hypothetical* well, and no fitted β maps accompany
+the real-data product shown in this report. The time-varying signal in that product
+(@sec-results, @fig-gwl-anim) is instead produced by `gwl_dynamic_90m`
+(`src/models/gwl_dynamic.py`): the well record is first restricted to the analysis window
+(2010-04–2013-03), then each well's mean *over that window* is removed — so the anomaly is
+a departure from the analysis-window mean, not from a long-term or climatological mean —
+and the resulting *observed* monthly anomaly is ordinary-kriged, downscaled to 90 m, and
+added to the Stage-1 baseline. That path contains no SPI-3, SWE, PDO, or β term
+whatsoever. Scenario generation by matrix multiply is therefore, at the time of writing, a
+design capability of the β-map path — not a demonstrated property of the product reported
+here.
+
 #### Rung 2 — Transfer-function-noise: restoring memory and recession
 
 A water table is not a memoryless gain; it is a **reservoir**. To first order each site
@@ -1338,21 +1372,38 @@ Stage 3. Two issues must be designed for before this rung is trustworthy for haz
   emulated anomalies onto the 90 m grid using the fine GAIA covariates (HAND, $V_{s30}$,
   $K_{\text{sat}}$, depth-to-bedrock) — the same fields that already drive Stage 1. Until the
   emulator, its downscaler, and an explicit extreme-event validation are in place, lateral
-  flow is handled in assimilation (above), and Rung 2 is the operational Stage 2.
+  flow is handled in assimilation (above). Rung 2 itself is **not implemented**: no TFN /
+  impulse-response model exists in the codebase, and it remains future work. Rung 1 (the
+  β-map) *is* implemented and is the pipeline's declared Stage 2, but has not yet been fit
+  on the real well network; what is operational on real data today is the kriged
+  observed-anomaly Stage-2/3 signal described in @sec-results.
 
 ### Stage 3: Kriging of observation residuals {#sec-stage3}
 
-Stage 3 removes any systematic bias between the climate reconstruction and the actual
-well observations. For each month $t$:
+Stage 3 is designed to remove any systematic bias between the climate reconstruction and
+the actual well observations. As with Stage 2, what follows describes the designed
+pipeline (`src/models/interpolate_residuals.py`), not the assembly used for the real-data
+product reported in @sec-results — see **What is actually operational today** in
+@sec-stage2. For each month $t$:
 $$\varepsilon(s,t) = \Delta\text{DTW}_{\text{obs}}(s,t) -
                      \Delta\text{DTW}_{\text{reconstructed}}(s,t)$$
 
 These residuals are interpolated to the 90 m grid using ordinary kriging
 [@hengl2007regression] with per-HUC-2 variograms and a Normal Score Transform to
-handle non-Gaussian residual distributions. The final assembled product is:
+handle non-Gaussian residual distributions. In the designed Stage-2/3 assembly the final
+product is:
 $$\text{DTW}_{\text{final}}(x,y,t) = \underbrace{\hat{\text{DTW}}_{\text{base}}(x,y)}_{\text{Stage 1}} +
                                       \underbrace{\Delta\hat{\text{DTW}}(x,y,t)}_{\text{Stage 2}} +
                                       \underbrace{\hat{\varepsilon}(x,y,t)}_{\text{Stage 3}}$$
+
+This equation states the *designed* assembly, and it is what
+`src/models/interpolate_residuals.py` computes; it is **not** how the real-data product
+shown in this report was assembled. Because no β maps have been fit to the real well
+network, there is no climate reconstruction to take residuals against, and the delivered
+90 m monthly product instead adds a single kriged *observed*-anomaly term to the Stage-1
+baseline (`gwl_dynamic_90m`; @sec-stage2, @sec-results) — i.e. its Stage-2 and Stage-3
+terms are not separately identified. Readers arriving here directly should read this
+section as specification, not as a description of the numbers reported in @sec-results.
 
 ---
 
@@ -1579,6 +1630,13 @@ where:
   proxy for the unexplained variance in the Stage 2 OLS fit
 - $\sigma_{\text{krige,resid}}$ is the Stage 3 kriging standard deviation (time-varying)
 
+This four-term budget describes the **designed** full β-map pipeline. The budget actually
+computed for the delivered real-data product has **three** terms — static (random-forest
+baseline), dynamic kriging, and downscaling representativeness (the three-term budget in
+"One downscaling and uncertainty budget for both variables", @sec-soilmoisture, and in
+`data/processed/provenance.json`) — with no $\sigma_{\text{response}}$ term, because no
+Stage-2 OLS fit was run on the real well network to produce one.
+
 All outputs carry a **variogram-driven well-support mask**: a cell's confidence is set by
 its distance to the nearest usable well *relative to its hydrogeologic-domain variogram
 range* (see @sec-validation), not a fixed radius. In the PNW Cascades, well density drops
@@ -1594,7 +1652,7 @@ additional monitoring infrastructure.
 
 ```{python}
 #| label: fig-comparison
-#| fig-cap: "**Comparison of GWL modeling paradigms.** Each approach is characterized by its data requirements, spatial resolution, temporal capability, and computational cost. The hybrid framework proposed here occupies the middle ground: it is more physically grounded than pure statistical interpolation (Fan et al. 2013, HydroGEN) but far less demanding than full numerical simulation. The key differentiators relative to prior hybrid work are the use of HAND (vs. raw DEM elevation) and the β-map framework for temporal extrapolation."
+#| fig-cap: "**Comparison of GWL modeling paradigms.** Each approach is characterized by its data requirements, spatial resolution, temporal capability, and computational cost. The hybrid framework proposed here occupies the middle ground: it is more physically grounded than pure statistical interpolation (Fan et al. 2013, HydroGEN) but far less demanding than full numerical simulation. The key differentiators relative to prior hybrid work are the use of HAND (vs. raw DEM elevation) and the β-map framework for temporal extrapolation. The second of these is a *designed* capability: the β-map temporal-extrapolation path is implemented in code but has not yet been fit or validated on the real well network, and the temporal capability actually demonstrated in this report is ordinary kriging of observed well anomalies — so the position plotted for \"This work\" is the designed target, not a validated result."
 #| fig-width: 11
 #| fig-height: 5.5
 
@@ -1662,11 +1720,18 @@ The key differentiators from prior hybrid work are:
 | Feature | Fan et al. (2013) | HydroGEN (2024) | Bloomfield (2013) | **This work** |
 |---------|-------------------|-----------------|-------------------|---------------|
 | Primary spatial predictor | DEM elevation | DEM + many vars | N/A (single site) | **HAND** |
-| Temporal model | None (static) | None (static) | SPI regression | **β-map (SPI+SWE+PDO)** |
+| Temporal model | None (static) | None (static) | SPI regression | **Kriged observed anomalies** (demonstrated); **β-map (SPI+SWE+PDO)** (implemented, not yet fit on real wells) |
 | Cross-validation | Random (inflated R²) | Random | Site-level | **Spatial block CV** |
 | Tiling artifacts | Yes (DEM tiles) | Reduced | N/A | **Eliminated (HAND)** |
 | Output format | GeoTIFF | GeoTIFF | CSV | **DataTree + STAC** |
-| Scenario generation | N/A | N/A | Re-run regression | **Matrix multiply** |
+| Scenario generation | N/A | N/A | Re-run regression | **Matrix multiply** (design capability; not yet demonstrated) |
+
+The **This work** column deliberately mixes demonstrated and designed capability. The
+HAND predictor, spatial block cross-validation, absence of tiling artifacts, and DataTree +
+STAC output describe the real-data product; the β-map temporal model and matrix-multiply
+scenario generation are implemented in code but have not yet been fit or validated on the
+real well network, and the temporal term that is actually demonstrated here is ordinary
+kriging of observed well anomalies (@sec-results).
 
 The approach most similar to ours is the combination of @bloomfield2013analysis's
 SPI-based regression with spatial interpolation of β coefficients, but no published
@@ -1913,9 +1978,14 @@ and is tracked as future work.
 ### Model-diagnostic and physical-plausibility checks
 - **Feature importance:** HAND ranks ≥1st or 2nd (below SPI-3 in humid settings); no
   straight-line discontinuities at HUC-2 or DEM tile boundaries.
-- **Stage 2 signs:** median per-well R² exceeds the HydroGEN analogue; SWE lag > 0 in
-  mountain-front wells; β₁ (SPI-3) negative everywhere (wetter → shallower); PDO term
-  significant ($p$ < 0.05) in >50% of sites [@kuss2014multi].
+- **Stage 2 signs (planned):** these are *acceptance criteria for a fit that has not yet
+  been run*, not diagnostics that have passed — no β maps have been fit to the real well
+  network (@sec-stage2). When that fit is performed we will check that the median per-well
+  R² exceeds the HydroGEN analogue; that the AIC-selected SWE lag > 0 in mountain-front
+  wells; and that β₁ (SPI-3) is negative everywhere (wetter → shallower). A significance
+  criterion on the PDO term [@kuss2014multi] is *not* computable from the current
+  implementation, which reports R², residual σ, AIC, and $n$ but no coefficient $p$-values;
+  applying it requires first extending the per-site fit to report them.
 - **Terrain monotonicity:** DTW decreases from ridge to valley floor; DTW < 0 m in < 0.1%
   of final cells (only active floodplains and tidal zones).
 - **Seasonal cycle:** domain-mean anomaly shallowest in Feb–Mar, deepest in Aug–Sep,
@@ -1950,7 +2020,9 @@ the honest metric over a heterogeneous domain rather than an at-well interpolati
 random-forest feature importance, spatial block cross-validation, and a 24-year well hydrograph.](assets/gwl_state.png){#fig-gwl-results}
 
 The monthly product is time-varying; the animation steps through depth-to-water month by month
-over a densely-instrumented window.
+over a densely-instrumented window. This time-varying field is produced by ordinary-kriging the
+*observed* per-well monthly anomaly and adding it to the Stage-1 baseline (`gwl_dynamic_90m`);
+it is not a β-map reconstruction from climate indices.
 
 ![Depth-to-water evolving month by month at 90 m (2010–2013).](assets/gwl_90m.gif){#fig-gwl-anim}
 
@@ -2481,14 +2553,21 @@ estimation in the Pacific Northwest that:
    spatial predictor, achieving physically correct GWL depth in valley floors where
    liquefaction risk is highest.
 
-2. **Captures PNW hydroclimatic variability** through per-site β-coefficient maps that
-   decompose GWL anomalies into SPI-3 (seasonal precipitation), SWE (snowmelt recharge),
-   and PDO (ENSO/decadal) components, consistent with the established literature on
-   western US groundwater teleconnections [@bloomfield2013analysis; @kuss2014multi].
+2. **Captures PNW hydroclimatic variability** in the delivered 90 m monthly product by
+   ordinary-kriging the observed per-well anomalies onto the static baseline, and supplies
+   — implemented in the pipeline, but not yet fit or validated on the real well network —
+   a per-site β-coefficient decomposition of those anomalies into SPI-3 (seasonal
+   precipitation), SWE (snowmelt recharge), and PDO (ENSO/decadal) components, consistent
+   with the established literature on western US groundwater teleconnections
+   [@bloomfield2013analysis; @kuss2014multi].
 
-3. **Enables forward GWL scenarios** from any climate projection via a matrix multiply
-   of β maps and climate indices, without re-running kriging — making the framework
-   compatible with Earth2Studio ensemble outputs.
+3. **Is designed to enable forward GWL scenarios** from any climate projection via a
+   matrix multiply of β maps and climate indices, without re-running kriging — which
+   would make the framework compatible with Earth2Studio ensemble outputs. This is stated
+   as capability, not as result: the β-map code exists and is the declared Stage 2, but no
+   β maps have been fit to the real well network, and the transfer-function-noise model of
+   Rung 2 is not implemented. Demonstrating and validating both on real wells is the
+   immediate next step.
 
 4. **Integrates with the GAIA HazLab ecosystem**, using SOLUS100 and PRISM from
    s3://cresst, producing STAC-provenance DataTree outputs, and cross-validating with
@@ -2541,13 +2620,22 @@ make climate-response
 make residuals
 ```
 
+The `make` targets above build the **designed** pipeline (Stage 1 → β-map Stage 2 →
+residual Stage 3). They do **not** reproduce the real-data 90 m monthly product reported in
+@sec-results: that product — @fig-gwl-anim and the uncertainty budget in
+`data/processed/provenance.json` — is produced by `gwl_dynamic_90m`, which has no Makefile
+target and is run via `pixi run python old/notebooks/make_products_90m.py` once the
+upstream targets it reads have been built (`make baseline` for the Stage-1 rasters, plus
+the QC'd monthly well parquet and the soil/climate inputs).
+
 Key files referenced in this document:
 
 | File | Role |
 |------|------|
 | `src/features/compute_terrain.py` | HAND, TWI computation from 3DEP |
 | `src/models/baseline_regression.py` | Stage 1 random forest + regression kriging |
-| `src/models/climate_response.py` | Stage 2 per-site OLS β-maps |
-| `src/models/interpolate_residuals.py` | Stage 3 kriging + final assembly |
+| `src/models/climate_response.py` | Stage 2 per-site OLS β-maps (designed path; not yet fit on real wells) |
+| `src/models/interpolate_residuals.py` | Stage 3 kriging + final assembly (designed path) |
+| `src/models/gwl_dynamic.py` | Kriged *observed*-anomaly dynamic DTW (`gwl_dynamic_90m`) — the path that actually produced @fig-gwl-anim and `data/processed/provenance.json`. Invoked from `old/notebooks/make_products_90m.py`, **not** from any Makefile target |
 | `docs/gaia-conventions.md` | DataTree schema, STAC provenance |
 | `docs/REFACTORING_PLAN.md` | Full 6-phase implementation plan |
