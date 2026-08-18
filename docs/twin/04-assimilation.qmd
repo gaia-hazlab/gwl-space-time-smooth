@@ -127,6 +127,146 @@ $1/\sigma_{\text{prior}}^2$. That is where "~94% wells for groundwater, ~95% dv/
 comes from — a *near-station refinement* fraction, not a claim about the field as a whole. The full
 $C_a$ above is what the design maps in [the evaluation chapter](05-state-evaluation.qmd).
 
+## The prior smoothness $\nu$: theoretical, statistical, and physical basis
+
+The prior correlation used by `GaussianPrior`/`matern_correlation` is Whittle–Matérn. Beyond the
+marginal variance $\sigma^2$ and the range $L$, it carries a third parameter, the smoothness $\nu$,
+which fixes the local regularity of the field. This section states what $\nu$ controls, what can and
+cannot be learned about it from data, and what the hydrologic literature implies for the two states the
+twin estimates. It is the justification for the value in use and a statement of where that value is
+still an assumption rather than a result.
+
+### The family and the parameter
+
+For separation $r = |x-x'|$ the correlation is
+
+$$\rho_\nu(r) \;=\; \frac{2^{1-\nu}}{\Gamma(\nu)}\,\left(\frac{\sqrt{2\nu}\,r}{L}\right)^{\!\nu} K_\nu\!\left(\frac{\sqrt{2\nu}\,r}{L}\right),$$
+
+with $K_\nu$ the modified Bessel function of the second kind. The family originates with
+@whittle1954stationary and @matern1960spatial; @guttorp2006matern document the history and argue for
+the compound name. It entered statistical practice through @handcock1993bayesian, and
+@stein1999interpolation established it as the default recommendation for spatial interpolation
+precisely because $\nu$ is adjustable rather than assumed.
+
+Two limits bracket what the choice means. At $\nu = 1/2$ the correlation collapses to the exponential
+$e^{-r\sqrt{2}/L}$ — the Ornstein–Uhlenbeck / first-order Markov form, continuous but nowhere
+mean-square differentiable. As $\nu \to \infty$ it converges to the squared-exponential (Gaussian)
+form, which is $C^\infty$ — analytic sample paths. Intermediate values interpolate: a Matérn field is
+$\lceil \nu \rceil - 1$ times mean-square differentiable, so $\nu = 3/2$ gives a field that is once
+differentiable and no more.
+
+::: {.callout-important}
+## The range convention is not universal — $L$ means one specific thing here
+This implementation uses the $\sqrt{2\nu}$ scaling shown above, so at $\nu = 3/2$ the correlation at
+$r = L$ is $(1+\sqrt{3})e^{-\sqrt{3}} = 0.483$. Other conventions are in wide use and are not
+interchangeable: @lindgren2011explicit scale by $\sqrt{8\nu}$ so that $\rho$ is approximately the
+distance at which correlation falls to $0.1$, and a third convention parameterises by $\kappa$ with no
+$\nu$-dependent factor at all. A range quoted under one convention is a different distance under
+another. The values in this twin ($L = 12$ km for the water-table anomaly, $L = 8$ km for soil
+moisture) are stated in the $\sqrt{2\nu}$ convention and must be converted before comparison with
+published ranges.
+:::
+
+### Why $\nu$ is the parameter that matters, and the one hardest to pin down
+
+@stein1999interpolation shows that the behaviour of the correlation near the origin — governed by
+$\nu$ — controls the properties that matter for interpolation: the rate at which kriging variance
+decays as sampling density increases, and the asymptotic efficiency of prediction. Misspecifying
+$\nu$ degrades prediction in ways that misspecifying $\sigma^2$ or $L$ does not, because the latter
+two can compensate for one another while $\nu$ cannot be compensated at all.
+
+That importance is in tension with identifiability. Under fixed-domain (infill) asymptotics —
+observations accumulating within a bounded region, which is the regime of a fixed monitoring network —
+@zhang2004inconsistent proves that $\sigma^2$ and $L$ are **not** separately consistently estimable at
+any sampling density. What is consistently estimable, for known $\nu$, is the microergodic combination
+$\sigma^2/L^{2\nu}$. Two consequences follow directly and both apply here:
+
+1. Reporting $\sigma$ and $L$ as independently calibrated quantities overstates what the data
+   determine. Only their combination is identified, and that combination is indexed by $\nu$.
+2. Because $\nu$ appears in the exponent of the identified quantity, an assumed $\nu$ propagates into
+   every variance statement the twin makes, including the posterior variances in the uncertainty
+   budget.
+
+Estimating $\nu$ itself is possible but demanding. @minasny2005matern fit the full Matérn — including
+$\nu$ — to soil variograms by restricted maximum likelihood and by weighted nonlinear least squares,
+and report that REML recovers the local process correctly at substantial computational cost. Both
+@stein1999interpolation and @minasny2005matern note that **irregularly located** observations are
+required to constrain $\nu$ with acceptable uncertainty, because $\nu$ is determined by the shape of
+the correlation at short lags, which a regular grid samples sparsely. In practice $\nu$ is frequently
+fixed rather than estimated [@diggle2007modelbased]. The well network available to this twin is
+irregular, which is the favourable case; the estimation has not yet been performed.
+
+### The physical argument, and why the two states should not share a value
+
+**Water-table anomaly.** Hydraulic head is not an independent random field. Under steady flow it
+satisfies $\nabla\!\cdot\!(K\nabla h) = 0$, so head is a *filtered* functional of the log-conductivity
+field. Spectral perturbation analysis of this relation
+[@mizell1982spectral; @gelhar1993stochastic; @dagan1989flow; @rubin2003applied] shows the transfer
+from log-$K$ to head suppresses high wavenumbers: the head spectrum falls off faster than the log-$K$
+spectrum, and the head field is correspondingly smoother. Since log-conductivity is itself routinely
+modelled as exponential ($\nu = 1/2$), the filtering argument places head **above** $\nu = 1/2$. It
+does not place it at the $C^\infty$ limit: where the water table intersects topography at gaining
+streams and at lithologic contacts, the surface has genuine breaks in slope that an analytic field
+cannot represent. A once-differentiable field, $\nu = 3/2$, is consistent with both constraints.
+
+**Soil moisture.** The empirical literature points the other way. Field-scale studies summarised by
+@western2002scaling and @vereecken2014soilmoisture find soil-moisture fields organised by rainfall
+forcing, vegetation, microtopography and lateral redistribution, with wetting fronts and
+vegetation/soil-unit boundaries producing sharp transitions; exponential and near-exponential
+variograms are the common fitted forms, and correlation structure varies with wetness state.
+@minasny2005matern likewise recover low smoothness for several soil properties. The evidence
+therefore supports a **rougher** field for $\theta$ than for the water table, closer to
+$\nu \approx 1/2$.
+
+::: {.callout-warning}
+## The twin currently uses one $\nu$ for both states, and only one of them is argued for
+`GaussianPrior` defaults to $\nu = 3/2$ and both the groundwater and soil-moisture priors are
+constructed with that default. The filtering argument above supports $\nu = 3/2$ for the water-table
+anomaly. It does **not** support the same value for soil moisture, for which the cited field
+literature indicates lower smoothness. Using a single value is a convenience of implementation, not a
+result. Treat the soil-moisture $\nu$ as an open parameter, and note that the state-dependent
+correlation *times* already encoded in `TEMPORAL_TAU_DAYS` (5 days for soil moisture, 120 days for
+groundwater) are the temporal analogue of exactly this distinction — the spatial axis has not yet been
+given the same treatment.
+:::
+
+### Sensitivity: how much does the choice change
+
+Comparing $\nu = 3/2$ against $\nu = 1$ at fixed $\sigma$ and $L$, the maximum absolute difference in
+correlation is $0.054$, attained near $r \approx 0.57L$. The distance at which correlation falls to
+$0.5$ contracts by $8.2\%$; at $0.2$ it contracts by $1.7\%$; at $0.05$ it expands by $3.1\%$. These
+differences are scale-invariant — identical at $L = 12$, $8$ and $2$ km. The choice between adjacent
+smoothness values is therefore a second-order effect on the correlation itself, and matters mainly
+through the identifiability route above, where $\nu$ enters as an exponent, and through the
+differentiability of the resulting analysis field.
+
+### Constraint imposed by the numerical representation
+
+The smoothness that can be represented is not independent of how the prior is carried.
+@lindgren2011explicit show that a Matérn field is the stationary solution of
+
+$$\tau\,(\kappa^2 - \Delta)^{\alpha/2} x(u) = \mathcal{W}(u), \qquad \nu = \alpha - d/2,$$
+
+and that the corresponding Gaussian Markov random field has a **sparse** precision matrix. In two
+dimensions $\nu = \alpha - 1$, and a local (sparse) precision exists only for integer $\alpha$ — hence
+only for $\nu \in \{1, 2, \dots\}$. **There is no sparse GMRF precision at $\nu = 3/2$.** Adopting a
+GMRF/SPDE representation for scalability therefore forces a change of statistical model, whereas a
+representation that applies the covariance directly carries any $\nu$ unchanged. The methodological
+position taken here is that the statistical model is chosen on physical and statistical grounds and
+the numerical representation is then made to serve it, not the reverse.
+
+### Status
+
+- $\nu = 3/2$ for the water-table anomaly: **argued** from the log-$K$-to-head filtering result, and
+  bounded away from the $C^\infty$ limit by stream and contact discontinuities. Not yet estimated.
+- $\nu = 3/2$ for soil moisture: **inherited from the default, and not supported** by the cited field
+  literature, which indicates a rougher field.
+- $\sigma$ and $L$: only the combination $\sigma^2/L^{2\nu}$ is identifiable from an infill network
+  [@zhang2004inconsistent]; the separate values in use are prior specifications, not measurements.
+- Outstanding: REML estimation of $(\sigma, L, \nu)$ per state from the irregular well and SNOTEL
+  records, following @minasny2005matern, reported as a profile likelihood in $\nu$ so that the
+  identifiability limits are visible rather than hidden inside a point estimate.
+
 ## Worked inversion: a checkerboard resolution test, network by network
 
 The estimator is not only a variance calculation — run forward and back through `blue_update`, it
