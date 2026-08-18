@@ -1,4 +1,4 @@
-"""The observing system on BOTH axes: spatial support x temporal revisit, per state.
+"""The observing system on BOTH axes: spatial support VS temporal revisit, per state.
 
 Run: ``pixi run spacetime-figure``
 
@@ -6,6 +6,12 @@ The spatial resolution maps show WHERE each stream constrains the state. This sh
 a state that changes fast is observed well only by a stream that samples fast. Soil moisture decorrelates
 in days, so a weekly satellite ALIASES it however fine its pixels; the water table integrates months, so
 a coarse revisit is fine for it. The same sensor is therefore worth different amounts for the two states.
+
+Panel 2 plots the temporal factor ALONE for each stream, against an idealised unit coverage: a PER-STREAM
+diagnostic on the time axis, not a network observability. For one stream at its own lag the factor is
+exact -- the posterior is rho^2 * R_space at every cell under the separable space-time prior -- but it
+does not carry over to a network: COMBINING streams at DIFFERENT lags admits no scalar space-time
+factorisation at all (issue #166).
 """
 from __future__ import annotations
 
@@ -80,16 +86,20 @@ def main():
              ncol=4, framealpha=.96)
     a.grid(alpha=.25, which="both")
 
-    # --- panel 2: effective observability for SOIL MOISTURE (fast state) --------------------------
+    # --- panel 2: per-stream temporal factor for SOIL MOISTURE (fast state) ----------------------
+    # One bar per stream, each at ITS OWN revisit: exact for that stream alone (rho^2 * R_space); the
+    # bars are NOT combinable into a network number (mixed lags -> no factorisation, issue #166).
+    # NB the `label=` strings below never render: this panel deliberately has no `b.legend()` call --
+    # the bars are annotated in place and the caption carries the reading. Do not add one blindly.
     b = ax[1]
     sm = [s for s in STREAMS if "soil_moisture" in s.states]
     tau = TEMPORAL_TAU_DAYS["soil_moisture"]
     names = [s.name for s in sm]
     temporal = np.array([float(temporal_resolution(s.revisit_days, tau)) for s in sm])
     y = np.arange(len(sm))
-    b.barh(y, np.ones_like(temporal), color="#dddddd", label="spatial coverage (idealised)")
+    b.barh(y, np.ones_like(temporal), color="#dddddd", label="idealised unit coverage (reference)")
     b.barh(y, temporal, color=[KIND_C[s.kind] for s in sm],
-           label="× temporal resolution (fast state)")
+           label="temporal resolution retained (fast state)")
     for i, s in enumerate(sm):
         b.text(temporal[i] + .02, i, "%.2f" % temporal[i], va="center", fontsize=13)
     b.set_yticks(y); b.set_yticklabels(names, fontsize=13); b.invert_yaxis()
