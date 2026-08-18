@@ -165,5 +165,73 @@ class TestParsePlaceholderSubagentMerge(unittest.TestCase):
         self.assertNotIn("toolu_late", agents["root"]["spawned"])
 
 
+class TestSecretRedaction(unittest.TestCase):
+    """dashboard.html is published to GitHub Pages via gaia_run_queue.sh, so a
+    secret embedded anywhere in a transcript -- not just a Bash command --
+    must never survive into it (or transcript.md) verbatim."""
+
+    # Shaped to match each pattern in gaia_trace.redact() (right prefix, right
+    # length) but filled with an obviously-fake "FAKE" repeat rather than
+    # plausible-looking characters -- a realistic-looking synthetic value
+    # here previously tripped GitHub's own push-protection secret scanner.
+    SECRETS = [
+        "sk-ant-" + "FAKE" * 4,
+        "ghp_" + "FAKE" * 6,
+        "AKIA" + "FAKE" * 4,
+        "xoxb-" + "FAKE" * 4,
+        "AIza" + "FAKE" * 8 + "FAK",
+    ]
+
+    def setUp(self):
+        s = self.SECRETS
+        events = [
+            {"_ord": 0, "type": "system", "subtype": "init",
+             "session_id": "s", "model": "m"},
+            {"_ord": 1, "type": "assistant", "parent_tool_use_id": None,
+             "message": {"content": [
+                {"type": "thinking", "thinking": f"the key I found is {s[0]}"},
+                {"type": "text", "text": f"I noticed a token {s[1]} while reading"},
+                {"type": "tool_use", "id": "t1", "name": "Write",
+                 "input": {"file_path": "config.py",
+                           "content": f'API_KEY = "{s[0]}"'}},
+             ]}},
+            {"_ord": 2, "type": "assistant", "parent_tool_use_id": None,
+             "message": {"content": [
+                {"type": "tool_use", "id": "t2", "name": "Edit",
+                 "input": {"file_path": "x.py", "old_string": "k=1",
+                           "new_string": f'TOKEN="{s[1]}"'}},
+             ]}},
+            {"_ord": 3, "type": "assistant", "parent_tool_use_id": None,
+             "message": {"content": [
+                {"type": "tool_use", "id": "t3", "name": "Bash",
+                 "input": {"command": "echo done"}},
+             ]}},
+            {"_ord": 4, "type": "user", "parent_tool_use_id": None,
+             "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "t3", "is_error": False,
+                 "content": f"output contained {s[2]} and {s[3]}"}]}},
+            {"_ord": 5, "type": "result", "num_turns": 3, "total_cost_usd": 0.01,
+             "duration_ms": 1000, "is_error": False,
+             "result": f"Done. Left the credential {s[4]} in place as requested."},
+        ]
+        session, agents = gaia_trace.parse(events)
+        self.dash = gaia_trace.dashboard(session, agents, "adversarial-test.jsonl")
+        self.md = gaia_trace.markdown(session, agents)
+
+    def test_no_secret_survives_into_dashboard_html(self):
+        for secret in self.SECRETS:
+            self.assertNotIn(secret, self.dash)
+
+    def test_no_secret_survives_into_transcript_md(self):
+        for secret in self.SECRETS:
+            self.assertNotIn(secret, self.md)
+
+    def test_redaction_actually_ran_rather_than_dropping_content(self):
+        # A passing "not in" test could also mean the content vanished
+        # entirely -- confirm [REDACTED] markers actually appear in its place.
+        self.assertIn("[REDACTED]", self.dash)
+        self.assertIn("[REDACTED]", self.md)
+
+
 if __name__ == "__main__":
     unittest.main()
