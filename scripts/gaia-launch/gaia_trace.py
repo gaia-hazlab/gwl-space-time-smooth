@@ -337,40 +337,48 @@ def markdown(session, agents):
         out.append("")
         for s in a["steps"]:
             if s["kind"] == "thinking":
-                out.append(f"{pad}*[reasoning]* {s['text'][:1500]}")
+                out.append(f"{pad}*[reasoning]* {redact(s['text'][:1500])}")
             elif s["kind"] == "text":
-                out.append(f"{pad}{s['text'][:2000]}")
+                out.append(f"{pad}{redact(s['text'][:2000])}")
             else:
-                arg = json.dumps(redacted_input(s["tool"], s["input"]),
+                arg = json.dumps(redact_value(s["input"]),
                                   ensure_ascii=False)[:200]
                 flag = " **ERROR**" if s["is_error"] else ""
                 out.append(f"{pad}- `{s['tool']}`{flag} `{arg}`")
                 if s["result"]:
-                    out.append(f"{pad}  ↳ {s['result'][:400]}")
+                    out.append(f"{pad}  ↳ {redact(s['result'][:400])}")
             out.append("")
         for child in a["spawned"]:
             emit(child, indent + 1)
 
     emit("root")
     if session["result"]:
-        out += ["## Final result", "", session["result"]]
+        out += ["## Final result", "", redact(session["result"])]
     return "\n".join(out)
 
 
 PALETTE = ["#5FB0C4", "#D9A441", "#B27CC4", "#7FB069", "#D97A7A", "#8892C7"]
 
-# Best-effort scrub of common secret shapes from a Bash command before it's
-# embedded in output that may end up published (dashboard.html goes to GitHub
-# Pages via gaia_run_queue.sh). Not a guarantee -- the real fix is never
-# putting secrets on a command line -- but it catches the common accidental
-# token-in-a-curl/git-remote case.
+# Best-effort scrub of common secret shapes from anything embedded in output
+# that may end up published (dashboard.html goes to GitHub Pages via
+# gaia_run_queue.sh). Not a guarantee -- the real fix is never putting a
+# secret in a command, a file an agent writes, or its own reasoning/response
+# -- but it catches the common accidental-token cases: a curl/git-remote
+# command, an agent hardcoding a key while editing a config file, or an agent
+# echoing a value back in its own text. Applied to EVERY string in a tool's
+# input (not just Bash's "command") and to agent text, since a key can show
+# up in a Write's content, an Edit's old/new string, or reasoning, not only
+# a shell command.
+_KEY_LABEL = r'(?i)\b(api[_-]?key|access[_-]?token|secret|password|passwd|auth(?:orization)?)'
 _SECRET_PATTERNS = [
-    re.compile(r'(?i)(authorization["\']?\s*[:=]\s*["\']?)(bearer\s+)?\S+'),
-    re.compile(r'(?i)\b(api[_-]?key|access[_-]?token|secret|password|passwd)'
-               r'(["\']?\s*[:=]\s*["\']?)\S+'),
-    re.compile(r'sk-[A-Za-z0-9_-]{10,}'),
-    re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}'),
-    re.compile(r'AKIA[0-9A-Z]{16}'),
+    re.compile(_KEY_LABEL + r'(["\']?\s*[:=]\s*["\']?)(bearer\s+)?\S+'),
+    re.compile(r'(?i)\bbearer\s+\S+'),
+    re.compile(r'sk-[A-Za-z0-9_-]{10,}'),           # Anthropic/OpenAI-style
+    re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}'),      # GitHub tokens
+    re.compile(r'AKIA[0-9A-Z]{16}'),                # AWS access key id
+    re.compile(r'xox[baprs]-[A-Za-z0-9-]{10,}'),    # Slack tokens
+    re.compile(r'AIza[0-9A-Za-z_-]{35}'),           # Google API key
+    re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----'),
     re.compile(r'(https?://)[^:/\s]+:[^@/\s]+@'),  # userinfo embedded in a URL
 ]
 
@@ -379,23 +387,26 @@ def redact(text):
     if not isinstance(text, str):
         return text
     out = text
-    out = _SECRET_PATTERNS[0].sub(r'\1[REDACTED]', out)
-    out = _SECRET_PATTERNS[1].sub(r'\1\2[REDACTED]', out)
-    for pat in _SECRET_PATTERNS[2:5]:
+    out = _SECRET_PATTERNS[0].sub(r'\1\2[REDACTED]', out)
+    for pat in _SECRET_PATTERNS[1:6]:
         out = pat.sub('[REDACTED]', out)
-    out = _SECRET_PATTERNS[5].sub(r'\1[REDACTED]@', out)
+    out = _SECRET_PATTERNS[6].sub('[REDACTED]', out)
+    out = _SECRET_PATTERNS[7].sub('[REDACTED]', out)
+    out = _SECRET_PATTERNS[8].sub(r'\1[REDACTED]@', out)
     return out
 
 
-def redacted_input(tool, inp):
-    """A copy of a tool_use's input with its Bash command scrubbed, for any
-    output that may be published. Other tools' inputs (file paths, patterns)
-    are a much smaller vector for literal secrets and are passed through."""
-    if tool != "Bash" or not isinstance(inp, dict) or "command" not in inp:
-        return inp
-    out = dict(inp)
-    out["command"] = redact(str(out["command"]))
-    return out
+def redact_value(value):
+    """Recursively scrub every string in a JSON-like value (a tool_use's
+    input, whatever its shape) -- a secret can land in any field of any
+    tool, not just Bash's "command"."""
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, dict):
+        return {k: redact_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_value(v) for v in value]
+    return value
 
 
 def dashboard(session, agents, source_name):
@@ -419,7 +430,7 @@ def dashboard(session, agents, source_name):
                 continue
             cls = "tick err" if s["is_error"] else (
                 "tick spawn" if s["spawns"] else "tick")
-            arg = json.dumps(redacted_input(s["tool"], s["input"]),
+            arg = json.dumps(redact_value(s["input"]),
                               ensure_ascii=False)[:180]
             ticks.append(
                 f'<span class="{cls}" style="left:{pct(s["ord"]):.3f}%" '
@@ -440,7 +451,7 @@ def dashboard(session, agents, source_name):
         log = []
         for s in a["steps"]:
             if s["kind"] == "tool_use":
-                arg = json.dumps(redacted_input(s["tool"], s["input"]),
+                arg = json.dumps(redact_value(s["input"]),
                                   ensure_ascii=False)[:220]
                 log.append(f'<div class="ln t{" err" if s["is_error"] else ""}">'
                            f'<code>{html.escape(s["tool"])}</code>'
@@ -448,7 +459,7 @@ def dashboard(session, agents, source_name):
             else:
                 tag = "reasoning" if s["kind"] == "thinking" else "says"
                 log.append(f'<div class="ln {s["kind"]}"><em>{tag}</em>'
-                           f'<span>{html.escape(s["text"][:600])}</span></div>')
+                           f'<span>{html.escape(redact(s["text"])[:600])}</span></div>')
         cards.append(
             f'<details class="agent" style="--c:{color}"{" open" if aid == "root" else ""}>'
             f'<summary><span class="dot"></span>'
@@ -477,7 +488,7 @@ def dashboard(session, agents, source_name):
     ])
 
     final = (f'<section class="final"><h2>Final result</h2><pre>'
-             f'{html.escape(session["result"])}</pre></section>'
+             f'{html.escape(redact(session["result"]))}</pre></section>'
              if session.get("result") else "")
 
     return TEMPLATE.format(
