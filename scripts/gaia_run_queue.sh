@@ -21,8 +21,10 @@
 # Before a PR is offered for review, its branch is tested for real merge
 # conflicts against every other open gaia PR. On a hit, an INDEPENDENT
 # gaia-auditor is given both diffs and both issue statements and asked for an
-# objective verdict; the loser is put back into draft with the verdict posted
-# on both PRs, and never auto-merges. See docs/postmortem/2026-08-18-gaia-run.md.
+# objective verdict, which is posted on BOTH PRs. The blocked side is labelled
+# needs-human-decision and never auto-merges, but stays READY FOR REVIEW -- a
+# draft PR gets no code review, and the human adjudicating a design collision
+# needs a review of both sides. See docs/postmortem/2026-08-18-gaia-run.md.
 #
 # CONVERGENCE. Copilot's code review NEVER submits an "Approve" state -- only
 # ever COMMENTED -- so Copilot alone cannot gate a merge. Its comments stopping
@@ -311,6 +313,16 @@ wait_for_copilot_review() {
   return 1
 }
 
+# `gh pr edit --add-label` goes through GraphQL and needs the read:org scope,
+# which a plain repo+workflow token does not have -- it fails with a scope error
+# that has nothing to do with labels. The REST issues/labels endpoint needs only
+# `repo`, so use that and keep the automation working on a least-privilege token.
+add_label() {
+  local number="$1" label="$2" logfile="$3"
+  gh api "repos/${REPO_SLUG}/issues/${number}/labels" -f "labels[]=${label}" >> "$logfile" 2>&1 \
+    || echo "  could not label #${number} with ${label}; add it by hand" | tee -a "$logfile"
+}
+
 # Returns 0 if this PR may proceed to review/merge, 1 if arbitration ruled
 # against it (or could not decide). Either way BOTH PRs get the verdict posted,
 # so the losing side is never silently dropped.
@@ -361,13 +373,13 @@ This verdict is advisory and was produced by an autonomous agent. **A human deci
       --description "Automated arbitration found a competing PR; a human must choose" >/dev/null 2>&1 || true
     case "$v" in
       A) echo "  arbitrator favours THIS PR (#${pr_number}); #${rival_num} needs rework by a human" | tee -a "$logfile"
-         gh pr edit "$rival_num" --add-label needs-human-decision >> "$logfile" 2>&1 || true ;;
+         add_label "$rival_num" needs-human-decision "$logfile" ;;
       B) echo "  arbitrator favours the rival (#${rival_num}); #${pr_number} blocked pending your decision" | tee -a "$logfile"
-         gh pr edit "$pr_number" --add-label needs-human-decision >> "$logfile" 2>&1 || true
+         add_label "$pr_number" needs-human-decision "$logfile"
          proceed=1 ;;
       *) echo "  arbitrator returned '${v}' -- both PRs left open for a human; not merging" | tee -a "$logfile"
-         gh pr edit "$pr_number" --add-label needs-human-decision >> "$logfile" 2>&1 || true
-         gh pr edit "$rival_num" --add-label needs-human-decision >> "$logfile" 2>&1 || true
+         add_label "$pr_number" needs-human-decision "$logfile"
+         add_label "$rival_num" needs-human-decision "$logfile"
          proceed=1 ;;
     esac
   done <<< "$conflicts"
