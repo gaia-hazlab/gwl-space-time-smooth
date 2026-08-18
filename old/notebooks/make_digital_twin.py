@@ -467,9 +467,11 @@ def make_attribution_figure(grid, static, fields, means, frame, path, L=25_000.0
     """Attribution of each state to its features (RF importance) and to its sensors (assimilation).
 
     Top row: random-forest permutation importance of every feature -- static covariates (HAND, TWI,
-    slope, clay, sand) plus the dv/v observation -- for the field itself. This is the honest, field-
-    level answer: Vs30 is terrain-driven, not "99% seismic". Bottom row: the precision-weighted
-    share of each sensor in the near-station assimilation UPDATE (what the earlier view showed).
+    slope, clay, sand) plus the dv/v observation -- for the field itself rather than for the near-
+    station update alone; where a state is built as a function of its covariates, that share is
+    self-recovery of the construction (see src/models/attribution.py). Bottom row: the precision-
+    weighted share of each sensor in the near-station assimilation UPDATE (what the earlier view
+    showed).
     """
     from matplotlib.patches import Patch
 

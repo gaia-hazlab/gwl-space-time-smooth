@@ -2,13 +2,17 @@
 
 The precision-weighted assimilation attributes only the near-station *update* to its sensors, so a
 state whose sole assimilated observation is dv/v reads as ~100% dv/v even though its field is really
-set by covariates (e.g. Vs30 is terrain-driven; dv/v only anchors variation near seismic stations).
+set by covariates (e.g. Vs30 is terrain-driven, by construction in this MVP; dv/v only anchors
+variation near seismic stations).
 
 This module answers the field-level question with a random forest across ALL features -- the static
-covariates (HAND, TWI, slope, clay, sand, the state's own baseline) plus the dv/v observation -- and
-reports permutation importance. It shows covariates dominating where they should (Vs30) while giving
-dv/v credit only where it adds information beyond the covariates. As real covariate/dv/v relations
-are learned, the same call generalizes the dv/v signal beyond station neighborhoods.
+covariates (HAND, TWI, slope, clay, sand) plus the dv/v observation -- and reports permutation
+importance. It quantifies how much of each field the covariates explain and how much dv/v explains
+beyond them. The state's own baseline is NOT among the features, so nothing controls for self-
+recovery: where a state is *defined* as a function of its covariates, that dominance is recovery of
+the construction, not independent evidence, and the shares must be read against how the state field
+was built. As real covariate/dv/v relations are learned, the same call generalizes the dv/v signal
+beyond station neighborhoods.
 """
 
 from __future__ import annotations
