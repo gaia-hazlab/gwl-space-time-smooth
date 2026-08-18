@@ -84,7 +84,8 @@ gaia_request_stop() {
   GAIA_STOP=1
   echo "" >&2
   echo "  !!! stop requested -- finishing the current issue, then halting the queue." >&2
-  echo "      (send a second TERM to kill immediately; in-flight work is committed+pushed, never deleted)" >&2
+  echo "      (a second TERM kills immediately -- work already COMMITTED is safe on the branch," >&2
+  echo "       but anything uncommitted at that instant is left in the working tree, not pushed)" >&2
   trap - TERM INT
 }
 trap gaia_request_stop TERM INT
@@ -110,8 +111,17 @@ preflight() {
   if ! gh pr view --help 2>&1 | grep -qE '^\s+--json'; then
     echo "  !!! preflight: 'gh pr view' has no --json -- cannot resolve PR numbers" >&2; fatal=1
   fi
-  for tool in jq python3 git; do
+  # Every binary a batch cannot complete without. `claude` and `pixi` were the
+  # notable omissions: without them a batch gets as far as branching and
+  # committing before dying, which is exactly the expensive-late-failure this
+  # function exists to prevent.
+  for tool in jq python3 git gh claude pixi; do
     command -v "$tool" >/dev/null || { echo "  !!! preflight: '$tool' not on PATH" >&2; fatal=1; }
+  done
+  # The helper scripts the loop shells out to, per batch.
+  for helper in scripts/gaia_group_issues.py scripts/gaia-launch/gaia_ticker.py \
+                scripts/gaia-launch/gaia_trace.py; do
+    [ -f "$REPO_DIR/$helper" ] || { echo "  !!! preflight: missing $helper" >&2; fatal=1; }
   done
   if [ "$fatal" -ne 0 ]; then
     echo "  !!! preflight failed -- refusing to start. Nothing has been changed." >&2
@@ -164,7 +174,9 @@ park_branch() {
     echo "  parking branch ${branch} (${reason}):"
     git diff --stat 2>&1
     # Preserve any uncommitted work as a real commit rather than discarding it.
-    # `git add -A` picks up untracked files too; .gaia-runs is gitignored except
+    # `git add -A` picks up untracked files too. .gaia-runs/ (logs, transcripts)
+    # is gitignored in full; the published dashboards live under docs/gaia-runs/
+    # and are NOT ignored, so they are picked up here as intended. Formerly
     # the rendered dashboards, so the run logs are unaffected either way.
     if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
       git add -A 2>&1 || true
@@ -212,7 +224,10 @@ changed_files_for_ref() {
 
 # Other open gaia PRs whose branches would genuinely CONFLICT with this one --
 # not merely touch a shared file. Overlap is the cheap prefilter; merge-tree is
-# the real test, and it writes nothing.
+# the real test. Note --write-tree DOES write a tree object to the object
+# database (it is how merge-tree reports the merged result); what it does not
+# do is move any ref, touch the index, or alter the working tree. The stray
+# trees are unreachable and get collected by a normal gc.
 find_conflicting_prs() {
   local branch="$1" logfile="$2" mine rivals rival_branch rival_num base overlap
   mine="$(changed_files_for_ref "$branch")" || return 0

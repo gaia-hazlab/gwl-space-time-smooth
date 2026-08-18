@@ -244,8 +244,11 @@ kill "$(cat .gaia-runs/gaia_run_queue.pid)"
 ```
 
 That requests a graceful stop: the current issue finishes, its work is committed and
-pushed, and the queue halts before the next batch. A second `TERM` kills immediately —
-in-flight work is still committed and pushed, never discarded.
+pushed, and the queue halts before the next batch.
+
+A second `TERM` kills **immediately**. Work already committed is safe on the branch, but
+anything uncommitted at that instant stays in the working tree and is not pushed — so
+prefer the single, graceful stop unless you need the process gone now.
 
 Confirm it is actually gone (the loop, not just a child):
 
