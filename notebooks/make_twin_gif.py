@@ -14,8 +14,35 @@ each frame by a BLUE assimilation (`src/models/observability.blue_update`):
 
 The wells and SNOTEL are real, independent measurements. The dv/v is synthetic and derived from the
 model state, so its update is a self-consistency check that adds no independent information; that is
-stated on the figure. To keep the covariance tractable the update runs on a coarse grid (wells averaged
-to one datum per cell) and its smooth correction is interpolated back to the 90 m display.
+stated on the figure.
+
+## This is a COARSE solve, upsampled -- and the prior is no longer the reason (issue #154)
+
+The BLUE update runs on a STEP*AFAC = 40-cell (3.6 km) assimilation grid (wells averaged to one datum
+per cell) and its smooth correction is interpolated back to the 90 m display by `upsample()`. That was
+originally forced by the dense `(n, n)` prior covariance, which is ~70 TB at the full 2.96 M-cell
+domain. **That constraint is gone**: `GaussianPrior.operator()` now gives an exact, matrix-free FFT
+prior that applies `C @ G.T` at 2.96 M cells in seconds (`src/models/observability`).
+
+The pipeline is deliberately NOT rewired here, for a reason that outlives the prior:
+
+- the **forward** model is decimated at STEP=8 too (`sub = tmpl.isel(y=..., x=...)` -- PRISM forcing,
+  soil/water-table states and the terrain fields are all reprojected onto the 8-cell display grid), so
+  a 90 m assimilation would be assimilating into a 720 m forward state. True 90 m assimilation needs
+  the forward model at 90 m, which is a separate and much larger cost than the prior ever was;
+- the parquet inputs this script needs (NWIS, SNOTEL, the UW-CC seismic inventory) are not part of a
+  clean checkout, so a rewired pipeline could not be run or validated when the operator landed.
+  Shipping an unrunnable rewrite would be worse than an honest comment.
+
+**What the coarse solve therefore costs, stated plainly:** the animation carries a real
+discretisation-plus-footprint-aliasing error relative to a 90 m solve. [PLACEHOLDER: the magnitude is
+being measured independently -- do not quote a number here until that measurement lands.]
+Qualitatively, most of it is expected to be **footprint aliasing** rather than discretisation of the
+field: `point_footprint` uses `width_km = 0.5`, so on a 3.6 km assimilation cell a well's Gaussian blob
+collapses to very nearly one-hot and the datum is silently treated as an average over 3.6 km of
+support instead of over ~0.5 km. The prior correlation lengths (12 km for GWL, 8 km for soil moisture)
+are several assimilation cells wide, so the *field* is comparatively well sampled at 3.6 km; the
+*observation operator* is not.
 """
 from __future__ import annotations
 
@@ -39,7 +66,11 @@ PROC = Path("data/processed")
 ASSETS = Path("docs/twin/assets")
 OUT = Path("figures/demo/twin_wetseason.gif")
 STEP = 8            # display grid subsample (the GIF is a communication artefact, not an analysis)
-AFAC = 5           # coarse assimilation grid = STEP*AFAC (dense BLUE covariance must stay tractable)
+# Coarse assimilation grid = STEP*AFAC = 40 cells = 3.6 km. This is NO LONGER a prior-covariance limit
+# (issue #154 gave GaussianPrior.operator(), an exact matrix-free FFT prior with no n^2 cost): it is
+# now only that the FORWARD model above is itself decimated at STEP, and that a 0.5 km sensor footprint
+# aliases badly onto a 3.6 km cell. See the module docstring.
+AFAC = 5
 CADENCE = 7        # days between frames
 
 # petrophysical band sensitivities (dv/v per unit state) and prior/noise scales
