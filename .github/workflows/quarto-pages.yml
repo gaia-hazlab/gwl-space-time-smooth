@@ -62,6 +62,14 @@ jobs:
           for f in gwl_soil_moisture_demo gwl_audit_framework; do
             if [ -f "docs/$f.html" ]; then cp "docs/$f.html" "_site/$f.html"; fi
           done
+          # Per-issue dashboards committed by scripts/gaia_run_queue.sh (docs/gaia-runs/issue-<n>/
+          # <timestamp>/dashboard.html), each already self-contained -- served as committed, plus a
+          # generated index linking every one, at /gaia-runs/.
+          if [ -d docs/gaia-runs ]; then
+            mkdir -p _site/gaia-runs
+            cp -r docs/gaia-runs/. _site/gaia-runs/
+            python3 scripts/gaia-launch/gaia_runs_site_index.py docs/gaia-runs _site/gaia-runs/index.html
+          fi
 
       # Publish the multi-doc site at /twin/ ONLY when its render succeeded — Quarto can leave a
       # partial _site/ behind on failure, so a bare directory check would deploy a broken /twin/.

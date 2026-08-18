@@ -81,3 +81,7 @@ docs/twin-pdf/_pdf/
 docs/twin-pdf/.quarto/
 docs/twin-pdf/*.quarto_ipynb
 docs/twin-pdf/_freeze/
+
+# gaia_run_queue.sh scratch: batch logs and raw stream-json per issue, never committed
+# (only the rendered docs/gaia-runs/**/dashboard.html is)
+.gaia-runs/

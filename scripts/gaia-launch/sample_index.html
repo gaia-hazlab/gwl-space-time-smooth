@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent run corpus</title>
+<style>
+ :root { --ink:#0C141C; --panel:#131F2A; --fg:#DCE6EE; --dim:#7E93A5;
+   --hair:#1B2A36; --pass:#7FB069; --fail:#E4574C; --none:#7E93A5; }
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--ink);color:var(--fg);
+   font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+ .wrap{max-width:1280px;margin:0 auto;padding:40px 24px 80px}
+ h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:32px;
+   font-weight:600;letter-spacing:-.015em;margin:0 0 4px}
+ .sub{color:var(--dim);font-family:ui-monospace,Menlo,monospace;
+   font-size:12.5px;margin-bottom:26px}
+ .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+   gap:1px;background:var(--hair);border:1px solid var(--hair);margin-bottom:30px}
+ .stat{background:var(--panel);padding:13px 15px}
+ .stat .k{display:block;color:var(--dim);font-size:11px;
+   text-transform:uppercase;letter-spacing:.09em}
+ .stat .v{display:block;font-family:ui-monospace,Menlo,monospace;
+   font-size:18px;margin-top:3px}
+ input{width:100%;padding:9px 12px;margin-bottom:14px;background:var(--panel);
+   border:1px solid var(--hair);color:var(--fg);font-size:13px;
+   font-family:ui-monospace,Menlo,monospace}
+ input:focus{outline:2px solid #5FB0C4;outline-offset:-2px}
+ table{width:100%;border-collapse:collapse;font-size:13px}
+ th{text-align:left;color:var(--dim);font-size:11px;text-transform:uppercase;
+   letter-spacing:.08em;font-weight:500;padding:8px 10px;
+   border-bottom:1px solid var(--hair);cursor:pointer;user-select:none}
+ th:hover{color:var(--fg)}
+ td{padding:9px 10px;border-bottom:1px solid var(--hair);
+   font-family:ui-monospace,Menlo,monospace;font-size:12px}
+ tr:hover td{background:var(--panel)}
+ a{color:#5FB0C4;text-decoration:none} a:hover{text-decoration:underline}
+ .pill{display:inline-block;padding:1px 8px;font-size:11px;
+   border:1px solid currentColor}
+ .pass{color:var(--pass)} .fail{color:var(--fail)}
+ .unverified,.unknown{color:var(--none)}
+ .num{text-align:right} .dim{color:var(--dim)}
+</style>
+<div class="wrap">
+ <h1>Agent run corpus</h1>
+ <div class="sub">/tmp/gaia-runs · 12 runs</div>
+ <div class="stats"><div class="stat"><span class="k">runs</span><span class="v">12</span></div><div class="stat"><span class="k">pass rate</span><span class="v">75%</span></div><div class="stat"><span class="k">passed</span><span class="v">9</span></div><div class="stat"><span class="k">failed</span><span class="v">3</span></div><div class="stat"><span class="k">total cost</span><span class="v">$2.95</span></div><div class="stat"><span class="k">median turns</span><span class="v">12</span></div><div class="stat"><span class="k">repos</span><span class="v">2</span></div></div>
+ <input id="q" placeholder="filter by repo, issue, outcome, subagent…">
+ <table id="t"><thead><tr><th>run</th><th>repo</th><th>issue</th><th>outcome</th><th>turns</th><th>agents</th><th>tools</th><th>errors</th><th>diff</th><th>cost</th><th>subagents</th></tr></thead><tbody><tr><td data-v="20260811T095710Z"><a href="mdenolle_gwl-space-time-smooth/issue-57/20260811T095710Z/dashboard.html">20260811T095710Z</a></td><td>mdenolle/gwl-space-time-smooth</td><td>57</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="4">4</td><td class="num" data-v="3">3</td><td class="num" data-v="9">9</td><td class="num" data-v="1">1</td><td class="num" data-v="72">72</td><td class="num" data-v="0.1139">$0.1139</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260811T095710Z"><a href="mdenolle_seisfetch/issue-57/20260811T095710Z/dashboard.html">20260811T095710Z</a></td><td>mdenolle/seisfetch</td><td>57</td><td data-v="fail"><span class="pill fail">fail</span></td><td class="num" data-v="14">14</td><td class="num" data-v="3">3</td><td class="num" data-v="7">7</td><td class="num" data-v="0">0</td><td class="num" data-v="53">53</td><td class="num" data-v="0.4588">$0.4588</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260811T094310Z"><a href="mdenolle_gwl-space-time-smooth/issue-43/20260811T094310Z/dashboard.html">20260811T094310Z</a></td><td>mdenolle/gwl-space-time-smooth</td><td>43</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="12">12</td><td class="num" data-v="3">3</td><td class="num" data-v="7">7</td><td class="num" data-v="0">0</td><td class="num" data-v="22">22</td><td class="num" data-v="0.1994">$0.1994</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260811T094310Z"><a href="mdenolle_seisfetch/issue-43/20260811T094310Z/dashboard.html">20260811T094310Z</a></td><td>mdenolle/seisfetch</td><td>43</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="12">12</td><td class="num" data-v="3">3</td><td class="num" data-v="9">9</td><td class="num" data-v="1">1</td><td class="num" data-v="48">48</td><td class="num" data-v="0.1219">$0.1219</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260811T094210Z"><a href="mdenolle_gwl-space-time-smooth/issue-42/20260811T094210Z/dashboard.html">20260811T094210Z</a></td><td>mdenolle/gwl-space-time-smooth</td><td>42</td><td data-v="fail"><span class="pill fail">fail</span></td><td class="num" data-v="5">5</td><td class="num" data-v="3">3</td><td class="num" data-v="9">9</td><td class="num" data-v="1">1</td><td class="num" data-v="34">34</td><td class="num" data-v="0.1959">$0.1959</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260811T094210Z"><a href="mdenolle_seisfetch/issue-42/20260811T094210Z/dashboard.html">20260811T094210Z</a></td><td>mdenolle/seisfetch</td><td>42</td><td data-v="fail"><span class="pill fail">fail</span></td><td class="num" data-v="11">11</td><td class="num" data-v="3">3</td><td class="num" data-v="7">7</td><td class="num" data-v="0">0</td><td class="num" data-v="81">81</td><td class="num" data-v="0.2421">$0.2421</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260810T095700Z"><a href="mdenolle_gwl-space-time-smooth/issue-57/20260810T095700Z/dashboard.html">20260810T095700Z</a></td><td>mdenolle/gwl-space-time-smooth</td><td>57</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="14">14</td><td class="num" data-v="3">3</td><td class="num" data-v="9">9</td><td class="num" data-v="1">1</td><td class="num" data-v="51">51</td><td class="num" data-v="0.3825">$0.3825</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260810T095700Z"><a href="mdenolle_seisfetch/issue-57/20260810T095700Z/dashboard.html">20260810T095700Z</a></td><td>mdenolle/seisfetch</td><td>57</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="17">17</td><td class="num" data-v="3">3</td><td class="num" data-v="9">9</td><td class="num" data-v="1">1</td><td class="num" data-v="89">89</td><td class="num" data-v="0.3264">$0.3264</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260810T094300Z"><a href="mdenolle_gwl-space-time-smooth/issue-43/20260810T094300Z/dashboard.html">20260810T094300Z</a></td><td>mdenolle/gwl-space-time-smooth</td><td>43</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="13">13</td><td class="num" data-v="3">3</td><td class="num" data-v="9">9</td><td class="num" data-v="1">1</td><td class="num" data-v="77">77</td><td class="num" data-v="0.1119">$0.1119</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260810T094300Z"><a href="mdenolle_seisfetch/issue-43/20260810T094300Z/dashboard.html">20260810T094300Z</a></td><td>mdenolle/seisfetch</td><td>43</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="16">16</td><td class="num" data-v="3">3</td><td class="num" data-v="7">7</td><td class="num" data-v="0">0</td><td class="num" data-v="57">57</td><td class="num" data-v="0.3058">$0.3058</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260810T094200Z"><a href="mdenolle_gwl-space-time-smooth/issue-42/20260810T094200Z/dashboard.html">20260810T094200Z</a></td><td>mdenolle/gwl-space-time-smooth</td><td>42</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="14">14</td><td class="num" data-v="3">3</td><td class="num" data-v="7">7</td><td class="num" data-v="0">0</td><td class="num" data-v="50">50</td><td class="num" data-v="0.1615">$0.1615</td><td class="dim">code-diagnostician, test-runner</td></tr><tr><td data-v="20260810T094200Z"><a href="mdenolle_seisfetch/issue-42/20260810T094200Z/dashboard.html">20260810T094200Z</a></td><td>mdenolle/seisfetch</td><td>42</td><td data-v="pass"><span class="pill pass">pass</span></td><td class="num" data-v="11">11</td><td class="num" data-v="3">3</td><td class="num" data-v="9">9</td><td class="num" data-v="1">1</td><td class="num" data-v="27">27</td><td class="num" data-v="0.3314">$0.3314</td><td class="dim">code-diagnostician, test-runner</td></tr></tbody></table>
+</div>
+<script>
+const q=document.getElementById('q'),tb=document.querySelector('#t tbody');
+q.addEventListener('input',()=>{const v=q.value.toLowerCase();
+  [...tb.rows].forEach(r=>r.style.display=r.textContent.toLowerCase().includes(v)?'':'none');});
+document.querySelectorAll('#t th').forEach((th,i)=>th.addEventListener('click',()=>{
+  const rows=[...tb.rows],asc=th.dataset.asc!=='1';th.dataset.asc=asc?'1':'0';
+  rows.sort((a,b)=>{const x=a.cells[i].dataset.v??a.cells[i].textContent,
+    y=b.cells[i].dataset.v??b.cells[i].textContent,
+    nx=parseFloat(x),ny=parseFloat(y);
+    return (!isNaN(nx)&&!isNaN(ny))?(asc?nx-ny:ny-nx)
+      :(asc?String(x).localeCompare(y):String(y).localeCompare(x));});
+  rows.forEach(r=>tb.appendChild(r));}));
+</script>
