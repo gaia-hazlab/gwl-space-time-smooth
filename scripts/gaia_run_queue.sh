@@ -237,7 +237,17 @@ find_conflicting_prs() {
 # whichever batch happened to run second.
 arbitrate_pair() {
   local branch="$1" pr_number="$2" rival_branch="$3" rival_num="$4" files="$5" logfile="$6"
-  local out verdict
+  local out verdict dir
+  # The gaia-auditor is READ-ONLY BY DESIGN -- its tool grant is
+  # Read/Grep/Glob/WebSearch/WebFetch/Skill, with no Bash. Telling it to run
+  # `git diff` would simply fail. So the caller (which does have git)
+  # materialises everything it needs to judge, and hands it file paths to Read.
+  dir="$(mktemp -d)"
+  git diff "$(git merge-base main "$branch")...$branch" > "$dir/proposal-A.diff" 2>>"$logfile" || true
+  git fetch -q origin "$rival_branch" 2>>"$logfile" || true
+  git diff "$(git merge-base main FETCH_HEAD)...FETCH_HEAD" > "$dir/proposal-B.diff" 2>>"$logfile" || true
+  gh pr view "$pr_number" --json title,body,number > "$dir/proposal-A-pr.json" 2>>"$logfile" || true
+  gh pr view "$rival_num"  --json title,body,number > "$dir/proposal-B-pr.json" 2>>"$logfile" || true
   out="$(claude -p "Use the gaia-auditor agent as an impartial ARBITRATOR between two competing
 pull requests in ${REPO_DIR} (${REPO_SLUG}). They modify the same files and cannot both be merged
 as written. You are not an author of either. Judge them on the merits.
@@ -246,10 +256,13 @@ Proposal A: PR #${pr_number}, branch ${branch}
 Proposal B: PR #${rival_num}, branch ${rival_branch}
 Files in conflict: ${files}
 
-Read both diffs before judging -- do not guess:
-  git diff \$(git merge-base main ${branch})...${branch}
-  git fetch origin ${rival_branch} && git diff \$(git merge-base main FETCH_HEAD)...FETCH_HEAD
-Read the issues each PR closes (gh pr view <n>) so you judge them against what was actually asked.
+Everything you need has been materialised for you -- Read these files, do not guess and do not
+try to run git or gh (you have no shell):
+  ${dir}/proposal-A.diff      full diff of A against its merge-base with main
+  ${dir}/proposal-B.diff      full diff of B against its merge-base with main
+  ${dir}/proposal-A-pr.json   A's PR title and body (states the issue it closes)
+  ${dir}/proposal-B-pr.json   B's PR title and body
+You may also Read/Grep the current checkout for surrounding context.
 
 Assess: correctness; scientific and numerical soundness; scalability; test coverage; API and
 maintenance cost; and whether one subsumes the other. If they are solving genuinely different
@@ -264,6 +277,7 @@ Finish your reply with EXACTLY one fenced json block and nothing after it:
 \`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" || out=""
   # Take the LAST json block: the auditor's prose may quote earlier examples.
   verdict="$(printf '%s' "$out" | awk '/^```json/{f=1;buf="";next} /^```/{if(f){last=buf;f=0}next} f{buf=buf$0"\n"} END{printf "%s", last}')"
+  rm -rf "$dir"
   if [ -z "$verdict" ] || ! jq -e . >/dev/null 2>&1 <<<"$verdict"; then
     printf '%s' "$out" >> "$logfile"
     printf '{"verdict":"escalate","confidence":"low","rationale":"The arbitrator produced no parseable verdict; escalating to a human.","reconciliation":""}'
@@ -358,19 +372,25 @@ This verdict is advisory and was produced by an autonomous agent. **A human deci
 # says whether the PR is actually done. Returns 0 = converged, 1 = blocked.
 audit_pr_convergence() {
   local pr_number="$1" branch="$2" numbers_csv="$3" review_comments="$4" logfile="$5"
-  local out verdict conv blocking rationale
+  local out verdict conv blocking rationale dir
   [ "$GAIA_AUDIT_GATE" = "1" ] || return 0
   echo "  auditor convergence gate on PR #${pr_number}..." | tee -a "$logfile"
+  # Same constraint as arbitrate_pair: the auditor has no Bash, so the diff and
+  # the review comments are written out for it to Read rather than fetch.
+  dir="$(mktemp -d)"
+  git diff "$(git merge-base main "$branch")...$branch" > "$dir/final.diff" 2>>"$logfile" || true
+  printf '%s\n' "${review_comments:-(no inline review comments were left)}" > "$dir/review-comments.txt"
   out="$(claude -p "Use the gaia-auditor agent to decide whether PR #${pr_number} (branch ${branch},
 resolving ${numbers_csv}) in ${REPO_DIR} is genuinely ready to merge. You are an independent
 reviewer, not the author. Be objective and be willing to block.
 
-Read the actual final diff -- do not guess:
-  git diff \$(git merge-base main ${branch})...${branch}
+Everything you need has been materialised -- Read these, do not guess and do not try to run git
+or gh (you have no shell):
+  ${dir}/final.diff             the complete final diff against main
+  ${dir}/review-comments.txt    the code-review comments left on the PR
+You may also Read/Grep the current checkout for surrounding context.
 
-These are the code-review comments left on the PR. Some may already be addressed, some may have
-been ignored, and some may be wrong:
-${review_comments:-(no inline review comments were left)}
+Some review comments may already be addressed, some may have been ignored, and some may be wrong.
 
 Decide, on the evidence in the diff:
   1. Is each substantive review comment either ADDRESSED in the code or explicitly and correctly
@@ -388,6 +408,7 @@ Finish your reply with EXACTLY one fenced json block and nothing after it:
  \"rationale\": \"<=6 sentences citing the code\"}
 \`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" || out=""
   verdict="$(printf '%s' "$out" | awk '/^```json/{f=1;buf="";next} /^```/{if(f){last=buf;f=0}next} f{buf=buf$0"\n"} END{printf "%s", last}')"
+  rm -rf "$dir"
   if [ -z "$verdict" ] || ! jq -e . >/dev/null 2>&1 <<<"$verdict"; then
     printf '%s' "$out" >> "$logfile"
     echo "  auditor produced no parseable verdict; treating as BLOCKED (fail closed)" | tee -a "$logfile"
