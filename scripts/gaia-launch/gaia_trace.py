@@ -321,7 +321,7 @@ def mermaid(session, agents):
 def markdown(session, agents):
     out = ["# Agent run transcript", ""]
     out.append(f"- session: `{session['session_id']}`")
-    out.append(f"- model: `{session['model']}`  cwd: `{session['cwd']}`")
+    out.append(f"- model: `{session['model']}`  cwd: `{redact_paths(str(session['cwd']))}`")
     if session["cost_usd"] is not None:
         out.append(f"- cost: ${session['cost_usd']:.4f}  "
                    f"turns: {session['num_turns']}  "
@@ -383,6 +383,26 @@ _SECRET_PATTERNS = [
 ]
 
 
+# Home directories are not secrets, but dashboard.html IS published to GitHub
+# Pages, and every absolute path in a transcript discloses the operator's
+# username and the machine's directory layout to anyone reading the site. A
+# single run can embed hundreds of them. Rewrite absolute paths to repo-relative
+# ones so the published page says `src/models/observability.py` rather than
+# `/home/<someone>/gwl-space-time-smooth/src/models/observability.py`.
+_HOME_PATTERNS = [
+    re.compile(r'/(?:home|Users)/[^/\s"\'<>:;,)\]]+/([A-Za-z0-9._-]+)'),  # /home/<user>/<repo>
+    re.compile(r'/(?:home|Users)/[^/\s"\'<>:;,)\]]+'),                    # bare /home/<user>
+]
+
+
+def redact_paths(text):
+    """Strip operator home directories from anything published."""
+    if not isinstance(text, str):
+        return text
+    out = _HOME_PATTERNS[0].sub(r'~/\1', text)
+    return _HOME_PATTERNS[1].sub('~', out)
+
+
 def redact(text):
     if not isinstance(text, str):
         return text
@@ -393,7 +413,7 @@ def redact(text):
     out = _SECRET_PATTERNS[6].sub('[REDACTED]', out)
     out = _SECRET_PATTERNS[7].sub('[REDACTED]', out)
     out = _SECRET_PATTERNS[8].sub(r'\1[REDACTED]@', out)
-    return out
+    return redact_paths(out)
 
 
 def redact_value(value):
@@ -495,7 +515,7 @@ def dashboard(session, agents, source_name):
         source=html.escape(source_name),
         session=html.escape(str(session["session_id"])),
         model=html.escape(str(session["model"])),
-        cwd=html.escape(str(session["cwd"])),
+        cwd=html.escape(redact_paths(str(session["cwd"]))),
         stats=stats, rows="".join(rows), cards="".join(cards), final=final)
 
 
