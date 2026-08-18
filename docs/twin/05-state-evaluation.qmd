@@ -382,6 +382,62 @@ change: coda-wave stretching recovers the banded $\delta v/v$ at **r > 0.95**, a
 returns the imposed profile within its propagated covariance. This is a **synthetic demonstration** —
 it establishes that the estimator is unbiased, not that the field measurement is.
 
+## The digital-twin MVP metrics — what is skill and what is demonstration
+
+The MVP summary has previously reported these five numbers side by side, with no way for a reader to
+tell from a bare correlation coefficient whether it came from a held-out observation or from a signal
+the pipeline was asked to recover in the first place. Tagged with **basis**, in the order they appear
+in the MVP reporting:
+
+| metric | value | reference | basis |
+|---|---|---|---|
+| groundwater baseline, block-CV RMSE | 18.5 m RMSE, $R^2 = 0.09$ (across 5 shuffle-split draws; $R^2$ sd 0.10, one draw negative) | held-out wells, pooled fixed-block fallback cross-validation — the `--domain`-absent branch of `src/models/baseline_regression.py`, not the per-domain variogram-block run (`data/processed/block_cv_metrics.json`, `pooled.rmse_mean = 18.49`) | **REAL** — the only row on this table scored against real observations withheld from fitting |
+| soil moisture vs MERRA-2 | r = 0.85, bias −0.08, RMSE 0.095 | MERRA-2 root-zone reanalysis — the $r$ is the **domain-mean** correlation over $n=24$ monthly means (`domain_mean_r_rootzone = 0.8546`); the bias and RMSE are **per-cell**, pooled over the 4-cell domain (`root_zone`, whose own per-cell $r$ is 0.84). Two different aggregations, as `notebooks/validate_merra2.py` reports them | **MODEL cross-check** — another model's reanalysis; consistency, not validation (see above) |
+| dv/v band recovery | r > 0.95 | controlled synthetic with a known imposed velocity change | **SYNTHETIC** — the inverse operator recovering the forward operator's own imposed signal; it shows the estimator recovers the imposed pattern, not that the field measurement does (see above) |
+| assimilation posterior σ-reduction | 53% (WTD) / 91% (θ) | `data/processed/dvv_summary.json` (`assimilation.wtd_sigma_reduction = 0.529`, `assimilation.theta_sigma_reduction = 0.912`) | **SYNTHETIC** — a ratio of the model's own most-favourable σ cell against an *assumed prior* σ, not a truth comparison |
+| attribution shares (near-station fraction) | ~94% wells (GWL), ~95% dv/v (soil moisture) | model introspection, [assimilation chapter](04-assimilation.qmd) | **SYNTHETIC** — precision-weight share of the near-station assimilation update, a function of the assumed σ's and station geometry; not an evaluation metric |
+
+The MERRA-2 domain-mean monthly correlation is dominated by the shared seasonal cycle at $n=24$ months
+over 4 cells; that is a small, coarse sample, not a spatially resolved test. The posterior σ-reduction
+is not a skill metric at all: it has no truth comparison and no residual. It is $1 - \min\sigma /
+\sigma_\text{prior}$ — the single most favourable cell in the model's own σ field — measured against a
+hardcoded assumed prior σ (σ_prior = 0.5 m for WTD, 0.05 m³ m⁻³ for θ, hardcoded at
+`old/notebooks/make_dvv_figures.py:180-182, 204-205`).
+The attribution shares are the same kind of number: a precision-weight read-off with
+no reference dataset and no residual, tabulated here only because it was previously reported alongside
+skill numbers, not because it evaluates anything. (The separately-reported Vs30 attribution figure
+is stale against the current summary artifact and is not restated here.)
+
+This table covers the digital-twin MVP metrics specifically; the chapter's other evaluations —
+water-budget, soil-moisture, snow — are in the sections above. Three MVP-adjacent numbers are
+deliberately **not** tabulated: ERA5-Land (no committed comparison artifact), SNOTEL SWE melt-out
+(an in-sample grid search, not a hold-out), and the SNOTEL independent θ comparison
+(`notebooks/validate_snotel.py`: pooled $r$ 0.40 over 788 station-months, median seasonal $r$ 0.54 and
+median anomaly $r$ 0.21 over 5 stations). Those three are different estimands from one run, not
+competing estimates of one quantity, and none of them is a leave-one-station-out score — that script
+holds nothing out, because nothing was ever fitted to SNOTEL θ. The repo's one genuine
+leave-one-station-out score is a separate snow-phase quantity: `notebooks/calibrate_snow.py` refits
+on four stations and scores the fifth, giving `loso_mean_r_calibrated = 0.439` in
+`data/processed/snow_calibration.json`. Its companion `loso_mean_r_default = 0.493` is bit-identical
+to `mean_r_default` — under the default parameters nothing is fitted, so there is nothing to hold out
+and that figure is not an out-of-sample score. The calibrated parameters score $r = 0.499$ in-sample
+but $0.439$ held-out: the tuning does not generalise.
+
+**The SYNTHETIC rows are pipeline demonstrations, not skill.** They establish that the machinery runs
+end to end and that the estimator recovers what it was given; they say nothing about how well the twin
+tracks the real subsurface. Only the REAL row is a skill claim, and the MODEL cross-check row is a
+consistency check against another model, not a validation.
+
+::: {.callout-note}
+## A number and a method pending reconciliation
+The groundwater-level section above states block-CV RMSE ≈ 19 m; the committed artifact
+(`data/processed/block_cv_metrics.json`, `pooled.rmse_mean = 18.49`) and the MVP reporting both give
+18.5 m. The disagreement is not only in the digits: that section describes the score as coming from
+variogram-sized blocks, whereas the committed artifact was written by the `--domain`-absent fallback
+branch, which uses a fixed `--cv-block-km` default of 200 km and never consults a variogram range.
+Neither the number nor the method is reconciled here.
+:::
+
 ## Calibrated uncertainty
 
 Uncertainty is calibrated, not decorative. From out-of-fold $(\mu, \sigma)$ we report empirical
