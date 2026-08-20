@@ -33,6 +33,9 @@ jobs:
 
   check-dois:
     runs-on: ubuntu-latest
+    # Loose cap so a hung checkout/env-solve cannot burn 6 hours; the tight bound that
+    # actually matters is on the network step below.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +44,18 @@ jobs:
           frozen: true
           cache: true
 
-      # references.bib has a history of fabricated/wrong DOIs (#158); this resolves every DOI
-      # against doi.org and fails red on anything unregistered, so a fake citation can't merge silently.
+      # references.bib has a history of fabricated/wrong DOIs (#158). This resolves every DOI
+      # against doi.org, so an unregistered (fabricated, unresolvable) DOI fails red. It does NOT
+      # check that a DOI points at the cited paper -- 5 of the 9 documented DOI defects were
+      # registered DOIs for unrelated papers and would pass this gate; that check stays manual.
+      # (A tenth FIXED entry, mckee1993spi, was a fabricated *title* on an entry that carries no
+      # DOI at all, so it is outside this gate's scope either way.)
+      #
+      # 71 DOIs + 2 canaries, x (RETRIES + 1) attempts x 15 s, is ~55 min of runner time during a
+      # doi.org outage. The cap belongs on this step, not the job: the job also pays for checkout
+      # and a cold-cache pixi solve/install of a large env (pygmt, cartopy, obspy, geopandas,
+      # xgboost, ... + 2 git deps), which can legitimately take longer than the network budget and
+      # must not turn this gate red for reasons unrelated to DOIs.
       - name: Verify references.bib DOIs resolve
+        timeout-minutes: 10
         run: pixi run check-dois
