@@ -76,6 +76,19 @@ GAIA_MAX_FILES="${GAIA_MAX_FILES:-40}"            # blast radius: files touched 
 GAIA_MAX_DIFF_LINES="${GAIA_MAX_DIFF_LINES:-4000}" # blast radius: added+removed lines
 GAIA_MAX_COST_USD="${GAIA_MAX_COST_USD:-0}"       # 0 = uncapped; else halt the queue past this
 GAIA_RUN_COST=0                                   # accumulated across the whole run
+
+# ── The science gate ─────────────────────────────────────────────────────────
+# The pipeline's only mechanical definition of "done" was `pixi run test`. A theoretician's
+# judgment fed no gate, so under gate pressure the orchestrator's shortest path to green was
+# always the scientific-coder and the science personas were decorative. This makes a gate
+# depend on them: the orchestrator pre-registers a plan from a READ-ONLY session, a routed
+# panel of read-only personas reviews it before any code exists, and a block stops
+# implementation. That is ground rule 3 (design-review first) and ground rule 1 (the maker
+# is never the sole judge) made mechanical instead of aspirational.
+GAIA_SCIENCE_GATE="${GAIA_SCIENCE_GATE:-1}"       # 0 disables plan + panel (not recommended)
+GAIA_PLAN_REVISIONS="${GAIA_PLAN_REVISIONS:-1}"   # plan revisions allowed after a panel block
+GAIA_GATE_INTEGRITY="${GAIA_GATE_INTEGRITY:-1}"   # 0 disables gate-weakening detection
+GAIA_FAIL_STRIKES="${GAIA_FAIL_STRIKES:-3}"       # identical failure signatures before stopping
 GAIA_PENDING_META=()                              # per-issue meta awaiting the batch outcome
 GAIA_PENDING_RAW=()
 
@@ -145,6 +158,9 @@ echo "guardrails: max ${GAIA_MAX_TURNS} turns and ${GAIA_ISSUE_TIMEOUT}s per iss
 blast radius ${GAIA_MAX_FILES} files / ${GAIA_MAX_DIFF_LINES} lines; \
 cost ceiling $([ "$GAIA_MAX_COST_USD" = 0 ] && echo 'NONE (set GAIA_MAX_COST_USD)' || echo "\$${GAIA_MAX_COST_USD}"); \
 git+gh denied to every agent"
+echo "science gate: $([ "$GAIA_SCIENCE_GATE" = 1 ] && echo 'ON (plan pre-registered, routed read-only panel gates implementation)' || echo 'OFF'); \
+gate-integrity: $([ "$GAIA_GATE_INTEGRITY" = 1 ] && echo ON || echo OFF); \
+stop after ${GAIA_FAIL_STRIKES} identical failures"
 
 # Fail at STARTUP on a broken publication path, not eleven hours in. The
 # 2026-08-17/18 run pushed nine branches and lost every one of them because
@@ -176,7 +192,9 @@ preflight() {
   done
   # The helper scripts the loop shells out to, per batch.
   for helper in scripts/gaia_group_issues.py scripts/gaia-launch/gaia_ticker.py \
-                scripts/gaia-launch/gaia_trace.py; do
+                scripts/gaia-launch/gaia_trace.py scripts/gaia-launch/gaia_plan.py \
+                scripts/gaia-launch/gaia_panel.py scripts/gaia-launch/gaia_brief.py \
+                scripts/gaia-launch/gaia_gate_integrity.py scripts/gaia-launch/gaia_failsig.py; do
     [ -f "$REPO_DIR/$helper" ] || { echo "  !!! preflight: missing $helper" >&2; fatal=1; }
   done
   # The guardrails are only real if this claude build honours the flags they are expressed
@@ -184,6 +202,29 @@ preflight() {
   # mode that matters: a build that REJECTS the flag would abort every invocation, and a
   # build that silently ignores it would leave the turn cap unenforced. Warn, do not block --
   # the wall-clock timeout and the post-hoc vcs assertion still hold either way.
+  # If the gaia plugin is not installed, every "Use the gaia-<persona> agent" instruction
+  # silently degrades to the base model answering in character -- no persona system prompt,
+  # no tool grant, no model tier. The science panel would still return confident verdicts.
+  # This is fatal rather than a warning: an unnoticed degradation of the judges is worse
+  # than a batch that refuses to start.
+  if [ "$GAIA_SCIENCE_GATE" = "1" ] && ! claude plugin list 2>/dev/null | grep -q 'gaia@gaia'; then
+    echo "  !!! preflight: the gaia plugin is NOT installed for this CLI." >&2
+    echo "      Every persona instruction would degrade to the base model in costume." >&2
+    echo "      Fix: claude plugin marketplace add ./.claude/gaia && claude plugin install gaia@gaia" >&2
+    echo "      (or run with GAIA_SCIENCE_GATE=0 to skip the panel entirely)" >&2
+    fatal=1
+  fi
+  # The project personas the panel routes to. These are specific to THIS twin -- derived from
+  # its own review record -- and a missing file means that persona silently degrades to the
+  # base model answering in character, which the dispatch check would then void as a block.
+  # Catch it at startup instead of one blocked batch at a time.
+  if [ "$GAIA_SCIENCE_GATE" = "1" ]; then
+    for persona in twin-hydrogeologist twin-geotech-engineer twin-atmospheric-scientist \
+                   twin-geostatistician twin-da-methodologist; do
+      [ -f "$REPO_DIR/.claude/agents/${persona}.md" ] || {
+        echo "  !!! preflight: missing project persona .claude/agents/${persona}.md" >&2; fatal=1; }
+    done
+  fi
   if ! claude --help 2>&1 | grep -q -- '--disallowed-tools'; then
     echo "  !!! preflight: this claude ($(claude --version 2>/dev/null)) has no --disallowed-tools;" >&2
     echo "      agents will NOT be tool-fenced. assert_no_vcs_mutation is then the only guard." >&2
@@ -360,6 +401,171 @@ cost_ceiling_hit() {
   awk -v c="$GAIA_RUN_COST" -v m="$GAIA_MAX_COST_USD" 'BEGIN{exit !(c>=m)}'
 }
 
+# Extract the LAST fenced json block from an agent reply. The prose may quote earlier
+# examples; the verdict is what it ends with. Shared by the plan and the panel, and the same
+# convention the arbitration and merge-gate auditors already use.
+last_json_block() {
+  awk '/^```json/{f=1;buf="";next} /^```/{if(f){last=buf;f=0}next} f{buf=buf$0"\n"} END{printf "%s", last}'
+}
+
+# The science gate. Writes $PLAN_FILE and $BRIEF_FILE for the caller to inject into the
+# implementation prompt. Returns 0 to proceed, 1 if the panel blocked (caller parks).
+science_gate() {
+  local number="$1" title="$2" labels="$3" milestone="$4" logfile="$5"
+  local dir plan_raw errs panel decision rev=0
+  [ "$GAIA_SCIENCE_GATE" = "1" ] || { : > "$PLAN_FILE"; : > "$BRIEF_FILE"; return 0; }
+  dir="$LOG_DIR/plan-${number}-${ts}"; mkdir -p "$dir"
+
+  # 1. Prior work. No model call: GitHub graph + our own ledger and corpus. This is the fix
+  #    for an orchestrator that used to be told three lines and knew nothing about the four
+  #    merged PRs that already touched its issue.
+  python3 "$REPO_DIR/scripts/gaia-launch/gaia_brief.py" "$number" --repo "$REPO_SLUG" \
+    > "$BRIEF_FILE" 2>>"$logfile" || echo "### Issue #${number}" > "$BRIEF_FILE"
+  echo "  brief: $(wc -l < "$BRIEF_FILE") lines of prior-work context" | tee -a "$logfile"
+
+  while : ; do
+    # 2. Pre-registration, from a READ-ONLY session -- it cannot touch the tree even if it
+    #    decides to, because Edit/Write/NotebookEdit and every vcs mutation are denied.
+    echo "  pre-registering a plan for #${number} (read-only)..." | tee -a "$logfile"
+    plan_raw="$(timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" \
+      claude -p "Use the gaia orchestrator to PLAN (not implement) work on GitHub issue #${number}
+(\"${title}\") in ${REPO_SLUG}. You are read-only: do not edit, write or run anything that changes state.
+
+Prior work already on the record -- do not redo any of it:
+$(cat "$BRIEF_FILE")
+${PANEL_FEEDBACK:-}
+
+Read the issue and the code you would touch, then emit the plan. Closure does NOT require a
+positive result: a reproducible negative result that localizes the obstruction and names a
+narrower follow-up is an equally valid outcome, and you must say what one would look like here.
+
+Finish your reply with EXACTLY one fenced json block and nothing after it:
+\`\`\`json
+{\"obstruction\": \"<what actually blocks this issue, 1-2 sentences>\",
+ \"questions\": [\"<ordered, testable>\"],
+ \"approach\": \"<method, not narrative>\",
+ \"artifacts\": [\"<files/notebooks/figures you will produce or change>\"],
+ \"expected_files\": <int>, \"expected_lines\": <int>, \"expected_runtime_min\": <int>,
+ \"stopping_conditions\": [\"<when to stop and report instead of improvising>\"],
+ \"negative_result_criteria\": \"<what a reproducible negative result looks like, and the narrower follow-up>\",
+ \"out_of_scope\": [\"<explicitly not doing>\"]}
+\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions \
+        --max-turns "$GAIA_AUX_MAX_TURNS" \
+        --disallowed-tools "${GAIA_READONLY_DENY[@]}" 2>>"$logfile")" || plan_raw=""
+    printf '%s' "$plan_raw" | last_json_block > "$PLAN_FILE"
+
+    if ! errs="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_plan.py" --validate "$PLAN_FILE" 2>&1)"; then
+      # Fails CLOSED, exactly like the auditor gate: an unparseable plan is not a plan, and
+      # proceeding without one silently reverts to the old no-plan behaviour.
+      { echo "  !!! #${number}: the pre-registered plan is invalid:"; echo "$errs" | sed 's/^/  | /'; } | tee -a "$logfile"
+      printf '%s' "$plan_raw" >> "$logfile"
+      return 1
+    fi
+    python3 "$REPO_DIR/scripts/gaia-launch/gaia_plan.py" --render "$PLAN_FILE" --issue "$number" \
+      > "$dir/plan.md" 2>>"$logfile"
+
+    # 3. The panel: routed from the issue's own labels and milestone, auditor always seated.
+    panel="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --route \
+      --labels "$labels" --milestone "$milestone" --plan "$PLAN_FILE" 2>>"$logfile")"
+    echo "  science panel for #${number}: ${panel}" | tee -a "$logfile"
+
+    local vfiles=()
+    for persona in $panel; do
+      timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" \
+        claude -p "Use the ${persona} agent to review this PRE-REGISTERED PLAN for GitHub issue
+#${number} (\"${title}\") in ${REPO_DIR}. No code has been written yet -- this is the cheapest
+moment to redirect a wrong approach, which is why you are being asked now.
+
+$(cat "$dir/plan.md")
+
+Judge it on the merits of YOUR discipline only; another persona covers the rest. Ground the
+science over the implementation: if the plan would produce a green test suite while answering
+the wrong physical question, say so. Every concern must name the concrete test that would
+settle it -- a concern with no decisive test is an opinion, and opinions do not block work.
+
+Finish your reply with EXACTLY one fenced json block and nothing after it:
+\`\`\`json
+{\"verdict\": \"approve\" | \"revise\" | \"block\",
+ \"concerns\": [{\"severity\": \"critical\"|\"major\"|\"minor\",
+               \"claim\": \"<what is wrong, concretely>\",
+               \"decisive_test\": \"<the check that would settle it>\"}]}
+\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions \
+          --max-turns "$GAIA_AUX_MAX_TURNS" \
+          --disallowed-tools "${GAIA_READONLY_DENY[@]}" \
+          --output-format stream-json --verbose 2>>"$logfile" \
+        > "$dir/${persona}.raw.jsonl" || : > "$dir/${persona}.raw.jsonl"
+      # VERIFY the persona was actually dispatched. "Use the gaia-auditor agent" is prose;
+      # whether the session delegated -- and therefore whether that persona's system prompt,
+      # tool grant and model tier were ever loaded -- is a fact in the transcript. A verdict
+      # from a session that never dispatched is the base model in costume, carrying the
+      # persona's name and none of its charter. That fails CLOSED to a block.
+      # Project personas (.claude/agents/twin-*.md) dispatch as a bare name; plugin personas
+      # as gaia:<name>. gaia_panel.py owns that mapping so it lives in exactly one place.
+      expect_type="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --expect-for "$persona")"
+      python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" \
+        --from-stream "$dir/${persona}.raw.jsonl" --expect "$expect_type" \
+        --out "$dir/${persona}.json" >> "$logfile" 2>&1 \
+        || echo "  !!! ${persona} was NOT dispatched as a subagent for #${number}; its verdict is void" | tee -a "$logfile"
+      vfiles+=("$dir/${persona}.json")
+    done
+
+    python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --aggregate "${vfiles[@]}" \
+      --json "$dir/panel.json" --render > "$dir/panel.md" 2>>"$logfile" || true
+    decision="$(jq -r '.decision // "block"' "$dir/panel.json" 2>/dev/null)" || decision="block"
+    echo "  panel decision for #${number}: ${decision}" | tee -a "$logfile"
+
+    # Publish plan and verdicts to the issue BEFORE implementation. The scientific reasoning
+    # is then on the record at the moment it could still have changed the approach, rather
+    # than reconstructed afterwards from a diff.
+    gh issue comment "$number" --body "$(cat "$dir/plan.md")
+
+$(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan to #${number})" | tee -a "$logfile"
+
+    [ "$decision" != "block" ] && return 0
+    if [ "$rev" -ge "$GAIA_PLAN_REVISIONS" ]; then
+      echo "  !!! science panel blocked #${number} after ${rev} revision(s); not implementing" | tee -a "$logfile"
+      add_label "$number" needs-human-decision "$logfile"
+      return 1
+    fi
+    rev=$((rev + 1))
+    PANEL_FEEDBACK="
+The science panel BLOCKED your previous plan. Address these before re-planning; do not
+re-submit the same approach with different wording:
+$(jq -r '.verdicts[].concerns[] | "- [\(.severity)] \(.claim)  -> decisive test: \(.decisive_test)"' "$dir/panel.json" 2>/dev/null)"
+    echo "  revising the plan for #${number} (revision ${rev}/${GAIA_PLAN_REVISIONS})" | tee -a "$logfile"
+  done
+}
+
+# Three strikes on the SAME failure. The queue already refuses to loop on Copilot -- it
+# fingerprints the review payload and stops when the fingerprint stops changing. The agent's
+# OWN failures had no such check, so a revision pass could reproduce an identical traceback
+# round after round, each one a full orchestrator invocation that learned nothing.
+#
+# Numeric values inside an assertion are normalised out of the signature on purpose (see
+# gaia_failsig.py): failing at 0.031 and then at 0.029 against the same expectation is one
+# unresolved problem, not two discoveries, and counting them separately is precisely the
+# loop this breaks.
+declare -A GAIA_FAIL_TALLY=()
+
+# Returns 1 if this failure has now been seen GAIA_FAIL_STRIKES times.
+strike_failure() {
+  local gate_out="$1" logfile="$2" sig n
+  sig="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_failsig.py" --log "$gate_out" --batch-only 2>>"$logfile")" || sig=""
+  [ -n "$sig" ] || return 0
+  n=$(( ${GAIA_FAIL_TALLY[$sig]:-0} + 1 ))
+  GAIA_FAIL_TALLY[$sig]=$n
+  echo "  failure signature ${sig} seen ${n}/${GAIA_FAIL_STRIKES} time(s) this batch" | tee -a "$logfile"
+  if [ "$n" -ge "$GAIA_FAIL_STRIKES" ]; then
+    {
+      echo "  !!! the same failure has now occurred ${n} times. Stopping this line rather than"
+      echo "      paying for another identical attempt. Signature ${sig}:"
+      python3 "$REPO_DIR/scripts/gaia-launch/gaia_failsig.py" --log "$gate_out" --summary 2>&1 | sed 's/^/  | /'
+    } | tee -a "$logfile"
+    return 1
+  fi
+  return 0
+}
+
 # ── Measure, not just ship ───────────────────────────────────────────────────
 # `gaia-run.sh` deliberately leaves the tree dirty and writes down what the agent did and
 # whether the tests passed; `gaia_run_queue.sh` commits, reviews, gates and merges. The
@@ -392,8 +598,11 @@ write_measurement() {
     --arg harness "gaia_run_queue.sh" --arg branch "$branch" --arg pr "${pr_number:-}" \
     --arg dashboard "$dash_rel" \
     --argjson max_turns "$GAIA_MAX_TURNS" --argjson issue_timeout_s "$GAIA_ISSUE_TIMEOUT" \
+    --argjson plan "$(cat "$PLAN_FILE" 2>/dev/null || echo null)" \
+    --argjson panel "$(cat "$LOG_DIR/plan-${number}-${ts}/panel.json" 2>/dev/null || echo null)" \
     '$ARGS.named | . + {delivery: {harness: .harness, branch: .branch, pr: .pr,
-        dashboard: .dashboard, max_turns: .max_turns, issue_timeout_s: .issue_timeout_s}}' \
+        dashboard: .dashboard, max_turns: .max_turns, issue_timeout_s: .issue_timeout_s},
+        science: {plan: .plan, panel: .panel}}' \
     > "$meta" 2>>"$logfile" || return 0
   # Deliberately NOT written to the corpus yet. `outcome` is the reward signal, and at
   # commit time the batch gate has not run -- the honest value is not known. Queue the
@@ -953,6 +1162,19 @@ while IFS= read -r batch_json; do
     # goes straight to $logfile, same as it always did; only its stdout changes shape.
     raw="$LOG_DIR/issue-${number}-${ts}.raw.jsonl"
     issue_start_epoch="$(date +%s)"
+
+    # THE SCIENCE GATE, before any editing agent runs. Blocks land here, where redirecting
+    # costs one read-only planning pass rather than a discarded implementation.
+    PLAN_FILE="$LOG_DIR/plan-${number}-${ts}.json"
+    BRIEF_FILE="$LOG_DIR/brief-${number}-${ts}.md"
+    PANEL_FEEDBACK=""
+    labels_csv="$(jq -r --arg n "$number" '.issues[] | select((.number|tostring)==$n) | (.labels // []) | join(",")' <<<"$batch_json" 2>/dev/null)" || labels_csv=""
+    if ! science_gate "$number" "$title" "$labels_csv" "${milestone:-}" "$logfile"; then
+      report_failure "science gate blocked #${number}; not implementing it (plan and panel verdicts are on the issue)" "$logfile" 1
+      batch_failed=1
+      break
+    fi
+
     vcs_before="$(vcs_state)"
     # --max-turns and the timeout are the two bounds that hold when nothing else does: an
     # agent that has lost the plot burns turns, and one that has deadlocked burns only wall
@@ -964,7 +1186,20 @@ while IFS= read -r batch_json; do
 Follow /gaia:ground-rules. Make the minimal correct change (code, tests, and/or docs) for THIS issue only.
 Do not commit -- leave the working tree dirty for the pipeline to commit.
 The pipeline owns git and gh; committing, pushing, branching and merging are denied to you
-at the tool level, and the queue verifies afterwards that no ref moved." \
+at the tool level, and the queue verifies afterwards that no ref moved.
+
+Prior work already on the record -- do not redo any of it:
+$(cat "$BRIEF_FILE" 2>/dev/null)
+
+YOUR PRE-REGISTERED PLAN, already reviewed and passed by the science panel. Implement THIS.
+Its out_of_scope list is binding, and its declared budget is compared against what you
+actually produce. If the work turns out to need something outside the plan, stop and report
+rather than widening it silently:
+$(cat "$PLAN_FILE" 2>/dev/null)
+
+Do not weaken the gate to pass it. Loosening a numeric tolerance, disabling a test, or
+editing what \`pixi run test\` runs is detected mechanically and blocks the commit. If the
+honest outcome is a negative result, report it as one -- that closes an issue here." \
         --permission-mode acceptEdits \
         --dangerously-skip-permissions \
         --max-turns "$GAIA_MAX_TURNS" \
@@ -1011,6 +1246,24 @@ at the tool level, and the queue verifies afterwards that no ref moved." \
     append_provenance "$number" "$title" "$branch" "$pr_number" "$dash_rel" "$raw" "$logfile"
 
     git add -A
+
+    # GATE INTEGRITY. The agent has just been judged by `pixi run test`; this asks whether it
+    # passed by fixing the code or by softening the judge. Loosened tolerances, disabled
+    # tests and edited gate definitions are all invisible in a green CI run, which is exactly
+    # what makes them dangerous in a numerics repository.
+    if [ "$GAIA_GATE_INTEGRITY" = "1" ]; then
+      python3 "$REPO_DIR/scripts/gaia-launch/gaia_gate_integrity.py" --staged \
+        --json "$LOG_DIR/gate-integrity-${number}-${ts}.json" >> "$logfile" 2>&1 && gi_rc=0 || gi_rc=$?
+      if [ "$gi_rc" -ne 0 ]; then
+        { echo "  !!! #${number} weakened the gate it is judged by (exit ${gi_rc}):"
+          python3 "$REPO_DIR/scripts/gaia-launch/gaia_gate_integrity.py" --staged 2>&1 | sed 's/^/  | /'
+        } | tee -a "$logfile"
+        report_failure "gate-integrity check FAILED for #${number}; parking rather than committing a softened gate" "$logfile" "$gi_rc"
+        batch_failed=1
+        break
+      fi
+    fi
+
     # Blast radius, checked with everything STAGED so untracked files count. Over the cap the
     # batch is parked rather than committed: whatever produced a 200-file diff for one issue,
     # it is not something to ship under that issue's `Closes #N` without a human looking.
@@ -1097,8 +1350,11 @@ ${closes_lines}" \
   # branch and draft PR both survive -- so a not-yet-green draft never reaches review or the
   # --merge, but its work is never destroyed either.
   echo "  pre-flight gate: pixi run test && pixi run check-dois" | tee -a "$logfile"
-  { pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; } && test_rc=0 || test_rc=$?
+  gate_out="$LOG_DIR/gate-preflight-$(jq -r '.issues[0].number' <<<"$batch_json")-${ts}.log"
+  { pixi run test && pixi run check-dois; } > "$gate_out" 2>&1 && test_rc=0 || test_rc=$?
+  cat "$gate_out" >> "$logfile"
   if [ "$test_rc" -ne 0 ]; then
+    strike_failure "$gate_out" "$logfile" || true
     flush_measurements "fail" "$logfile"
     report_failure "pre-flight gate FAILED for ${numbers_csv}; PR left as draft, issues stay open" "$logfile" "$test_rc"
     [ -n "$pr_number" ] && gh pr comment "$pr_number" --body "Pre-flight gate failed (\`pixi run test\` / \`check-dois\`); left as a draft for a human. See \`${logfile}\`." >> "$logfile" 2>&1 || true
@@ -1291,14 +1547,23 @@ Do not commit -- leave the working tree dirty."
 
     if tree_dirty; then
       echo "  re-running gate after revision round ${review_round}" | tee -a "$logfile"
-      if pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; then
+      # Captured to its own file, not just appended to the batch log, so the failure can be
+      # signatured. Tee'd back so the log still has everything it always had.
+      gate_out="$LOG_DIR/gate-${numbers_csv//[^0-9]/_}-r${review_round}-${ts}.log"
+      if { pixi run test && pixi run check-dois; } > "$gate_out" 2>&1; then
+        cat "$gate_out" >> "$logfile"
         git add -A
         git commit -m "gaia: address Copilot review round ${review_round} on #${pr_number}
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
         git push
       else
-        echo "  revision broke the gate for ${numbers_csv}; leaving PR #$pr_number open for a human" | tee -a "$logfile"
+        cat "$gate_out" >> "$logfile"
+        if ! strike_failure "$gate_out" "$logfile"; then
+          echo "  repeated identical failure; leaving PR #$pr_number open for a human" | tee -a "$logfile"
+        else
+          echo "  revision broke the gate for ${numbers_csv}; leaving PR #$pr_number open for a human" | tee -a "$logfile"
+        fi
         gate_ok=0
         break
       fi

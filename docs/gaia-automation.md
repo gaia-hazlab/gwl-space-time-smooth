@@ -11,10 +11,15 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 | `scripts/gaia_run_queue.sh` | Runs the queue: orchestrator → PR → arbitration → review → auditor gate → merge |
 | `scripts/gaia-launch/gaia_ticker.py` | Live per-agent ticker while a batch runs |
 | `scripts/gaia-launch/gaia_trace.py` | Renders a transcript into the HTML dashboard |
+| `scripts/gaia-launch/gaia_brief.py` | Prior-work brief for an issue (GitHub + our ledger) |
+| `scripts/gaia-launch/gaia_plan.py` | The pre-registered plan: schema, validation, declared-vs-actual |
+| `scripts/gaia-launch/gaia_panel.py` | Routes the science panel, verifies dispatch, aggregates verdicts |
+| `scripts/gaia-launch/gaia_gate_integrity.py` | Detects an agent weakening the gate it is judged by |
+| `scripts/gaia-launch/gaia_failsig.py` | Stable failure signatures, for the three-strikes rule |
 | `scripts/gaia-launch/gaia_pr_dashboard.sh` | Renders and stages the dashboard for one PR |
 | `scripts/gaia-launch/gaia_runs_site_index.py` | Builds the index over all published dashboards |
 
-> **The safety model, in seven invariants.** Everything below follows from these:
+> **The safety model, in nine invariants.** Everything below follows from these:
 >
 > 1. **Nothing is ever deleted.** Failure parks work — committed, pushed, renamed out of the
 >    way. The only automatic branch removal is after a successful merge.
@@ -33,6 +38,13 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 > 7. **Every agent invocation is bounded before it starts** — turns, wall clock, files and
 >    lines it may touch, and the tools it may reach. The gates further down protect `main`;
 >    these protect the tree, the clock and the bill.
+> 8. **The science is judged before the code exists.** Every issue is pre-registered as a
+>    plan from a read-only session, and a routed panel of read-only science personas — with
+>    the auditor always seated — must pass it before any editing agent runs. A block stops
+>    implementation.
+> 9. **An agent may not weaken the thing that judges it.** Loosened tolerances, disabled
+>    tests and edited gate definitions are detected mechanically in the staged diff and
+>    block the commit. Passing by softening the gate is not passing.
 
 ## The pipeline at a glance
 
@@ -55,7 +67,13 @@ flowchart TD
     CLEAN -- yes --> LOOP
 
     subgraph LOOP["per issue in the batch, sequentially"]
-        ORCH["<b>claude -p</b> → gaia-orchestrator<br/><i>'resolve #N … do NOT commit'</i><br/><i>git+gh denied at the tool level</i><br/><code>--max-turns</code> · <code>timeout</code>"]
+        BRIEF["prior-work brief<br/><i>GitHub graph + our ledger</i><br/><i>no model call</i>"]
+        PLAN["<b>pre-register a plan</b><br/><i>read-only session, schema-validated</i><br/><i>fails closed</i>"]
+        PANEL{"<b>science panel</b><br/><i>routed from labels + milestone</i><br/><i>auditor always seated</i><br/><i>dispatch verified in the transcript</i>"}
+        BRIEF --> PLAN --> PANEL
+        PANEL -- "block (1 revision, then human)" --> PARKR
+        PANEL -- approve --> ORCH
+        ORCH["<b>claude -p</b> → gaia-orchestrator<br/><i>implements THE PLAN</i><br/><i>git+gh denied at the tool level</i><br/><code>--max-turns</code> · <code>timeout</code>"]
         BOUND{"turns / wall clock<br/>within caps?<br/><i>and no ref moved?</i>"}
         DIRTY{"working tree dirty?<br/><i>incl. UNTRACKED files</i>"}
         DASH["render dashboard.html<br/><i>gaia_trace.py</i>"]
@@ -67,7 +85,10 @@ flowchart TD
         BOUND -- no --> PARKR["park the batch"]
         BOUND -- yes --> DIRTY
         DIRTY -- no --> SKIP["skip this issue"]
-        DIRTY -- yes --> DASH --> PROV --> RADIUS
+        DIRTY -- yes --> DASH --> PROV --> INTEG
+        INTEG{"<b>gate integrity</b><br/><i>tolerance loosened? test disabled?</i><br/><i>gate definition edited?</i>"}
+        INTEG -- weakened --> PARKR
+        INTEG -- clean --> RADIUS
         RADIUS -- no --> PARKR
         RADIUS -- yes --> COMMIT --> DRAFT
     end
@@ -488,6 +509,117 @@ a batch has already done its work.
 | `GAIA_MAX_FILES` | `40` | Blast radius: files one issue may touch before the batch is parked |
 | `GAIA_MAX_DIFF_LINES` | `4000` | Blast radius: added + removed lines |
 | `GAIA_MAX_COST_USD` | `0` | `0` = uncapped; otherwise halt the queue between issues past this |
+| `GAIA_SCIENCE_GATE` | `1` | `0` skips plan pre-registration and the science panel (not recommended) |
+| `GAIA_PLAN_REVISIONS` | `1` | Plan revisions allowed after a panel block, before parking |
+| `GAIA_GATE_INTEGRITY` | `1` | `0` disables gate-weakening detection (not recommended) |
+| `GAIA_FAIL_STRIKES` | `3` | Identical failure signatures tolerated before a line is stopped |
+
+### The science gate — judging the plan before the code exists
+
+The pipeline had one mechanical definition of "done": `pixi run test`. Nothing consumed a
+theoretician's judgment, so under gate pressure the orchestrator's shortest path to green
+was always the scientific-coder, and the science personas were structurally decorative.
+Calling them more often would not have changed that — **a gate has to depend on them.**
+
+So before any editing agent runs:
+
+1. **A prior-work brief** is assembled with no model call, from the GitHub graph and our own
+   ledger and corpus: which issues this one references and their state, which PRs already
+   touched it (merged first — those are settled), and what this queue itself already tried
+   and with what outcome. The orchestrator used to be handed three lines and no history,
+   which is the single largest avoidable token cost in the pipeline and a standing risk of
+   redoing settled work.
+2. **The orchestrator pre-registers a plan** from a **read-only** session: the obstruction,
+   the ordered testable questions, the approach, the artifacts, a declared budget in files /
+   lines / runtime, the stopping conditions, what would count as a **reproducible negative
+   result**, and what is explicitly out of scope. It is validated against a schema and
+   **fails closed** — an unparseable plan is not a plan, and proceeding without one silently
+   reverts to the old behaviour. A plan declaring more than 40 files or 4000 lines is
+   rejected outright: an agent may not pre-authorise a sprawling diff by predicting one.
+3. **A routed panel of PROJECT personas reviews it.** Personas are selected from the issue's
+   own labels and milestone, and the **auditor sits on every panel** (ground rule 1: the
+   maker is never the sole judge). Capped at three to bound cost. Every persona is read-only
+   by tool grant, so this stage physically cannot touch the tree.
+
+   The domain reviewers are **specific to this twin** (`.claude/agents/twin-*.md`), not the
+   general gaia family, because a generic reviewer does not know this project's own history.
+   Each was derived from this repository's review record and carries its ranked concerns as
+   priors to verify:
+
+   | Persona | Derived from | Routed by |
+   |---|---|---|
+   | `twin-hydrogeologist` | `peer_review.md` §1 | `hydrogeology`, `water-budget`, `soil-reanalysis`, `stage-1` |
+   | `twin-geotech-engineer` | `peer_review.md` §2 | `geotech`, `landlab`, liquefaction/landslide/Vs30 milestones |
+   | `twin-atmospheric-scientist` | `peer_review.md` §3 | `atmospheric`, flood milestone |
+   | `twin-geostatistician` | sensor-uncertainty review, 2026-08 prior audit | `uncertainty`, `validation`, `dv-v`, `stage-2` |
+   | `twin-da-methodologist` | DA-estimator-correctness milestone, 2026-08 audit | `stage-3`, "Applied math", "probabilistic" |
+
+   Genuinely-software or documentation issues still route to the general `gaia-debugger` and
+   `gaia-lab-notebook`: not every issue in this repo is a question about the twin's science.
+4. **Concerns must name a decisive test.** A concern with no test that would settle it is an
+   opinion, and opinions do not block work. A `block`, or any `critical` concern, stops
+   implementation; one revision is allowed, then the issue is labelled for a human.
+5. **The plan and every verdict are posted to the issue** before implementation — so the
+   scientific reasoning is on the record at the moment it could still have changed the
+   approach, rather than reconstructed afterwards from a diff.
+
+This is our own **ground rule 3** ("design-review first — audit a plan once before resources
+are spent") made mechanical. The queue had never once done it.
+
+#### The personas are verified, not assumed
+
+"Use the gaia-auditor agent" is prose. Whether the session actually *delegated* — and
+therefore whether that persona's system prompt, tool grant and model tier were ever loaded —
+is a fact recorded in the transcript, as a `Task` dispatch carrying a `subagent_type`. Real
+queue runs do dispatch them (issue #154's run dispatched seven), but the count varies, and a
+verdict from a session that never dispatched is the base model in costume: the persona's
+name, none of its charter.
+
+So each panel call runs with `--output-format stream-json` and the transcript is checked for
+the expected `subagent_type`. A missing dispatch fails **closed** to a block. Project personas
+resolve as a bare name and plugin personas as `gaia:<name>`; `gaia_panel.py --expect-for` owns
+that mapping so it lives in one place.
+
+Preflight refuses to start if the gaia plugin is not installed, or if any project persona file
+is missing — both failures degrade the judges silently while still returning confident
+verdicts, which is worse than a batch that refuses to begin.
+
+Verified by real dispatch, not by reading: a probe run of `twin-hydrogeologist` produced a
+transcript containing `subagent_type: twin-hydrogeologist`.
+
+### An agent may not weaken its own judge
+
+An agent told to make `pixi run test` pass has two routes: fix the code, or soften the gate.
+Nothing distinguished them, and the second is invisible in a green CI run — which is what
+makes it dangerous in a numerics repository, where loosening one `rtol` turns a failing
+convergence claim into a passing one without a line of physics changing.
+
+`gaia_gate_integrity.py` reads the **staged** diff and blocks on:
+
+| Signal | Why it blocks |
+|---|---|
+| `@pytest.mark.skip` / `xfail` added | Turns a failing test green without touching the code under test |
+| A tolerance raised (`rtol`, `atol`, `places`, …) | A weaker numeric check can manufacture a convergence result |
+| An assertion bound raised (`assert err < 1e-10` → `1e-2`) | Same, in bare form |
+| An existing gate definition altered or removed | Changes what the gate *runs*, not whether the code passes it |
+
+Net loss of tests or assertions is reported as a **warning**, never a block — a genuine
+refactor produces it too. Adding a *stricter* task is explicitly fine: the check triggers on
+removed gate lines, not added ones, and comments are stripped before matching. It carries no
+model and no opinions: every finding names a file, the before/after text, and why.
+
+### Three strikes on the same failure
+
+The queue already refuses to loop on Copilot — it fingerprints the review payload and stops
+when the fingerprint stops changing. The agent's own failures had no such check, so a
+revision pass could reproduce an identical traceback round after round, each one a full
+orchestrator invocation that learned nothing.
+
+`gaia_failsig.py` reduces a pytest run to a stable signature — test id, exception type, and
+the *shape* of the message, with paths, addresses and numeric values normalised out. Failing
+at `0.031` and then at `0.029` against the same expectation is one unresolved problem, not
+two discoveries; counting them separately is exactly the loop this breaks. After
+`GAIA_FAIL_STRIKES` identical signatures the line stops and the batch is left for a human.
 
 ### Bounding a run
 

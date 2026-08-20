@@ -27,7 +27,7 @@ in the same milestone batch. Held-back issues are logged to stderr, not
 silently dropped.
 
 Emits one JSON object per line (JSONL) to stdout:
-  {"key": "...", "branch": "gaia/...", "issues": [{"number": N, "title": "..."}]}
+  {"key": "...", "branch": "gaia/...", "issues": [{"number": N, "title": "...", "labels": [...]}]}
 """
 import json
 import re
@@ -158,6 +158,10 @@ def main():
         groups.setdefault(key, []).append({
             "number": issue["number"],
             "title": issue["title"],
+            # Carried through to the batch JSON so the queue's science panel can route on
+            # them. The grouper already has them (it groups by topic label); dropping them
+            # here would have collapsed every panel to the default pair.
+            "labels": labels,
             "priority": priority_of(labels),
             "milestone": milestone,
         })
@@ -178,7 +182,8 @@ def main():
                     "milestone": chunk[0]["milestone"],
                     "rank": rank,
                     "branch": f"gaia/{slug(key)}-{tier_name}-{chunk_idx}",
-                    "issues": [{"number": m["number"], "title": m["title"]} for m in chunk],
+                    "issues": [{"number": m["number"], "title": m["title"],
+                                "labels": m.get("labels", [])} for m in chunk],
                 })
 
     # P0 batches first (globally), then one milestone at a time in MILESTONE_ORDER;
