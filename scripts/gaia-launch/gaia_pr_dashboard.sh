@@ -27,9 +27,12 @@ if [ -z "$TRANSCRIPT" ]; then
   # Claude Code slugifies the project path by replacing every '/' with '-'.
   SESSION_DIR="$HOME/.claude/projects/${REPO_DIR//\//-}"
   [ -d "$SESSION_DIR" ] || { echo "!!! no session dir at $SESSION_DIR; pass a transcript explicitly" >&2; exit 1; }
-  # -maxdepth 1 so a nested archive directory cannot win the newest-file race.
-  TRANSCRIPT="$(find "$SESSION_DIR" -maxdepth 1 -name '*.jsonl' -printf '%T@ %p\n' 2>/dev/null \
-                | sort -rn | head -1 | cut -d' ' -f2-)"
+  # `ls -t` rather than `find -printf`: -printf is a GNU extension and fails on macOS/BSD
+  # find, which would break this on a developer laptop even though the unattended target is
+  # Linux. The glob does not recurse, so a nested archive directory cannot win the
+  # newest-file race either. Session files are UUID-named, so the usual `ls` parsing hazard
+  # (whitespace/newlines in filenames) does not arise. (Copilot review, PR #218.)
+  TRANSCRIPT="$(ls -t "$SESSION_DIR"/*.jsonl 2>/dev/null | head -1)"
   [ -n "$TRANSCRIPT" ] || { echo "!!! no .jsonl transcripts in $SESSION_DIR" >&2; exit 1; }
   echo "  using the newest session transcript: $TRANSCRIPT"
   echo "  (pass one explicitly if another session also contributed to PR #${PR_NUMBER})"
