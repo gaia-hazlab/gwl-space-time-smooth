@@ -33,6 +33,98 @@ from collections import Counter, OrderedDict
 
 TASK_TOOLS = {"Task", "Agent", "dispatch_agent"}
 
+# ── Who is speaking ──────────────────────────────────────────────────────────────────────
+# Two families run in this repo and a reader has to tell them apart at a glance.
+#
+#   GAIA  (`gaia:gaia-auditor`)      the general research family, from the installed plugin.
+#                                    Any project using gaia gets these.
+#   TWIN  (`twin-hydrogeologist`)    reviewers written FOR this twin, derived from its own
+#                                    review record in docs/reviews/ and carrying that
+#                                    record's standing concerns as priors to verify.
+#
+# Rendering both as raw subagent_type strings made that a matter of noticing a prefix. It is
+# the difference between a generic reviewer and one that knows an 18.5 m baseline RMSE
+# cannot serve a sub-metre liquefaction requirement. The raw type is still what goes into
+# the corpus -- this is the human-facing name only.
+TWIN_PREFIX = "twin-"
+# Domain shorthand that Title Case would otherwise mangle ("Da Methodologist").
+ACRONYMS = {"da": "DA", "qa": "QA", "ci": "CI", "dv": "dv/v", "ml": "ML"}
+
+
+def agent_family(subagent_type):
+    """"twin" (project-specific), "gaia" (plugin family), "session", or "other"."""
+    st = str(subagent_type or "").strip()
+    if not st:
+        return "session"
+    if st.startswith(TWIN_PREFIX):
+        return "twin"
+    if st.startswith("gaia:") or st.startswith("gaia-"):
+        return "gaia"
+    return "other"
+
+
+def display_name(subagent_type, fallback="subagent"):
+    """Human-facing agent name: 'Gaia · Auditor', 'Twin · Hydrogeologist'."""
+    st = str(subagent_type or "").strip()
+    if not st:
+        return fallback
+    fam = agent_family(st)
+    if fam == "twin":
+        bare, prefix = st[len(TWIN_PREFIX):], "Twin"
+    elif fam == "gaia":
+        bare = st.split(":")[-1]
+        if bare.startswith("gaia-"):
+            bare = bare[len("gaia-"):]
+        prefix = "Gaia"
+    else:
+        return st
+    words = [ACRONYMS.get(w.lower(), w.capitalize()) for w in bare.split("-") if w]
+    return f"{prefix} · {' '.join(words)}" if words else st
+
+
+def prune_unused(agents):
+    """Drop agents that were dispatched but never did anything, and report how many.
+
+    A Task block creates an agent entry as soon as it is SEEN. If that subagent's steps
+    never appear in the transcript, the entry survives with zero tool calls, zero reasoning
+    and zero errors -- and was rendered as a full channel and a full card. One real run
+    showed twelve agents of which ten were phantoms, four of them duplicate names.
+
+    This is not only cosmetic: `n_agents` in the corpus counted them too, so every
+    "how many agents did this take?" number was inflated at the source.
+
+    An empty agent whose descendant did work is KEPT, so the tree stays connected.
+    """
+    keep = set()
+
+    def visit(aid):
+        kept_child = False
+        for c in agents[aid].get("spawned", []):
+            if c in agents and visit(c):
+                kept_child = True
+        if aid == "root" or agents[aid]["steps"] or kept_child:
+            keep.add(aid)
+            return True
+        return False
+
+    if "root" in agents:
+        visit("root")
+    for aid in agents:
+        if aid not in keep and agents[aid]["steps"]:
+            keep.add(aid)          # orphan with real content: never silently drop work
+
+    dropped = len(agents) - len(keep)
+    if not dropped:
+        return agents, 0
+    out = OrderedDict()
+    for aid, a in agents.items():
+        if aid not in keep:
+            continue
+        a = dict(a)
+        a["spawned"] = [c for c in a.get("spawned", []) if c in keep]
+        out[aid] = a
+    return out, dropped
+
 
 # ----------------------------------------------------------------- parsing
 
@@ -165,8 +257,9 @@ def parse(events):
                     pending_tools[tid] = (agent_id, len(agent["steps"]) - 1)
 
                 if name in TASK_TOOLS and tid:
-                    label = (inp.get("subagent_type") or inp.get("agent_type")
-                             or inp.get("description") or "subagent")
+                    st = inp.get("subagent_type") or inp.get("agent_type")
+                    label = display_name(st) if st else (
+                        inp.get("description") or "subagent")
                     placeholder = agents.get(tid)
                     if placeholder is not None:
                         # A placeholder was created above (its own events arrived
@@ -460,7 +553,8 @@ def dashboard(session, agents, source_name):
                f'background:{color}"></span>')
         rows.append(
             f'<div class="chan" style="--c:{color}">'
-            f'<div class="chan-label" style="padding-left:{a["depth"] * 18}px">'
+            f'<div class="chan-label" data-fam="{agent_family(a["subagent_type"])}" '
+            f'style="padding-left:{a["depth"] * 18}px">'
             f'<span class="dot"></span>{html.escape(a["name"])} '
             f'<span class="count">({calls})</span></div>'
             f'<div class="chan-track">{bar}{"".join(ticks)}</div></div>')
@@ -555,6 +649,10 @@ TEMPLATE = """<!doctype html>
     color:var(--fg); white-space:nowrap; overflow:hidden;
     text-overflow:ellipsis; }}
   .chan-label .count {{ color:var(--dim); }}
+  /* Project personas are the ones that carry THIS twin's review record as priors;
+     the gaia family is generic. Worth seeing without reading the name. */
+  .chan-label[data-fam="twin"] {{ font-weight:600; }}
+  .chan-label[data-fam="gaia"] {{ opacity:.88; }}
   .dot {{ display:inline-block; width:7px; height:7px; border-radius:50%;
     background:var(--c); margin-right:7px; vertical-align:middle; }}
   .chan-track {{ position:relative; height:22px;
@@ -642,7 +740,13 @@ def record(session, agents, args):
 
     tools = Counter(s["tool"] for a in agents.values()
                     for s in a["steps"] if s["kind"] == "tool_use")
-    subagents = [a["name"] for aid, a in agents.items() if aid != "root"]
+    # The RAW subagent_type, never the display name. This field was previously identical to
+    # a["name"], so giving names a human-facing form would have silently changed the value
+    # space of a longitudinal corpus -- existing records say "gaia:gaia-auditor" and new ones
+    # would have said "Gaia · Auditor", making any query across the two wrong rather than
+    # merely ugly. Display names are for the dashboard; the corpus keeps the identifier.
+    subagents = [a["subagent_type"] or a["name"]
+                 for aid, a in agents.items() if aid != "root"]
 
     rec = {
         # identity
@@ -722,6 +826,8 @@ def main():
                         "nothing -- pass e.g. 'PR #218 - guardrails'.")
     p.add_argument("--repo"), p.add_argument("--issue")
     p.add_argument("--outcome", help="e.g. pass, fail, needs-review")
+    p.add_argument("--all-agents", action="store_true",
+                   help="also show agents that were dispatched but never acted")
     args = p.parse_args()
 
     events, bad = load(args.jsonl)
@@ -735,6 +841,11 @@ def main():
         return
 
     session, agents = parse(events)
+    if not args.all_agents:
+        agents, dropped = prune_unused(agents)
+        if dropped:
+            print(f"note: hid {dropped} dispatched-but-inactive agent(s) "
+                  f"(--all-agents to show them)", file=sys.stderr)
 
     if args.counts:
         print(format_counts_table(agent_rows(agents)))

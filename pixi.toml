@@ -66,7 +66,11 @@ codameter = { git = "https://github.com/Denolle-Lab/codameter.git" }
 # === Tests (the CI gate) ===
 # The whole suite is offline: every test constructs synthetic inputs, so it runs on a clean checkout.
 # codameter/disba-dependent tests SKIP visibly (never a silent pass). -p no:cacheprovider keeps CI clean.
-test = "pytest tests/ -q -p no:cacheprovider"
+# scripts/gaia-launch/tests/ is included deliberately. Those tests cover the queue's own
+# gates -- plan parsing, panel routing, gate-integrity, the dashboard roster -- and they
+# existed for weeks without ever being collected, so the machinery that decides whether
+# research code may merge was itself ungated. Same failure class it is built to catch.
+test = "pytest tests/ scripts/gaia-launch/tests/ -q -p no:cacheprovider"
 # Online (hits doi.org), so it's a separate task from `test`, not folded into the offline suite.
 check-dois = "python scripts/check_doi_integrity.py"
 # Resolution-only checking cannot catch a REAL DOI attached to the WRONG paper -- the failure this

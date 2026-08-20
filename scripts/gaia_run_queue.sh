@@ -87,6 +87,12 @@ GAIA_RUN_COST=0                                   # accumulated across the whole
 # is never the sole judge) made mechanical instead of aspirational.
 GAIA_SCIENCE_GATE="${GAIA_SCIENCE_GATE:-1}"       # 0 disables plan + panel (not recommended)
 GAIA_PLAN_REVISIONS="${GAIA_PLAN_REVISIONS:-1}"   # plan revisions allowed after a panel block
+# Planning gets its OWN budget. It first ran on GAIA_AUX_TIMEOUT, which was sized for a
+# short auditor verdict, and the first supervised run died at exactly 1205s against that
+# 1200s cap having produced nothing. Planning reads the issue AND the code it would touch;
+# that is not an aux-sized task.
+GAIA_PLAN_TIMEOUT="${GAIA_PLAN_TIMEOUT:-2700}"    # 45 min wall clock for the planning session
+GAIA_PLAN_MAX_TURNS="${GAIA_PLAN_MAX_TURNS:-40}"
 GAIA_GATE_INTEGRITY="${GAIA_GATE_INTEGRITY:-1}"   # 0 disables gate-weakening detection
 GAIA_FAIL_STRIKES="${GAIA_FAIL_STRIKES:-3}"       # identical failure signatures before stopping
 GAIA_PENDING_META=()                              # per-issue meta awaiting the batch outcome
@@ -408,11 +414,41 @@ last_json_block() {
   awk '/^```json/{f=1;buf="";next} /^```/{if(f){last=buf;f=0}next} f{buf=buf$0"\n"} END{printf "%s", last}'
 }
 
+# A batch that died at the science gate used to record NOTHING. write_measurement is only
+# reached at commit time, so the corpus never saw the runs where the gate actually acted --
+# selection bias in the one dataset built to answer "does reviewing plans change outcomes?".
+# Every gate exit now leaves a record, keyed by WHY: plan-timeout, plan-invalid, panel-block.
+record_gate_block() {
+  local number="$1" title="$2" raw="$3" outcome="$4" logfile="$5"
+  local dir meta
+  if [ ! -s "$raw" ]; then
+    echo "  (no transcript to measure for #${number}; gate outcome ${outcome} unrecorded)" | tee -a "$logfile"
+    return 0
+  fi
+  dir="$(dirname "$raw")"
+  meta="${dir}/issue-${number}-${ts}.gate.meta.json"
+  jq -n \
+    --arg run_id "issue-${number}-${ts}" --arg repo "$REPO_SLUG" --arg issue "$number" \
+    --arg issue_title "$title" --arg git_rev "$(git rev-parse HEAD 2>/dev/null)" \
+    --arg outcome "$outcome" --arg dir "$dir" --arg harness "gaia_run_queue.sh" \
+    --arg claude_version "$(claude --version 2>/dev/null | head -1)" \
+    --argjson plan "$(cat "$PLAN_FILE" 2>/dev/null || echo null)" \
+    --argjson panel "$(cat "$dir/panel.json" 2>/dev/null || echo null)" \
+    '$ARGS.named | . + {delivery: {harness: .harness},
+                        science: {plan: .plan, panel: .panel}}' \
+    > "$meta" 2>>"$logfile" || return 0
+  python3 "$REPO_DIR/scripts/gaia-launch/gaia_trace.py" "$raw" \
+    --records "$LOG_DIR/records.jsonl" --meta "$meta" >> "$logfile" 2>&1 \
+    && echo "  measured: gate block on #${number} (outcome=${outcome}) -> ${LOG_DIR}/records.jsonl" | tee -a "$logfile" \
+    || echo "  could not record the gate block for #${number}" | tee -a "$logfile"
+  return 0
+}
+
 # The science gate. Writes $PLAN_FILE and $BRIEF_FILE for the caller to inject into the
 # implementation prompt. Returns 0 to proceed, 1 if the panel blocked (caller parks).
 science_gate() {
   local number="$1" title="$2" labels="$3" milestone="$4" logfile="$5"
-  local dir plan_raw errs panel decision rev=0
+  local dir errs panel decision rev=0 plan_rc gate_outcome
   [ "$GAIA_SCIENCE_GATE" = "1" ] || { : > "$PLAN_FILE"; : > "$BRIEF_FILE"; return 0; }
   dir="$LOG_DIR/plan-${number}-${ts}"; mkdir -p "$dir"
 
@@ -427,9 +463,15 @@ science_gate() {
     # 2. Pre-registration, from a READ-ONLY session -- it cannot touch the tree even if it
     #    decides to, because Edit/Write/NotebookEdit and every vcs mutation are denied.
     echo "  pre-registering a plan for #${number} (read-only)..." | tee -a "$logfile"
-    plan_raw="$(timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" \
-      claude -p "Use the gaia orchestrator to PLAN (not implement) work on GitHub issue #${number}
-(\"${title}\") in ${REPO_SLUG}. You are read-only: do not edit, write or run anything that changes state.
+    plan_rc=0
+    timeout --signal=TERM --kill-after=60 "$GAIA_PLAN_TIMEOUT" \
+      claude -p "Dispatch the gaia-study-designer agent to PLAN (not implement) work on GitHub
+issue #${number} (\"${title}\") in ${REPO_SLUG}. You are read-only: do not edit, write or run
+anything that changes state.
+
+Dispatch it in the FOREGROUND (run_in_background: false) and wait for its result, then relay
+its plan as your own final reply. Dispatch NO other agent. The panel below is the review
+step; a planner that reviews itself first only spends the budget twice.
 
 Prior work already on the record -- do not redo any of it:
 $(cat "$BRIEF_FILE")
@@ -450,15 +492,28 @@ Finish your reply with EXACTLY one fenced json block and nothing after it:
  \"negative_result_criteria\": \"<what a reproducible negative result looks like, and the narrower follow-up>\",
  \"out_of_scope\": [\"<explicitly not doing>\"]}
 \`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions \
-        --max-turns "$GAIA_AUX_MAX_TURNS" \
-        --disallowed-tools "${GAIA_READONLY_DENY[@]}" 2>>"$logfile")" || plan_raw=""
-    printf '%s' "$plan_raw" | last_json_block > "$PLAN_FILE"
-
-    if ! errs="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_plan.py" --validate "$PLAN_FILE" 2>&1)"; then
-      # Fails CLOSED, exactly like the auditor gate: an unparseable plan is not a plan, and
-      # proceeding without one silently reverts to the old no-plan behaviour.
-      { echo "  !!! #${number}: the pre-registered plan is invalid:"; echo "$errs" | sed 's/^/  | /'; } | tee -a "$logfile"
-      printf '%s' "$plan_raw" >> "$logfile"
+        --max-turns "$GAIA_PLAN_MAX_TURNS" \
+        --disallowed-tools "${GAIA_READONLY_DENY[@]}" \
+        --output-format stream-json --verbose 2>>"$logfile" \
+        > "$dir/plan.raw.jsonl" || plan_rc=$?
+    # A timeout is not a malformed plan, and reporting them identically cost a whole
+    # diagnosis cycle on the first supervised run. 124 is timeout's TERM, 137 its KILL.
+    if [ "$plan_rc" -eq 124 ] || [ "$plan_rc" -eq 137 ]; then
+      echo "  !!! #${number}: planning TIMED OUT after ${GAIA_PLAN_TIMEOUT}s (rc=${plan_rc}). \
+Raise GAIA_PLAN_TIMEOUT, or narrow the issue." | tee -a "$logfile"
+    elif [ "$plan_rc" -ne 0 ]; then
+      echo "  !!! #${number}: the planning session exited ${plan_rc} before producing a plan." | tee -a "$logfile"
+    fi
+    # Read the STREAM, not the process's stdout: a killed `claude -p` prints nothing in text
+    # mode, so partial work was unrecoverable. Fails CLOSED either way -- an unparseable plan
+    # is not a plan -- but now it says WHICH failure this was.
+    if ! errs="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_plan.py" \
+          --from-stream "$dir/plan.raw.jsonl" --out "$PLAN_FILE" \
+          --expect "$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --expect-for gaia-study-designer)" 2>&1)"; then
+      { echo "  !!! #${number}: no usable pre-registered plan:"; echo "$errs" | sed 's/^/  | /'; } | tee -a "$logfile"
+      gate_outcome="plan-timeout"
+      [ "$plan_rc" -eq 0 ] && gate_outcome="plan-invalid"
+      record_gate_block "$number" "$title" "$dir/plan.raw.jsonl" "$gate_outcome" "$logfile"
       return 1
     fi
     python3 "$REPO_DIR/scripts/gaia-launch/gaia_plan.py" --render "$PLAN_FILE" --issue "$number" \
@@ -525,6 +580,7 @@ $(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan t
     if [ "$rev" -ge "$GAIA_PLAN_REVISIONS" ]; then
       echo "  !!! science panel blocked #${number} after ${rev} revision(s); not implementing" | tee -a "$logfile"
       add_label "$number" needs-human-decision "$logfile"
+      record_gate_block "$number" "$title" "$dir/plan.raw.jsonl" "panel-block" "$logfile"
       return 1
     fi
     rev=$((rev + 1))
