@@ -683,6 +683,10 @@ def record(session, agents, args):
         # write into one corpus, so "did the delivery pipeline get better?" is a query
         # over records.jsonl rather than an archaeology exercise across two log formats.
         "delivery": meta.get("delivery"),
+        # The pre-registered plan and the panel's verdicts, so "does reviewing the plan
+        # actually change outcomes?" is a query over this corpus rather than an opinion.
+        # Pair it with `outcome` and `files_touched` across a few dozen issues.
+        "science": meta.get("science"),
         # payload
         "final_result": session["result"],
         "artifacts_dir": meta.get("dir"),
