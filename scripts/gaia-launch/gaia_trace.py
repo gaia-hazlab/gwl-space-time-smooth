@@ -712,6 +712,10 @@ def main():
                    help="append one trajectory record (JSONL) for training use")
     p.add_argument("--meta", metavar="FILE",
                    help="meta.json from gaia-run.sh; merged into the record")
+    p.add_argument("--title", metavar="TEXT",
+                   help="dashboard heading; defaults to the transcript filename. "
+                        "An interactive session is named by a UUID, which tells a reader "
+                        "nothing -- pass e.g. 'PR #218 - guardrails'.")
     p.add_argument("--repo"), p.add_argument("--issue")
     p.add_argument("--outcome", help="e.g. pass, fail, needs-review")
     args = p.parse_args()
@@ -738,7 +742,7 @@ def main():
         open(args.md, "w", encoding="utf-8").write(markdown(session, agents))
     if args.html:
         open(args.html, "w", encoding="utf-8").write(
-            dashboard(session, agents, os.path.basename(args.jsonl)))
+            dashboard(session, agents, args.title or os.path.basename(args.jsonl)))
     if args.records:
         with open(args.records, "a", encoding="utf-8") as f:
             f.write(json.dumps(record(session, agents, args),

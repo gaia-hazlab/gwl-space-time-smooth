@@ -11,6 +11,7 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 | `scripts/gaia_run_queue.sh` | Runs the queue: orchestrator → PR → arbitration → review → auditor gate → merge |
 | `scripts/gaia-launch/gaia_ticker.py` | Live per-agent ticker while a batch runs |
 | `scripts/gaia-launch/gaia_trace.py` | Renders a transcript into the HTML dashboard |
+| `scripts/gaia-launch/gaia_pr_dashboard.sh` | Renders and stages the dashboard for one PR |
 | `scripts/gaia-launch/gaia_runs_site_index.py` | Builds the index over all published dashboards |
 
 > **The safety model, in seven invariants.** Everything below follows from these:
@@ -660,6 +661,27 @@ with a generated index over all of them:
 - **Index:** <https://gaia-hazlab.github.io/gwl-space-time-smooth/gaia-runs/>
 - **One run:** `https://gaia-hazlab.github.io/gwl-space-time-smooth/gaia-runs/issue-<n>/<timestamp>/dashboard.html`
 
+### A dashboard per PR, not only per issue
+
+The queue renders one dashboard per **issue** and commits it beside the code it documents,
+which covers every PR the queue opens itself. A PR raised from an **interactive** session
+produced none — so the published index silently omitted exactly the work a human had been
+involved in, which is the work whose provenance matters most.
+
+```bash
+scripts/gaia-launch/gaia_pr_dashboard.sh 218          # newest session transcript for this repo
+scripts/gaia-launch/gaia_pr_dashboard.sh 218 path/to/session.jsonl   # or name it explicitly
+```
+
+It renders through the same `gaia_trace.py` (so the same secret redaction applies), titles
+the page from the PR rather than the session UUID, writes
+`docs/gaia-runs/pr-<n>/<timestamp>/dashboard.html`, and stages it. Commit it with the PR it
+documents. The index generator discovers `issue-*` and `pr-*` alike and labels each row.
+
+The transcript auto-detection picks the most recently modified session file for this repo.
+That is a convenience, not a guarantee — if more than one session contributed to the PR,
+pass the path explicitly.
+
 Note the dashboards only appear on the site **after the PR merges**. To read one before
 that, open the file from the branch, or render it yourself from any transcript — including
 a run that never got committed:
@@ -669,9 +691,10 @@ a run that never got committed:
 python3 scripts/gaia-launch/gaia_trace.py .gaia-runs/issue-154-20260818T101610Z.raw.jsonl \
   --html /tmp/issue-154.html
 
-# or from an interactive session file
+# or from an interactive session file (--title beats a UUID heading)
 python3 scripts/gaia-launch/gaia_trace.py \
-  ~/.claude/projects/-home-mdenolle-gwl-space-time-smooth/<session-id>.jsonl --html /tmp/s.html
+  ~/.claude/projects/-home-mdenolle-gwl-space-time-smooth/<session-id>.jsonl \
+  --html /tmp/s.html --title "PR #218 — guardrails"
 ```
 
 Other useful outputs from the same tool — `--inspect` for a terminal summary, `--counts`
