@@ -69,6 +69,16 @@ codameter = { git = "https://github.com/Denolle-Lab/codameter.git" }
 test = "pytest tests/ -q -p no:cacheprovider"
 # Online (hits doi.org), so it's a separate task from `test`, not folded into the offline suite.
 check-dois = "python scripts/check_doi_integrity.py"
+# Resolution-only checking cannot catch a REAL DOI attached to the WRONG paper -- the failure this
+# file has actually suffered. --metadata compares title/first-author/year against Crossref. Run this
+# (not just `check-dois`) before merging any literature update (issue #158).
+check-dois-metadata = "python scripts/check_doi_integrity.py docs/references.bib --metadata"
+
+# === Prior calibration (issue #192) ===
+# Estimate the spatial prior from OUT-OF-FOLD residuals, profiling over nu with sigma/L/nugget
+# re-estimated at each candidate. --self-test verifies the estimator against a known Matern field
+# (a few minutes, offline, writes nothing); the real run needs a residual table that is not in-repo.
+calibrate-prior-selftest = "python scripts/calibrate_spatial_prior.py --self-test"
 
 # === Primary pipeline ===
 data = "python -m src.data.download_nwis --start-date 2000-01-01 --output-dir data/raw/nwis"

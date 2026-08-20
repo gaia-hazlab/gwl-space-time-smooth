@@ -127,7 +127,7 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   │   ├── compute_grid.py           ← canonical 90 m EPSG:5070 grid definition
 │   │   ├── compute_terrain.py        ← HAND, TWI, slope, contributing area from 3DEP DEM
 │   │   ├── hydrogeologic_domains.py  ← domain mask from lithology + HAND + dist-coast (issue #2)
-│   │   └── well_hydrostratigraphy.py ← screen wells to the shallow unconfined water table (issue #46)
+│   │   └── well_hydrostratigraphy.py ← what a well MEASURES: water_table | aquifer_head | unknown (#46, #189)
 │   ├── models/
 │   │   ├── baseline_regression.py   ← Stage 1: random forest + regression kriging (GWL)
 │   │   ├── climate_response.py      ← Stage 2: per-site OLS β-maps
@@ -140,6 +140,8 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   │   ├── downscale.py             ← static-envelope × coarse-driver downscalers + σ budget
 │   │   ├── anchor.py                ← precision-weighted point assimilation (obs anchoring)
 │   │   ├── attribution.py           ← RF permutation feature-importance attribution
+│   │   ├── hydro_state.py           ← the state vocabulary: storage → h_wt → DTW → pore pressure (#187)
+│   │   ├── prior_calibration.py     ← REML Matérn profile over ν from out-of-fold residuals (#192)
 │   │   ├── soil_mechanics.py        ← SCAFFOLD: full soil-mechanics coupling (#19)
 │   │   └── interpolate_{baseline,anomalies}.py ← LEGACY co-kriging (comparison only)
 │   ├── evaluation/
