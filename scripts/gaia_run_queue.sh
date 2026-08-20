@@ -94,6 +94,11 @@ GAIA_VCS_DENY=(
   "Bash(git revert:*)" "Bash(git am:*)" "Bash(git apply:*)" "Bash(git gc:*)"
   "Bash(git prune:*)" "Bash(git reflog:*)" "Bash(git filter-branch:*)"
   "Bash(git worktree:*)" "Bash(git remote:*)" "Bash(git config:*)" "Bash(git restore:*)"
+  # fetch/pull update refs too: `pull` moves the local branch (and can merge), and `fetch`
+  # rewrites remote-tracking refs and FETCH_HEAD -- which collision arbitration reads to
+  # materialise a rival's diff. Denied for the same reason as the rest. (Copilot, PR #218.)
+  "Bash(git fetch:*)" "Bash(git pull:*)" "Bash(git update-ref:*)" "Bash(git symbolic-ref:*)"
+  "Bash(git submodule:*)" "Bash(git notes:*)" "Bash(git replace:*)"
   "Bash(gh pr merge:*)" "Bash(gh pr create:*)" "Bash(gh pr close:*)" "Bash(gh pr ready:*)"
   "Bash(gh pr edit:*)" "Bash(gh issue close:*)" "Bash(gh issue delete:*)"
   "Bash(gh repo delete:*)" "Bash(gh release:*)" "Bash(gh api:*)" "Bash(gh workflow:*)"
@@ -243,20 +248,43 @@ assert_tree_clean() {
 # throwaway branch and returns to a clean `main`.
 quarantine_residue() {
   local label="$1" why="$2" logfile="$3"
-  local ref="gaia/residue/${label}-$(date -u +%Y%m%dT%H%M%SZ)"
-  {
-    git checkout -b "$ref" 2>&1 || return 1
-    git add -A 2>&1 || true
-    git commit -m "gaia residue (unreviewed): ${why}
+  local ref="gaia/residue/${label}-$(date -u +%Y%m%dT%H%M%SZ)" commit_rc=0
+  git checkout -b "$ref" >> "$logfile" 2>&1 || {
+    echo "  !!! could not create ${ref}; NOT touching the tree. Residue left exactly as found." | tee -a "$logfile"
+    return 1
+  }
+  git add -A >> "$logfile" 2>&1 || true
+  # --no-verify is deliberate. Residue is BY DEFINITION unreviewed and may well fail this
+  # repo's pre-commit hook (which runs the test suite). A hook rejecting it is not a reason
+  # to lose it -- the whole point of this function is to preserve work nobody has vetted.
+  git commit --no-verify -m "gaia residue (unreviewed): ${why}
 
 Found in the working tree where it should have been clean. This did NOT pass the gate and
 was NOT part of any reviewed PR. Quarantined here so the next batch starts clean; nothing
 was deleted.
 
-Co-Authored-By: Claude <noreply@anthropic.com>" 2>&1 || true
-    git checkout main 2>&1 || git checkout -f main 2>&1 || true
-  } >> "$logfile" 2>&1
+Co-Authored-By: Claude <noreply@anthropic.com>" >> "$logfile" 2>&1 || commit_rc=$?
+
+  if [ "$commit_rc" -ne 0 ]; then
+    # FAIL CLOSED, and above all do NOT `checkout -f`. The earlier version fell through to a
+    # forced checkout on commit failure, which would DELETE the very residue it was called to
+    # preserve -- a direct contradiction of invariant 1. Stay on the residue branch, leave the
+    # tree exactly as it is, and make the caller stop. (Found by Copilot review on PR #218.)
+    {
+      echo "  !!! could not commit the residue (exit ${commit_rc}). It is UNTOUCHED on branch ${ref}."
+      echo "      Nothing was discarded and nothing was force-checked-out."
+      echo "      Resolve by hand before running the queue again:  git -C \"$REPO_DIR\" status"
+    } | tee -a "$logfile"
+    return 1
+  fi
+
+  # The commit succeeded, so the tree is clean and this checkout cannot destroy anything.
+  git checkout main >> "$logfile" 2>&1 || {
+    echo "  !!! quarantined on ${ref} but could not return to main; stopping here rather than forcing." | tee -a "$logfile"
+    return 1
+  }
   echo "  residue quarantined on ${ref} (nothing deleted); inspect: git log -1 --stat ${ref}" | tee -a "$logfile"
+  return 0
 }
 
 # The guardrail that does not depend on the CLI honouring anything. Deny rules are the
@@ -264,9 +292,14 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>&1 || true
 # that it must hold when the thing it is guarding misbehaves. So: snapshot version control
 # before every agent invocation, and PROVE afterwards that the agent did not move it.
 vcs_state() {
-  printf '%s@%s' \
+  # HEAD and the branch name are not enough. They miss a created or deleted branch, and they
+  # miss anything that moves a remote-tracking ref (a stray `git fetch`), which collision
+  # arbitration later reads. Fingerprint the WHOLE local ref namespace as well, so the check
+  # is about "did any ref move", not just "did this one". (Copilot review, PR #218.)
+  printf '%s@%s@%s' \
     "$(git rev-parse HEAD 2>/dev/null || echo none)" \
-    "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo none)"
+    "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo none)" \
+    "$(git show-ref 2>/dev/null | fingerprint)"
 }
 
 # Returns 1 if the agent committed, checked out, or otherwise moved a ref. The caller
@@ -845,8 +878,17 @@ while IFS= read -r batch_json; do
   # NOTE: we are on `main` here, so this must NOT call park_branch -- that would commit the
   # residue onto main and then rename main out from under the queue.
   if ! assert_tree_clean "before starting ${numbers_csv}" "$logfile"; then
-    quarantine_residue "prebatch-$(jq -r '.issues[0].number' <<<"$batch_json")" \
-      "tree was already dirty before ${numbers_csv} started" "$logfile"
+    # A failed quarantine means unpreserved work is sitting in the tree. HALT THE WHOLE
+    # QUEUE rather than `continue`: the next batch's first act is `git checkout main`, which
+    # against a dirty tree either fails (killing the script mid-flight under `set -e`) or,
+    # worse, gets forced somewhere and destroys the work. Nothing automated should touch a
+    # tree we could not preserve.
+    if ! quarantine_residue "prebatch-$(jq -r '.issues[0].number' <<<"$batch_json")" \
+        "tree was already dirty before ${numbers_csv} started" "$logfile"; then
+      report_failure "could not preserve pre-existing residue; HALTING the queue with the tree untouched" "$logfile" 1
+      GAIA_STOP=1
+      break
+    fi
   fi
   if ! assert_tree_clean "after quarantining, before starting ${numbers_csv}" "$logfile"; then
     report_failure "could not get to a clean tree before ${numbers_csv}; skipping this batch rather than committing someone else's work" "$logfile" 1
@@ -1301,8 +1343,13 @@ closing comment on each issue in the batch." \
   # is at risk), but it must be loud and it must not propagate.
   git checkout main >> "$logfile" 2>&1 || git checkout -f main >> "$logfile" 2>&1 || true
   if ! assert_tree_clean "after merging PR #${pr_number} (${numbers_csv})" "$logfile"; then
-    quarantine_residue "postmerge-pr${pr_number}" \
-      "left in the tree after PR #${pr_number} merged" "$logfile"
+    # The merge already succeeded, so nothing shipped is at risk -- but the same reasoning
+    # applies to what is left behind: if it could not be preserved, no later batch may run.
+    if ! quarantine_residue "postmerge-pr${pr_number}" \
+        "left in the tree after PR #${pr_number} merged" "$logfile"; then
+      report_failure "PR #${pr_number} merged, but post-merge residue could not be preserved; HALTING the queue with the tree untouched" "$logfile" 1
+      GAIA_STOP=1
+    fi
   fi
 
   if [ -n "$milestone" ]; then
