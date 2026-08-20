@@ -135,16 +135,48 @@ def build_observations(coords, region, shape, obs_mod, dvv_mod):
 
 
 # ----------------------------------------------------------------- the minimal operator form
-def cross_direct(obs_mod, sigma, length_km, nu, region, coords, G, block=4096):
+def effective_support(g, mass_tol=1e-12):
+    """Smallest index set carrying all but ``mass_tol`` of a footprint's absolute mass.
+
+    ``np.nonzero(g)`` is NOT the support of a Gaussian footprint in floating point. A
+    ``point_footprint`` on a 40x40 grid has 1177 of 1600 cells nonzero -- 74% of the domain --
+    because the tail only underflows around 1e-322, while 99.999995% of the mass sits in the
+    top ~25 cells. Taking nonzero as the support therefore made ``cross_direct`` cost ~74% of
+    dense for the commonest observation type while still being described as support-restricted.
+    (Found by Copilot review on PR #217.)
+
+    The truncation is bounded, not heuristic. Since ``Bx[:, i] = sigma^2 * sum_j corr(x, x_j) g_j``
+    and ``|corr| <= 1``, dropping a set D changes the result by at most ``sigma^2 * sum_{j in D} |g_j|``.
+    So the absolute error is ``<= sigma^2 * mass_tol`` by construction -- at the default, ~1e-12
+    of the prior variance, orders of magnitude below any comparison threshold in this benchmark.
+    """
+    a = np.abs(g)
+    total = a.sum()
+    if total == 0:
+        return np.empty(0, dtype=np.intp)
+    order = np.argsort(a)[::-1]
+    keep = np.searchsorted(np.cumsum(a[order]), (1.0 - mass_tol) * total) + 1
+    return np.sort(order[:keep])
+
+
+def cross_direct(obs_mod, sigma, length_km, nu, region, coords, G, block=4096, mass_tol=1e-12):
     """C @ G.T evaluated from the Matern kernel over each footprint's SUPPORT. Never forms C.
 
+    "Support" means the *effective* support -- the smallest cell set carrying all but
+    ``mass_tol`` of the footprint's mass (see :func:`effective_support`), NOT every cell where
+    ``g`` is bitwise nonzero. The induced error is bounded by ``sigma^2 * mass_tol``.
+
     Cost is n * |supp(g_i)| per observation, so it is the right method for compact footprints
-    (wells, SNOTEL) and degenerates towards dense for a footprint that covers the domain.
+    (wells, SNOTEL) and degenerates towards dense for a footprint that genuinely covers the
+    domain -- a dv/v volume kernel does; a point sensor does not, and previously was treated
+    as though it did.
     """
     n = coords.shape[0]
     out = np.zeros((n, G.shape[0]), dtype="float64")
+    supp_sizes = []
     for i, g in enumerate(G):
-        supp = np.nonzero(g)[0]
+        supp = effective_support(g, mass_tol)
+        supp_sizes.append(supp.size)
         if supp.size == 0:
             continue
         acc = np.zeros(n, dtype="float64")
@@ -156,6 +188,12 @@ def cross_direct(obs_mod, sigma, length_km, nu, region, coords, G, block=4096):
                 corr *= (region[:, None] == region[sl][None, :])
             acc += corr @ g[sl]
         out[:, i] = (sigma ** 2) * acc
+    # Reported, not silent: a method that claims to be support-restricted has to show what
+    # fraction of the domain it actually touched, or the claim is unfalsifiable.
+    cross_direct.last_support = dict(
+        n=n, mean=float(np.mean(supp_sizes)), max=int(np.max(supp_sizes)),
+        min=int(np.min(supp_sizes)), mean_frac=float(np.mean(supp_sizes) / n),
+        mass_tol=mass_tol)
     return out
 
 
@@ -258,7 +296,13 @@ def main():
      t_dir = time.perf_counter() - t0
      diagC_an = np.full(n, sigma ** 2)
      m_x, v_x, r_x, S_x = blue_from_cross(Bx_dir, G, diagC_an, d_obs, nv)
-     results["direct"] = dict(Bx=Bx_dir, m=m_x, v=v_x, r=r_x, S=S_x, t_cross=t_dir, mem=peak_gb())
+     supp = cross_direct.last_support
+     results["direct"] = dict(Bx=Bx_dir, m=m_x, v=v_x, r=r_x, S=S_x, t_cross=t_dir,
+                              mem=peak_gb(), support=supp)
+     print(f"\n## direct: effective support {supp['mean']:.0f} of {supp['n']} cells on average "
+           f"({100*supp['mean_frac']:.2f}% of the domain), min {supp['min']}, max {supp['max']}")
+     print(f"   mass_tol={supp['mass_tol']:g} => absolute error bound sigma^2*mass_tol "
+           f"= {sigma**2 * supp['mass_tol']:.2e}")
 
     # ---- A: StationaryGridPrior (FFT) ------------------------------------------------------
     try:

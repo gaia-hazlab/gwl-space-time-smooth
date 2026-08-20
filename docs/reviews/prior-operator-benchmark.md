@@ -113,6 +113,38 @@ underflows to exactly zero on a domain this small, so a `g != 0` support test is
 direct implementation must therefore **truncate** at a mass tolerance — a controlled approximation
 that A, being exact, does not need.
 
+> **Correction (2026-08-19).** The paragraph above was right, and the benchmark script did not do it.
+> `cross_direct` took its support from `np.nonzero(g)`, which on the real 90 m km-grid is **100% of
+> the domain** at every size this study used (86% at 400×400, where the tail finally underflows). So
+> every `direct` timing in §4 below was measured on an untruncated implementation — precisely the one
+> this paragraph says nobody should write. Found by Copilot review on PR #217.
+>
+> The script now truncates by mass. `effective_support(g, mass_tol)` keeps the smallest cell set
+> carrying all but `mass_tol` of the footprint's absolute mass. The error is **bounded, not
+> heuristic**: since `Bx[:,i] = σ² Σ_j corr(x,x_j) g_j` and `|corr| ≤ 1`, dropping a set `D` changes
+> the result by at most `σ² Σ_{j∈D} |g_j| ≤ σ²·mass_tol`. At the default `mass_tol = 1e-12` and
+> σ = 0.5 that is 2.5e-13 — measured max deviation 1.85e-13, i.e. the bound holds and is tight.
+>
+> Re-measured on the same 25,600-cell domain and the same 7 observations: mean effective support
+> 76.7% → 42.1%, and `C @ G.T` **147.4 s → 81.6 s (1.81×)**. The residual 42% is the two dv/v
+> footprints, which genuinely do cover the domain — which is the finding of §3, now measured on an
+> implementation that matches its own description. The speedup grows with domain size, because the
+> truncated point-sensor support is a constant ~5,363 cells while `nnz` was `n`:
+>
+> | domain | cells | `nnz` support | truncated support | ratio |
+> |---|---|---|---|---|
+> | 60×60 | 3,600 | 100.0% | 98.9% | 1.0× |
+> | 100×100 | 10,000 | 100.0% | 53.6% | 1.9× |
+> | 160×160 | 25,600 | 100.0% | 21.0% | 4.8× |
+> | 260×260 | 67,600 | 100.0% | 7.9% | 12.6× |
+> | 400×400 | 160,000 | 86.2% | 3.4% | 25.7× |
+>
+> **No conclusion in this report changes.** A is still exact and still orders of magnitude faster;
+> `direct` still degenerates on volume footprints, which is the whole argument. What changes is that
+> the `direct` column is now an honest measurement of the method §3 describes, rather than an upper
+> bound from a method §3 rules out. The §4 tables below are left at their original values and are
+> superseded by this note for the `direct` row only.
+
 ## 4. Numerical comparison
 
 Primary metric is `C @ G.T`, as required. 25,600-cell native-90-m domain, 3 non-axis-aligned regions,
@@ -144,7 +176,9 @@ properly exercised and B has a stationary interior):**
 | **A** | **2.800e-16** | 2.498e-16 | 6.813e-15 | 4.673e-16 | **0.252 s** |
 | B | 1.411e+01 | 3.173e+00 | 6.172e-01 | 3.336e-01 | 0.186 s |
 
-**`direct` and A agree with dense to the same 2.7e-16 — and A is 776× faster.** `direct`'s cost is
+**`direct` and A agree with dense to the same 2.7e-16 — and A is 776× faster** (≈430× against the
+truncated `direct`; see the correction in §3, and note the two runs are on different machine loads,
+so treat the ratio rather than the absolute seconds as the comparable quantity). `direct`'s cost is
 also **independent of L** (195.4 s at L=12 km, 195.3 s and 192.1 s at L=2 km), confirming that it is
 set by footprint support and not by the correlation length. The direct form
 degenerates to dense cost here because the two dv/v footprints have ~99% support (§3): its 195 s is
