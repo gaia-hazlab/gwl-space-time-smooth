@@ -78,7 +78,11 @@ def test_matern_correlation_is_rougher_than_the_old_squared_exponential():
         assert np.all(m >= -1e-9)
     # nu=0.5 (exponential) is rougher near the origin than the squared-exponential -- it decays faster
     assert matern_correlation(np.array([1.0]), length, nu=0.5)[0] < rbf[np.argmin(np.abs(d - 1.0))]
-    assert _raises(lambda: matern_correlation(1.0, length, nu=99), ValueError)
+    # any POSITIVE nu is now supported (the calibration grid needs 1.0 and 2.0, which have no
+    # elementary closed form); only non-positive / non-finite nu is rejected.
+    assert _raises(lambda: matern_correlation(1.0, length, nu=0.0), ValueError)
+    assert _raises(lambda: matern_correlation(1.0, length, nu=-1.0), ValueError)
+    assert _raises(lambda: matern_correlation(1.0, length, nu=np.nan), ValueError)
 
 
 def test_gaussian_prior_defaults_to_matern_and_is_positive_semidefinite():
@@ -305,3 +309,228 @@ if __name__ == "__main__":
     test_blue_update_recovers_a_smooth_truth_and_reverts_off_support()
     test_information_gain_is_monotone_in_variance_reduction()
     print("all observability tests passed")
+
+
+# --- the prior is a statistical model, chosen independently of nu, convention, and backend ---------
+
+def test_general_nu_matches_the_half_integer_closed_forms_and_covers_the_calibration_grid():
+    # nu=1.0 and nu=2.0 have no elementary closed form but are on the groundwater candidate grid, so
+    # the general (Bessel) branch must exist AND agree with the closed forms where both apply.
+    from scipy.special import gammaln, kv
+
+    d = np.array([0.0, 0.25, 1.0, 3.0, 10.0, 200.0])
+    L = 4.0
+
+    def bessel_form(r, nu):
+        x = (2.0 * nu) ** 0.5 * np.asarray(r) / L
+        out = np.ones_like(x)
+        p = x > 0
+        out[p] = np.exp((1.0 - nu) * np.log(2.0) - gammaln(nu) + nu * np.log(x[p])) * kv(nu, x[p])
+        return np.nan_to_num(out)
+
+    for nu in (0.5, 1.5, 2.5):
+        assert np.allclose(matern_correlation(d, L, nu), bessel_form(d, nu), atol=1e-12)
+    for nu in (1.0, 2.0):
+        m = matern_correlation(d, L, nu)
+        assert m[0] == 1.0
+        assert np.all(np.diff(m) <= 1e-12)
+        assert np.all((m >= 0.0) & (m <= 1.0))
+    # smoothness ordering at a fixed lag: rougher fields decorrelate faster near the origin
+    at_half_L = [matern_correlation(np.array([L / 2]), L, nu)[0] for nu in (0.5, 1.0, 1.5, 2.0, 2.5)]
+    assert all(a < b for a, b in zip(at_half_L, at_half_L[1:]))
+
+
+def test_nu_one_half_is_the_plain_exponential_not_exp_of_sqrt2_r_over_L():
+    # The documented convention is sqrt(2 nu) r / L, so sqrt(2*0.5)=1 exactly and rho = exp(-r/L).
+    # The assimilation chapter previously stated exp(-sqrt(2) r / L); this pins the correct form.
+    d = np.linspace(0.0, 30.0, 61)
+    L = 7.0
+    assert np.allclose(matern_correlation(d, L, nu=0.5), np.exp(-d / L))
+    assert not np.allclose(matern_correlation(d, L, nu=0.5), np.exp(-np.sqrt(2.0) * d / L))
+
+
+def test_range_convention_conversion_and_microergodic_parameter():
+    from src.models.observability import (
+        RANGE_CONVENTION,
+        convert_matern_range,
+        microergodic_parameter,
+    )
+
+    assert RANGE_CONVENTION == "sqrt(2*nu)*L".replace("*L", "*r/L")   # documented verbatim
+    L, nu = 12.0, 1.5
+    # Lindgren's practical range uses sqrt(8 nu) r / rho; matching arguments gives rho = 2 L
+    assert convert_matern_range(L, nu, "lindgren") == 2.0 * L
+    kappa = convert_matern_range(L, nu, "kappa")
+    assert np.isclose(kappa, np.sqrt(2 * nu) / L)
+    # the microergodic quantity is sigma^2 kappa^(2nu) -- NOT the convention-free sigma^2 / L^(2nu)
+    sigma = 0.5
+    assert np.isclose(microergodic_parameter(sigma, L, nu), sigma ** 2 * kappa ** (2 * nu))
+    assert not np.isclose(microergodic_parameter(sigma, L, nu), sigma ** 2 / L ** (2 * nu))
+    # it is invariant along the (sigma, L) ridge Zhang (2004) says is unidentifiable: scaling L by c
+    # and sigma^2 by c^(2nu) leaves it unchanged
+    c = 1.7
+    assert np.isclose(microergodic_parameter(sigma * c ** nu, L * c, nu),
+                      microergodic_parameter(sigma, L, nu))
+    assert _raises(lambda: convert_matern_range(L, nu, "nonsense"), ValueError)
+
+
+def test_groundwater_and_soil_moisture_can_carry_different_nu():
+    # The core configuration defect this audit fixes: ONE GaussianPrior default silently governed
+    # both states. The registry must let them differ, and the priors must actually differ.
+    from src.models.observability import NU_CANDIDATES, PRIOR_HYPERPARAMETERS, prior_for_state
+
+    assert set(PRIOR_HYPERPARAMETERS) == {"water_table_head_anomaly", "soil_moisture_anomaly"}
+    gw = prior_for_state("water_table_head_anomaly", nu=1.5)
+    sm = prior_for_state("soil_moisture_anomaly", nu=0.5)
+    assert gw.nu != sm.nu
+    c = _grid(n=8, span=20.0)
+    assert not np.allclose(gw.cov(c) / gw.sigma ** 2, sm.cov(c) / sm.sigma ** 2)
+    # ...and changing one state's nu must not touch the other's
+    assert prior_for_state("soil_moisture_anomaly").nu == PRIOR_HYPERPARAMETERS[
+        "soil_moisture_anomaly"].nu
+    # the candidate grids are state-specific, per the audit
+    assert NU_CANDIDATES["water_table_head_anomaly"] == (0.5, 1.0, 1.5, 2.0)
+    assert NU_CANDIDATES["soil_moisture_anomaly"] == (0.5, 1.0, 1.5)
+    # nothing is labelled calibrated, because nothing has been
+    assert all(hp.status != "calibrated" for hp in PRIOR_HYPERPARAMETERS.values())
+    assert _raises(lambda: prior_for_state("dvv"), KeyError)
+
+
+def test_dtw_and_head_anomalies_share_one_prior_entry_not_two():
+    # WTD anomaly = -head anomaly, so a separate "wtd" hyperparameter entry would be a modelling
+    # error. Assert the registry does not contain one.
+    from src.models.observability import PRIOR_HYPERPARAMETERS
+
+    keys = " ".join(PRIOR_HYPERPARAMETERS).lower()
+    assert "wtd" not in keys and "dtw" not in keys
+
+
+def test_barrier_id_is_an_alias_of_region_id_and_a_contradiction_is_refused():
+    c = np.array([[0.0, 0.0], [1.0, 0.0], [10.0, 0.0], [11.0, 0.0]])
+    region = np.array([0, 0, 1, 1])
+    by_region = GaussianPrior(sigma=1.0, length_km=4.0, region_id=region)
+    by_barrier = GaussianPrior(sigma=1.0, length_km=4.0, barrier_id=region)
+    assert np.allclose(by_region.cov(c), by_barrier.cov(c))
+    assert np.array_equal(by_region.barrier_id, region)          # the alias is populated both ways
+    assert np.array_equal(by_barrier.region_id, region)
+    assert _raises(lambda: GaussianPrior(sigma=1.0, length_km=4.0, region_id=region,
+                                         barrier_id=np.array([0, 1, 0, 1])), ValueError)
+
+
+# --- variance reduction is not resolution ----------------------------------------------------------
+
+def test_resolution_is_an_alias_of_variance_reduction_ratio():
+    from src.models.observability import resolution as res_alias
+    from src.models.observability import variance_reduction_ratio
+
+    assert res_alias is variance_reduction_ratio
+    c = _grid()
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    G = np.vstack([point_footprint(c, (10.0, 10.0))])
+    a, b = variance_reduction_ratio(C, G, 0.01)
+    a2, b2 = res_alias(C, G, 0.01)
+    assert np.allclose(a, a2) and np.allclose(b, b2)
+
+
+def test_averaging_kernel_rows_sum_toward_one_where_constrained_and_zero_where_not():
+    from src.models.observability import averaging_kernel, variance_reduction_ratio
+
+    c = _grid(n=16, span=20.0)
+    C = GaussianPrior(sigma=1.0, length_km=3.0).cov(c)
+    G = np.vstack([point_footprint(c, (5.0, 5.0), width_km=0.4)])
+    A = averaging_kernel(C, G, noise_var=1e-4)
+    assert A.shape == (len(c), len(c))
+    near = int(np.argmin(np.sum((c - [5.0, 5.0]) ** 2, axis=1)))
+    far = int(np.argmax(np.sum((c - [5.0, 5.0]) ** 2, axis=1)))
+    assert A[near].sum() > 0.9                      # essentially fully informed by the datum
+    assert abs(A[far].sum()) < 0.2                  # the far cell mostly keeps its prior
+    # a no-observation system has a zero resolution operator and zero DFS
+    assert np.allclose(averaging_kernel(C, np.empty((0, len(c))), 1.0), 0.0)
+
+
+def test_a_broad_footprint_gives_high_variance_reduction_but_a_WIDE_averaging_kernel():
+    # This is the claim the docs must stop making: high R(j) does not mean the estimate at j is
+    # localized. A single very broad footprint drives R up while the averaging kernel stays wide.
+    from src.models.observability import (
+        averaging_kernel,
+        resolution_width_km,
+        variance_reduction_ratio,
+    )
+
+    c = _grid(n=21, span=40.0)
+    C = GaussianPrior(sigma=1.0, length_km=15.0).cov(c)
+    centre = np.array([20.0, 20.0])
+    j = int(np.argmin(np.sum((c - centre) ** 2, axis=1)))
+
+    narrow = np.vstack([point_footprint(c, centre, width_km=0.4)])
+    broad = np.vstack([point_footprint(c, centre, width_km=6.0)])     # a dv/v-like volume average
+
+    r_narrow, _ = variance_reduction_ratio(C, narrow, 1e-3)
+    r_broad, _ = variance_reduction_ratio(C, broad, 1e-3)
+    w_narrow = resolution_width_km(C, narrow, 1e-3, c, rows=[j])[0]
+    w_broad = resolution_width_km(C, broad, 1e-3, c, rows=[j])[0]
+
+    assert r_broad[j] > 0.9 and r_narrow[j] > 0.9      # BOTH look "well resolved" on the diagonal
+    assert w_broad > 10.0 * w_narrow                   # but the broad datum is far less localized
+    assert w_broad > 5.0                               # kilometres, not the 90 m the grid suggests
+    # the wide kernel is genuinely spread: its peak weight is a smaller share of the row
+    A_broad = averaging_kernel(C, broad, 1e-3, rows=[j])[0]
+    A_narrow = averaging_kernel(C, narrow, 1e-3, rows=[j])[0]
+    assert A_broad.max() < A_narrow.max()
+    # an unconstrained system has no width, not zero width
+    assert np.isnan(resolution_width_km(C, np.empty((0, len(c))), 1.0, c, rows=[j])[0])
+
+
+def test_degrees_of_freedom_for_signal_is_bounded_by_the_number_of_observations():
+    from src.models.observability import degrees_of_freedom_for_signal as dfs
+
+    c = _grid(n=12, span=20.0)
+    C = GaussianPrior(sigma=1.0, length_km=4.0).cov(c)
+    locs = [(4.0, 4.0), (16.0, 4.0), (4.0, 16.0), (16.0, 16.0)]
+    G = np.vstack([point_footprint(c, p) for p in locs])
+
+    assert dfs(C, np.empty((0, len(c))), 1.0) == 0.0
+    d_low, d_high = dfs(C, G, 1e-4), dfs(C, G, 10.0)
+    assert 0.0 < d_high < d_low <= len(locs) + 1e-9      # noisier data determine fewer numbers
+    assert d_low > 3.0                                   # 4 well-separated precise data ~ 4 dof
+    # co-located duplicates add data but almost no independent information
+    dup = np.vstack([point_footprint(c, (4.0, 4.0)) for _ in range(4)])
+    assert dfs(C, dup, 1e-4) < 1.5
+
+
+# --- a screened/confined well cannot use the shallow water-table point operator (#189) --------------
+
+def test_water_table_point_operator_refuses_a_confined_or_unknown_observation():
+    from src.models.observability import water_table_point_footprint
+
+    c = _grid(n=8, span=20.0)
+    loc = (10.0, 10.0)
+    g = water_table_point_footprint(c, loc, "water_table")
+    assert np.isclose(g.sum(), 1.0)
+    assert np.allclose(g, point_footprint(c, loc))          # same operator, just gated
+
+    assert _raises(lambda: water_table_point_footprint(c, loc, "aquifer_head"), ValueError)
+    assert _raises(lambda: water_table_point_footprint(c, loc, "unknown"), ValueError)
+    assert _raises(lambda: water_table_point_footprint(c, loc, "shallow_watertable"), ValueError)
+
+
+def test_a_deep_confined_well_is_classified_then_refused_end_to_end():
+    # the semantic layer and the operator layer must agree: a well NWIS says is confined must not be
+    # able to reach the h_wt point operator by any ordinary route.
+    import pandas as pd
+
+    from src.features.well_hydrostratigraphy import measurement_target
+    from src.models.observability import water_table_point_footprint
+
+    sites = pd.DataFrame({
+        "well_depth_m": [8.0, 8.0, 120.0, np.nan],
+        "aqfr_type_cd": ["U", "C", None, None],      # a SHALLOW well in a confined unit is not h_wt
+        "is_flowing": [False, False, False, True],
+    })
+    tgt = list(measurement_target(sites))
+    assert tgt == ["water_table", "aquifer_head", "aquifer_head", "unknown"]
+
+    c = _grid(n=6, span=10.0)
+    assert np.isclose(water_table_point_footprint(c, (5.0, 5.0), tgt[0]).sum(), 1.0)
+    for bad in tgt[1:]:
+        assert _raises(lambda t=bad: water_table_point_footprint(c, (5.0, 5.0), t), ValueError)

@@ -8,8 +8,12 @@ Applies the full QC chain from the water-table-model skill:
   4. Convert feet → meters
   5. Compute WTE from DTW + land surface altitude
   6. Check datum consistency (drop NGVD29 or flag for VERTCON)
-  7. Aggregate to monthly medians per site — NO gap filling; sparse months stay NaN
-  8. Compute per-site temporal coverage statistics; flag sparse / gappy time series
+  7. Classify each SITE's observation semantics -- water_table / aquifer_head / unknown -- from its
+     screened interval, aquifer type code, flowing status and depth (issue #189). Only
+     ``water_table`` sites may enter the assimilation through the shallow water-table point operator;
+     ``unknown`` is flagged, never silently promoted.
+  8. Aggregate to monthly medians per site — NO gap filling; sparse months stay NaN
+  9. Compute per-site temporal coverage statistics; flag sparse / gappy time series
 
 Usage:
     python -m src.data.qc_nwis --input-dir data/raw/nwis --output data/processed/nwis_gwlevels_monthly.parquet
@@ -55,6 +59,14 @@ BAD_STATUS_CODES = {
     "V",  # Foreign substance
     "Z",  # Other
 }
+
+# Status codes that mark THIS well as flowing. Their readings are dropped with the rest of
+# BAD_STATUS_CODES, but the site-level fact is retained (see qc_filter step 1 / 7b): a head at or
+# above land surface means the reading is not a usable depth to a phreatic water table.
+# Deliberately ONLY "F": the NWIS codes "E" (recently flowing nearby) and "G" (nearby recently
+# flowing) describe a NEIGHBOURING well and are not evidence about this one -- including them would
+# disqualify perfectly good water-table wells for their neighbours' behaviour.
+FLOWING_STATUS_CODES = {"F"}
 
 # Wells deeper than this (feet) are flagged as likely confined
 DEEP_WELL_THRESHOLD_FT = 500
@@ -133,6 +145,14 @@ def qc_filter(
     report: dict = {"raw_records": len(df_gw), "raw_sites": df_sites["site_no"].nunique()}
 
     # ---- Step 1: Filter bad status codes ----
+    # Record the flowing/artesian SITES before the filter removes their readings: the reading is
+    # unusable but the fact that this site's head stands above land surface is exactly the evidence
+    # that it is not a phreatic water-table well (issue #189).
+    if "lev_status_cd" in df_gw.columns:
+        flowing_sites = set(df_gw.loc[df_gw["lev_status_cd"].isin(FLOWING_STATUS_CODES), "site_no"]
+                            .astype(str).str.strip())
+    else:
+        flowing_sites = set()
     if "lev_status_cd" in df_gw.columns:
         bad_mask = df_gw["lev_status_cd"].isin(BAD_STATUS_CODES)
         n_bad_status = bad_mask.sum()
@@ -189,13 +209,23 @@ def qc_filter(
 
     # Select key columns from site metadata
     site_cols = ["site_no"]
+    # Everything needed to decide WHAT a well's water level measures (issue #189). Depth alone is a
+    # proxy; the screened interval and the aquifer TYPE code answer the question directly, so they are
+    # carried through even though NWIS populates them sparsely -- a sparse direct attribute still
+    # beats a dense proxy, and where all of them are missing the well is flagged `unknown` rather
+    # than assumed to be a water-table well.
     col_map = {
         "dec_lat_va": "lat",
         "dec_long_va": "lon",
         "alt_va": "alt_ft",
         "alt_datum_cd": "alt_datum",
         "well_depth_va": "well_depth_ft",
+        "hole_depth_va": "hole_depth_ft",
         "aqfr_cd": "aquifer_cd",
+        "nat_aqfr_cd": "nat_aquifer_cd",
+        "aqfr_type_cd": "aqfr_type_cd",       # U unconfined / C confined / M multiple / X mixed / N unknown
+        "openings_top_va": "screen_top_ft",   # GWSI open/screened interval, ft below land surface
+        "openings_bot_va": "screen_bottom_ft",
     }
     for raw_col, clean_col in col_map.items():
         if raw_col in df_sites.columns:
@@ -205,7 +235,8 @@ def qc_filter(
     df_sites_slim = df_sites_slim.rename(columns=col_map)
 
     # Convert numeric columns
-    for col in ["lat", "lon", "alt_ft", "well_depth_ft"]:
+    for col in ["lat", "lon", "alt_ft", "well_depth_ft", "hole_depth_ft",
+                "screen_top_ft", "screen_bottom_ft"]:
         if col in df_sites_slim.columns:
             df_sites_slim[col] = pd.to_numeric(df_sites_slim[col], errors="coerce")
 
@@ -262,6 +293,23 @@ def qc_filter(
         df["well_depth_m"] = df["well_depth_ft"] * FT_TO_M
     else:
         df["well_depth_m"] = np.nan
+    for ft_col, m_col in (("screen_top_ft", "screen_top_m"),
+                          ("screen_bottom_ft", "screen_bottom_m"),
+                          ("hole_depth_ft", "hole_depth_m")):
+        df[m_col] = df[ft_col] * FT_TO_M if ft_col in df.columns else np.nan
+
+    # ---- Step 7b: observation semantics (issue #189) ----
+    # Attach what each well's water level actually constrains: water_table / aquifer_head / unknown.
+    # This is a SITE attribute, derived from screen, aquifer type, flowing status and depth.
+    df["is_flowing"] = df["site_no"].isin(flowing_sites)
+    report["sites_flowing_or_artesian"] = int(df.loc[df["is_flowing"], "site_no"].nunique())
+
+    from src.features.well_hydrostratigraphy import measurement_target
+
+    df["measurement_target"] = measurement_target(df).values
+    tgt_counts = df.drop_duplicates("site_no")["measurement_target"].value_counts().to_dict()
+    report["measurement_target_sites"] = {k: int(v) for k, v in tgt_counts.items()}
+    logger.info("  Observation semantics (sites): %s", report["measurement_target_sites"])
 
     # ---- Step 8: Remove sites with < min_obs measurements ----
     obs_counts = df.groupby("site_no").size()
@@ -311,6 +359,12 @@ def aggregate_monthly(df: pd.DataFrame) -> pd.DataFrame:
         agg_kwargs["aquifer_cd"] = ("aquifer_cd", "first")
     if "state" in df.columns:
         agg_kwargs["state"] = ("state", "first")
+    # Carry the observation-semantics attributes through both aggregations, so a downstream consumer
+    # never has to re-derive (or guess) what a well measures (issue #189).
+    for col in ("measurement_target", "is_flowing", "aqfr_type_cd", "nat_aquifer_cd",
+                "screen_top_m", "screen_bottom_m", "hole_depth_m"):
+        if col in df.columns:
+            agg_kwargs[col] = (col, "first")
 
     monthly = (
         df.groupby(["site_no", "year", "month"])
@@ -358,6 +412,12 @@ def build_clean_sites(df_monthly: pd.DataFrame) -> pd.DataFrame:
         agg_kwargs["state"] = ("state", "first")
     if "aquifer_cd" in df_monthly.columns:
         agg_kwargs["aquifer_cd"] = ("aquifer_cd", "first")
+    # Carry the observation-semantics attributes through both aggregations, so a downstream consumer
+    # never has to re-derive (or guess) what a well measures (issue #189).
+    for col in ("measurement_target", "is_flowing", "aqfr_type_cd", "nat_aquifer_cd",
+                "screen_top_m", "screen_bottom_m", "hole_depth_m"):
+        if col in df_monthly.columns:
+            agg_kwargs[col] = (col, "first")
 
     sites = df_monthly.groupby("site_no").agg(**agg_kwargs).reset_index()
 
