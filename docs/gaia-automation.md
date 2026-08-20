@@ -13,7 +13,7 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 | `scripts/gaia-launch/gaia_trace.py` | Renders a transcript into the HTML dashboard |
 | `scripts/gaia-launch/gaia_runs_site_index.py` | Builds the index over all published dashboards |
 
-> **The safety model, in five invariants.** Everything below follows from these:
+> **The safety model, in seven invariants.** Everything below follows from these:
 >
 > 1. **Nothing is ever deleted.** Failure parks work — committed, pushed, renamed out of the
 >    way. The only automatic branch removal is after a successful merge.
@@ -26,6 +26,241 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 > 5. **A PR is never left in draft.** Draft PRs get no code review, so the queue marks each
 >    PR ready, *verifies* it took, and requests review before anything can block it. Work
 >    that is held back is labelled, not hidden.
+> 6. **The working tree is clean at every batch boundary.** A batch starts clean or it does
+>    not start; a merged batch leaves it clean. Residue is quarantined onto its own branch,
+>    never inherited by the next batch and never committed under somebody else's `Closes #N`.
+> 7. **Every agent invocation is bounded before it starts** — turns, wall clock, files and
+>    lines it may touch, and the tools it may reach. The gates further down protect `main`;
+>    these protect the tree, the clock and the bill.
+
+## The pipeline at a glance
+
+Four views of the same machine: the **batch lifecycle** (what happens to a set of issues),
+the **agent/artifact interaction** (who touches the code, and when), the **review
+convergence loop** (the Copilot iteration), and the **single-issue harness**
+(`gaia-run.sh`, which is a different tool with a different purpose).
+
+### 1. Batch lifecycle — issues in, merged `main` out
+
+```mermaid
+flowchart TD
+    ISSUES["GitHub open issues<br/><i>labels P0/P1/P2, topic, epic; milestones</i>"]
+    GROUP["gaia_group_issues.py<br/><i>milestone → topic label → solo</i><br/><i>P0s split off early, max 4 per PR</i><br/><i>blocked-by issues held out</i>"]
+    BATCH["one batch = one branch<br/><code>gaia/&lt;key&gt;</code> cut from main"]
+
+    ISSUES --> GROUP --> BATCH --> CLEAN{"working tree<br/>clean?"}
+    CLEAN -- no --> QUAR["quarantine the residue onto<br/><code>gaia/residue/*</code>, then retry"]
+    QUAR --> CLEAN
+    CLEAN -- yes --> LOOP
+
+    subgraph LOOP["per issue in the batch, sequentially"]
+        ORCH["<b>claude -p</b> → gaia-orchestrator<br/><i>'resolve #N … do NOT commit'</i><br/><i>git+gh denied at the tool level</i><br/><code>--max-turns</code> · <code>timeout</code>"]
+        BOUND{"turns / wall clock<br/>within caps?<br/><i>and no ref moved?</i>"}
+        DIRTY{"working tree dirty?<br/><i>incl. UNTRACKED files</i>"}
+        DASH["render dashboard.html<br/><i>gaia_trace.py</i>"]
+        PROV["append provenance ledger line<br/><i>docs/provenance/ledger.jsonl</i>"]
+        RADIUS{"blast radius<br/>within caps?"}
+        COMMIT["git commit 'Closes #N'<br/>+ git push"]
+        DRAFT["first commit only:<br/>open <b>DRAFT</b> PR"]
+        ORCH --> BOUND
+        BOUND -- no --> PARKR["park the batch"]
+        BOUND -- yes --> DIRTY
+        DIRTY -- no --> SKIP["skip this issue"]
+        DIRTY -- yes --> DASH --> PROV --> RADIUS
+        RADIUS -- no --> PARKR
+        RADIUS -- yes --> COMMIT --> DRAFT
+    end
+
+    LOOP --> GATE{"pre-flight gate<br/><code>pixi run test</code><br/><code>pixi run check-dois</code><br/><code>quarto render docs/twin</code>"}
+    GATE -- fail --> PARK
+    GATE -- pass --> BODY["gaia-lab-notebook drafts the PR body<br/><i>reads the real diff; script guarantees every 'Closes #N'</i>"]
+    BODY --> READY["gh pr ready<br/><i>verified, retried once — a draft gets no review</i>"]
+    READY --> REQ["request Copilot review"]
+    REQ --> ARB{"<b>collision</b> arbitration:<br/>does this branch really conflict<br/>with another open <code>gaia/*</code> PR?<br/><i>file overlap → git merge-tree</i><br/><i>a detector, NOT a bake-off</i>"}
+    ARB -- "no rival" --> REVIEW
+    ARB -- "conflict" --> AUD1["independent <b>gaia-auditor</b> arbitrates<br/><i>both diffs, both issue statements,</i><br/><i>not told which side is 'ours'</i><br/><i>usually two DIFFERENT issues</i>"]
+    AUD1 --> VERDICT{"A / B / reconcile / escalate"}
+    VERDICT -- "A: land this one first" --> REVIEW
+    VERDICT -- "B / reconcile / escalate" --> HOLD["verdict posted on <b>both</b> PRs<br/>loser labelled <code>needs-human-decision</code><br/><i>stays ready-for-review, never auto-merges</i>"]
+
+    REVIEW["review convergence loop<br/><i>see diagram 3</i>"]
+    REVIEW -- "gate broken / no review in 20 min" --> HOLD
+    REVIEW -- converged --> CHECKS{"GitHub Actions<br/>green?"}
+    CHECKS -- no --> HOLD
+    CHECKS -- yes --> AUD2{"<b>gaia-auditor</b> merge gate<br/><i>final diff vs outstanding comments</i><br/><i>fails CLOSED</i>"}
+    AUD2 -- blocked --> HOLD
+    AUD2 -- converged --> MERGE["gh pr merge<br/>+ delete branch"]
+    MERGE --> POST{"tree clean<br/>after merge?"}
+    POST -- no --> QUAR2["quarantine onto <code>gaia/residue/*</code><br/><i>never inherited by the next batch</i>"]
+    POST -- yes --> CLOSE
+    QUAR2 --> CLOSE
+    CLOSE["every issue closes via 'Closes #N'<br/>gaia-lab-notebook posts a scientist-facing<br/>close comment on each issue"]
+    CLOSE --> EPIC["milestone's epic tracker gets a progress note<br/><b>the epic is never closed</b>"]
+
+    PARK["<b>park_branch</b><br/><i>commit + push + rename to</i> <code>gaia/parked/*</code><br/><i>nothing is ever deleted</i>"]
+
+    classDef human fill:#fde2e2,stroke:#b60205,color:#000
+    classDef good fill:#e2f5e9,stroke:#1a7f37,color:#000
+    class HOLD,PARK,PARKR human
+    class MERGE,CLOSE,EPIC good
+```
+
+Every red path leaves the PR **open** and the issues **open**, with a log. Nothing merges
+on a guess, and no failure path deletes work.
+
+### 2. Who touches the code — agents, the working tree, and GitHub
+
+The shell script owns git; the agents own the edits. The orchestrator is invoked as a
+**fresh, non-interactive `claude -p` process per issue** — it has no memory of the previous
+issue in the batch, and each invocation is explicitly told *not* to commit.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Q as gaia_run_queue.sh<br/>(owns git + gh)
+    participant O as gaia-orchestrator<br/>(claude -p, one per issue)
+    participant S as specialist subagents
+    participant WT as working tree<br/>(REPO_DIR)
+    participant GH as GitHub
+    participant CP as Copilot reviewer
+    participant A as gaia-auditor<br/>(read-only, no Bash)
+    participant N as gaia-lab-notebook
+
+    Q->>GH: gh issue list → grouped into a batch
+    Q->>WT: git checkout -B gaia/<key> main
+
+    loop each issue #35;N in the batch
+        Q->>O: "resolve #35;N … follow /gaia:ground-rules … do NOT commit"
+        O->>S: theoretician → scientific-coder → debugger → auditor<br/>(data-engineer feeds data throughout)
+        S->>WT: Edit / Write / Bash — the actual code, tests, docs
+        O-->>Q: stdout stream-json → gaia_ticker.py → raw.jsonl
+        Q->>WT: gaia_trace.py raw.jsonl → docs/gaia-runs/issue-N/<ts>/dashboard.html
+        Q->>WT: git add -A && git commit "Closes #35;N"
+        Q->>GH: git push — first commit opens a DRAFT PR
+    end
+
+    Q->>WT: pixi run test / check-dois / quarto render
+    Q->>N: "write the PR body from the real diff"
+    N->>WT: reads git diff main...branch
+    N-->>Q: prose + Closes lines
+    Q->>GH: gh pr edit --body … → gh pr ready → request Copilot review
+
+    Note over Q,A: collision arbitration only if another open gaia/* PR truly conflicts
+    Q->>WT: materialise proposal-A.diff / proposal-B.diff into a temp dir
+    Q->>A: "arbitrate — Read these files, you have no shell"
+    A-->>Q: fenced JSON verdict
+    Q->>GH: post the verdict on BOTH PRs
+
+    loop review rounds, up to 3
+        CP->>GH: COMMENTED review + inline comments
+        Q->>GH: poll for a review submitted after `since`
+        Q->>O: "address this Copilot review — do NOT commit"
+        O->>WT: revisions
+        Q->>WT: re-run test + check-dois
+        Q->>GH: commit + push → Copilot re-reviews on push
+    end
+
+    Q->>GH: gh pr checks --watch
+    Q->>WT: write final.diff + review-comments.txt to a temp dir
+    Q->>A: "is this genuinely ready to merge?"
+    A-->>Q: {converged, blocking[], rationale}
+    Q->>GH: merge + Closes #35;N closes every issue
+    Q->>N: "write the closing message"
+    N-->>Q: prose
+    Q->>GH: post it on each issue + a progress note on the epic
+```
+
+Two things worth noticing in that sequence:
+
+- **The auditor has no shell.** Its tool grant is Read/Grep/Glob/WebSearch/WebFetch/Skill,
+  by design — so the *caller* materialises the diffs and review comments into a temp
+  directory and hands the auditor file paths to `Read`. An auditor that could run `git`
+  could also change the thing it is judging.
+
+  That grant covers the **subagent**, and for a long time the sandbox stopped there. The
+  queue reaches the auditor through a top-level `claude -p` session that has the *full*
+  tool set — Bash included — and merely delegates; nothing structurally stopped that
+  wrapper from touching git, and the diff-materialisation dance was a convention rather
+  than an enforced boundary. Every auditor and lab-notebook invocation now passes
+  `--disallowed-tools` denying `Edit`, `Write`, `NotebookEdit` and every git/gh mutation,
+  so the fence reaches the wrapper too.
+- **The Provenance Keeper agent is bypassed here — its ledger is not.** In an interactive
+  session that agent commits; in the queue the shell script does, because it must guarantee
+  the `Closes #N` trailer and must convert a failed commit into a controlled park rather
+  than a `set -e` death. Bypassing the *agent* is fine; dropping the *record* was not, and
+  until recently there was no provenance artifact in this repo at all. The queue now
+  appends one JSON line per issue to `docs/provenance/ledger.jsonl` **before** staging, so
+  the entry is committed alongside the code it describes.
+
+### 3. The Copilot iteration, in detail
+
+Copilot's code review **never** submits an `APPROVED` state — only ever `COMMENTED`. Waiting
+for approval would hang forever, so convergence is defined by *content*, and Copilot alone
+can never gate a merge.
+
+```mermaid
+flowchart TD
+    START(["PR ready for review<br/>Copilot requested"]) --> WAIT["poll reviews API up to 20 min<br/><i>only accept one submitted AFTER `since`</i><br/><i>— a push retriggers a fresh review</i>"]
+    WAIT -- "nothing in time" --> HUMAN
+    WAIT --> FETCH["fetch inline comments + review body"]
+    FETCH -- "API call FAILED" --> HUMAN["leave open for a human<br/><i>a failed fetch must not look like 'no comments'</i>"]
+    FETCH --> EMPTY{"both empty?"}
+    EMPTY -- yes --> CONV(["converged"])
+    EMPTY -- no --> FP{"fingerprint == previous round's?<br/><i>sha256 of inline comments + review body</i>"}
+    FP -- yes --> CONV
+    FP -- no --> CAP{"round == 3?"}
+    CAP -- yes --> CONV
+    CAP -- no --> REVISE["gaia-orchestrator revision pass<br/><i>'make the changes the review actually calls for;</i><br/><i>if a comment is wrong, rebut it instead of complying'</i>"]
+    REVISE --> CHANGED{"diff produced?"}
+    CHANGED -- no --> CONV
+    CHANGED -- yes --> REGATE{"test + check-dois<br/>still pass?"}
+    REGATE -- no --> HUMAN
+    REGATE -- yes --> PUSH["commit + push"] --> WAIT
+
+    CONV --> GATE["<b>this is not permission to merge</b><br/>CI must be green AND the<br/>gaia-auditor must independently agree"]
+
+    classDef human fill:#fde2e2,stroke:#b60205,color:#000
+    class HUMAN human
+```
+
+An unchanged fingerprint reads identically whether the revision pass *addressed* the
+feedback or *ignored* it. That ambiguity is exactly why the auditor gate exists downstream:
+a merge needs **both** signals — Copilot quiet **and** an independent auditor satisfied.
+
+### 4. `gaia-run.sh` — the single-issue harness, which does something else
+
+`scripts/gaia-launch/gaia-run.sh` is **not** a step in the queue. It runs the orchestrator on
+*one* issue with no branch, no PR, no review and no merge, and archives the whole trajectory
+plus a pass/fail signal into a corpus — it is the evaluation/observation harness, not the
+delivery pipeline.
+
+```mermaid
+flowchart LR
+    IN(["gaia-run.sh N 'title' [repo]"]) --> PRE["preflight: claude, jq, python3<br/>warn if the tree is already dirty<br/><i>so change.diff is attributable to the agent alone</i>"]
+    PRE --> RUN["claude -p → gaia-orchestrator<br/>--max-turns 60, stream-json"]
+    RUN --> TICK["gaia_ticker.py<br/><i>live per-agent ticker</i>"] --> RAW["raw.jsonl"]
+    RUN --> WT["edits land in the working tree<br/><b>left dirty on purpose</b>"]
+    WT --> CAP["git diff → change.diff<br/>git status → status.txt"]
+    CAP --> VERIFY{"GAIA_TEST_CMD<br/><i>default pytest -q</i>"}
+    VERIFY --> META["meta.json<br/><i>outcome pass/fail/unverified, wall_s,<br/>diff_lines, files_touched, git_rev</i>"]
+    RAW --> TRACE["gaia_trace.py"]
+    META --> TRACE
+    TRACE --> OUT["dashboard.html · transcript.md · graph.mmd<br/>+ one record appended to<br/><code>~/gaia-runs/records.jsonl</code>"]
+```
+
+The difference in one line: **`gaia-run.sh` only measures; `gaia_run_queue.sh` ships *and*
+measures.** The harness deliberately leaves the tree dirty and writes down what the agent
+did; the queue commits, reviews, gates and merges — and, since the clean-tree/guardrail
+work, writes the same corpus record for every issue it attempts.
+
+Both now append to `records.jsonl` in the **same schema** (`gaia_trace.py --records --meta`),
+with a `delivery` object present only on queue records (branch, PR, dashboard, and the caps
+that invocation ran under). Before this, the delivery path rendered a dashboard a human
+could read and then discarded every number on it — so "is the pipeline getting better?" was
+unanswerable, and only "did that run feel bad?" was available. The queue's records carry the
+batch's real gate outcome (`pass` / `fail` / `unverified`), stamped once the gate has
+actually run rather than guessed at commit time, and **failed batches are recorded too** — a
+corpus of successes teaches nothing.
 
 ## What it does, end to end
 
@@ -39,9 +274,23 @@ For each batch of related issues (see grouping, below):
 3. Open **one draft PR** for the batch on the first commit, then swap in a real description
    drafted by the `gaia-lab-notebook` agent (reads the actual diff, explains it in plain
    language, ends with one `Closes #N` per issue) and mark it ready for review.
-4. **Arbitration.** Batches are cut from `main` in parallel, so two batches can
-   independently propose *competing* designs for the same module without either agent
-   seeing the other. The branch is tested against every other open `gaia/*` PR —
+4. **Collision arbitration.** Read the name literally. Batches are cut from `main` in
+   parallel, so two batches can land incompatible edits in the same module without either
+   agent seeing the other.
+
+   > **This is a collision detector, not a bake-off.** The pair it judges is whatever two
+   > branches happened to touch the same files, and they are almost always resolving
+   > *different* issues — PR #215 (sparse GMRF/SPDE Matérn, issue #163) and PR #216
+   > (stationary-grid covariance, issue #154) collided in `observability.py` while
+   > answering two different questions. "Which is better, A or B?" is not even well posed
+   > for such a pair, which is why `reconcile` is a first-class verdict. A verdict of `A`
+   > means *A should land first*, *not* that the project has chosen design A.
+   >
+   > A genuine A/B would need the **same issue set** resolved twice, on two branches, by
+   > two independent orchestrator runs, and only then arbitrated. That is a different
+   > mechanism and this is not it. What this stage is genuinely good for is making a
+   > silent, incompatible double-merge impossible.
+ The branch is tested against every other open `gaia/*` PR —
    changed-file overlap as a prefilter, then `git merge-tree` as the real conflict test. On
    a genuine conflict an **independent `gaia-auditor`** receives both diffs and both issue
    statements, is not told which side is "ours", and returns a verdict
@@ -231,6 +480,50 @@ a batch has already done its work.
 | `GAIA_ARBITRATION` | `1` | `0` disables rival-PR conflict arbitration (not recommended) |
 | `GAIA_AUDIT_GATE` | `1` | `0` disables the auditor merge gate (not recommended) |
 | `REVIEW_MAX_ROUNDS` | `3` | Cap on Copilot revise-and-re-review rounds |
+| `GAIA_MAX_TURNS` | `80` | Agent turns per orchestrator invocation |
+| `GAIA_AUX_MAX_TURNS` | `30` | ... per auditor / lab-notebook invocation |
+| `GAIA_ISSUE_TIMEOUT` | `5400` | Wall-clock seconds per issue, then `TERM` (then `KILL` after 60s) |
+| `GAIA_AUX_TIMEOUT` | `1200` | Wall clock for the short-lived agents |
+| `GAIA_MAX_FILES` | `40` | Blast radius: files one issue may touch before the batch is parked |
+| `GAIA_MAX_DIFF_LINES` | `4000` | Blast radius: added + removed lines |
+| `GAIA_MAX_COST_USD` | `0` | `0` = uncapped; otherwise halt the queue between issues past this |
+
+### Bounding a run
+
+Every gate described above is **downstream**: it refuses to merge. Downstream gates protect
+`main`. They do nothing about an invocation that spends eight hours and $200 rewriting two
+hundred files before the first gate ever runs — and the numbers are not hypothetical: a
+single real issue in the 2026-08-18 run (`#154`) cost **$15.93** across **195 tool calls**
+and **8 agents**. Forty batches of that is a four-figure bill.
+
+So there is now an **upstream** layer, bounding what one invocation may consume and touch:
+
+| Bound | Mechanism | What it catches |
+|---|---|---|
+| Turns | `--max-turns` on every `claude -p` | An agent that has lost the plot and is looping |
+| Wall clock | `timeout --signal=TERM --kill-after=60` | An agent that has deadlocked and is burning only time |
+| Blast radius | staged `git diff --cached` vs the caps, checked *before* the commit | A runaway refactor, a stray build artifact, foreign residue |
+| Spend | summed `total_cost_usd` from the transcript, checked *between* issues | The bill |
+| Tools | `--disallowed-tools` for every git/gh mutation | An agent committing, pushing, branching or merging |
+| Version control | `assert_no_vcs_mutation` — HEAD+branch snapshotted before each invocation, compared after | The above, *when the CLI fence fails or is absent* |
+
+Two notes on that table.
+
+**`--max-turns` was the asymmetry.** `gaia-run.sh` — the *measurement* harness, which ships
+nothing — capped turns at 60. `gaia_run_queue.sh` — the *delivery* harness, which commits,
+pushes and merges — capped nothing. The unbounded path was the one with write access.
+
+**The last row is the one that matters.** Every other bound is enforced by `claude` itself,
+and the entire point of a runaway guard is that it has to hold when the thing it is guarding
+misbehaves. Snapshotting version control around each invocation and proving afterwards that
+no ref moved is the only check here the script fully owns. It is also the answer to a
+finding from the 2026-08-17/18 post-mortem: §3.6 confirms the "do not commit" instruction
+was present *verbatim in all nineteen sessions*, and it did not prevent the incident.
+**Prose is not a guardrail.** These deny the tool and then verify the outcome.
+
+The caps are deliberately generous — they are runaway detectors, not budgets. If a batch
+legitimately needs more, raise the variable for that run; the failure mode is a parked
+branch with a clear message, never lost work.
 
 ### Stopping it
 
@@ -334,6 +627,14 @@ gaia:gaia-scientific-coder      44       1  Bash x43, Read x1
 | `.gaia-runs/issue-<n>-<ts>.raw.jsonl` | Raw `stream-json` transcript for that issue | no (gitignored) |
 | `.gaia-runs/gaia_run_queue.pid` | The loop's PID | no |
 | `.gaia-runs/cron.log` | Cron wrapper output | no |
+| `.gaia-runs/records.jsonl` | One corpus record per issue attempted — outcome, cost, turns, tool histogram, subagent roster, `delivery` block | no |
+| `docs/provenance/ledger.jsonl` | One provenance line per issue — `parent_rev`, PR, dashboard, transcript, `pixi.lock` hash, total spend, the gate that ran, and the AI-assistance statement | **yes**, in the same commit as the code |
+
+The last row is deliberately committed rather than gitignored: provenance that lives only in
+`.gaia-runs/` dies with the box it ran on. The entry carries `parent_rev` rather than its own
+commit sha, because it has to be written *before* the commit in order to land inside it —
+`parent_rev` plus the commit containing the line identifies the change completely, and git
+supplies the resulting sha.
 
 **The batch log is the first place to look when a batch didn't do what you expected.** Its
 `!!!` lines are the failure reports, each followed by the last 40 lines of context:
@@ -398,10 +699,13 @@ agents run in the first place.
 - **Anything that doesn't clear the gate** (tests, DOI check, quarto render, Copilot
   review timeout, checks red, auditor block) is left open with a log, not force-merged or
   retried silently.
-- **Arbitration verdicts are advisory.** When two PRs propose competing designs, the
-  auditor's verdict is posted on both and the loser is held back — but *which design the
-  project adopts is yours to decide.* The mechanism exists to make the collision visible
-  and stop a silent merge, not to settle architecture on your behalf.
+- **Collision-arbitration verdicts are advisory, and narrower than they look.** When two
+  PRs collide, the auditor's verdict is posted on both and the blocked side is held back —
+  but the pair is whatever two branches happened to touch the same files, usually resolving
+  *different* issues. A verdict of `A` means "land A first", not "the project has chosen
+  design A". *Which design the project adopts is yours to decide.* The mechanism exists to
+  make the collision visible and stop a silent double-merge, not to settle architecture on
+  your behalf — and it is not an A/B bake-off; see the note in step 4.
 - **Parked branches wait for you.** Nothing prunes them. Deciding whether parked work is
   resumed, rewritten, or dropped is a human call.
 - **Copilot review plus the auditor gate substitute for your own adversarial pass in this

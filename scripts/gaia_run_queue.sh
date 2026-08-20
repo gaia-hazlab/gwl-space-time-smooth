@@ -14,10 +14,12 @@
 #   belongs to a milestone) a progress note on that milestone's epic tracker --
 #   the epic itself is never closed by this script.
 #
-# ARBITRATION (see arbitrate_against_rivals). Batches are cut from main in
-# parallel, so two batches can independently propose COMPETING designs for the
-# same module and neither agent ever sees the other -- exactly what happened on
-# 2026-08-17/18 with #163 (SparseMaternPrior) vs #154 (StationaryGridPrior).
+# COLLISION ARBITRATION (see arbitrate_collisions). Batches are cut from main in
+# parallel, so two batches can land incompatible edits in the same module with
+# neither agent ever seeing the other -- exactly what happened on 2026-08-17/18
+# with #163 (SparseMaternPrior) vs #154 (StationaryGridPrior). Note those are two
+# DIFFERENT issues that collided in one file, not two designs for one problem:
+# this stage detects collisions, it does not run a bake-off.
 # Before a PR is offered for review, its branch is tested for real merge
 # conflicts against every other open gaia PR. On a hit, an INDEPENDENT
 # gaia-auditor is given both diffs and both issue statements and asked for an
@@ -61,6 +63,47 @@ GAIA_ARBITRATION="${GAIA_ARBITRATION:-1}"      # 0 disables rival-PR arbitration
 GAIA_AUDIT_GATE="${GAIA_AUDIT_GATE:-1}"        # 0 disables the auditor merge gate
 GAIA_MAX_BATCHES="${GAIA_MAX_BATCHES:-0}"      # 0 = drain the queue; N = stop after N batches
 
+# ── Runaway guardrails ────────────────────────────────────────────────────────
+# Everything above this block is a DOWNSTREAM gate: it refuses to merge. Downstream
+# gates protect `main`; they do nothing about an invocation that spends eight hours
+# and $200 rewriting two hundred files before the first gate ever runs. These are the
+# UPSTREAM bounds -- what one invocation is allowed to consume and to touch.
+GAIA_MAX_TURNS="${GAIA_MAX_TURNS:-80}"            # agent turns per orchestrator invocation
+GAIA_AUX_MAX_TURNS="${GAIA_AUX_MAX_TURNS:-30}"    # ... per auditor / lab-notebook invocation
+GAIA_ISSUE_TIMEOUT="${GAIA_ISSUE_TIMEOUT:-5400}"  # 90 min wall clock per issue, then TERM
+GAIA_AUX_TIMEOUT="${GAIA_AUX_TIMEOUT:-1200}"      # 20 min for the short-lived agents
+GAIA_MAX_FILES="${GAIA_MAX_FILES:-40}"            # blast radius: files touched by ONE issue
+GAIA_MAX_DIFF_LINES="${GAIA_MAX_DIFF_LINES:-4000}" # blast radius: added+removed lines
+GAIA_MAX_COST_USD="${GAIA_MAX_COST_USD:-0}"       # 0 = uncapped; else halt the queue past this
+GAIA_RUN_COST=0                                   # accumulated across the whole run
+GAIA_PENDING_META=()                              # per-issue meta awaiting the batch outcome
+GAIA_PENDING_RAW=()
+
+# The pipeline owns git and gh. Every agent is TOLD not to commit; the 2026-08-17/18
+# post-mortem (§3.6) confirms the instruction was present verbatim in all 19 sessions and
+# that it did not prevent the incident. Prose is not a guardrail. These deny the tool.
+#
+# Deliberately subcommand-scoped, not a blanket `Bash` deny: agents legitimately need
+# `git diff`, `git log`, `gh issue view` and `gh pr view` to do their jobs. What they must
+# never reach is anything that WRITES history, moves a ref, or mutates GitHub. `gh api` is
+# denied wholesale because it is the escape hatch around every other entry here.
+GAIA_VCS_DENY=(
+  "Bash(git commit:*)" "Bash(git push:*)" "Bash(git merge:*)" "Bash(git rebase:*)"
+  "Bash(git reset:*)" "Bash(git checkout:*)" "Bash(git switch:*)" "Bash(git branch:*)"
+  "Bash(git tag:*)" "Bash(git clean:*)" "Bash(git stash:*)" "Bash(git cherry-pick:*)"
+  "Bash(git revert:*)" "Bash(git am:*)" "Bash(git apply:*)" "Bash(git gc:*)"
+  "Bash(git prune:*)" "Bash(git reflog:*)" "Bash(git filter-branch:*)"
+  "Bash(git worktree:*)" "Bash(git remote:*)" "Bash(git config:*)" "Bash(git restore:*)"
+  "Bash(gh pr merge:*)" "Bash(gh pr create:*)" "Bash(gh pr close:*)" "Bash(gh pr ready:*)"
+  "Bash(gh pr edit:*)" "Bash(gh issue close:*)" "Bash(gh issue delete:*)"
+  "Bash(gh repo delete:*)" "Bash(gh release:*)" "Bash(gh api:*)" "Bash(gh workflow:*)"
+)
+# The read-only roles (auditor, lab-notebook-as-drafter) get no editing tools at all. The
+# gaia-auditor SUBAGENT already has no Bash in its own grant -- but the queue reaches it
+# through a top-level `claude -p` session that has the FULL tool set and merely delegates,
+# so without this the sandbox stops at the subagent boundary and never covers the wrapper.
+GAIA_READONLY_DENY=( "Edit" "Write" "NotebookEdit" "${GAIA_VCS_DENY[@]}" )
+
 : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}"
 
 cd "$REPO_DIR"
@@ -91,6 +134,12 @@ gaia_request_stop() {
 trap gaia_request_stop TERM INT
 trap 'rm -f "$GAIA_PIDFILE"' EXIT
 echo "gaia queue PID $$ (stop with: kill $$   or   kill \$(cat $GAIA_PIDFILE))"
+# Print the bounds at launch. An operator authorising an unattended multi-hour run should be
+# able to see, without reading the script, what a single invocation is allowed to consume.
+echo "guardrails: max ${GAIA_MAX_TURNS} turns and ${GAIA_ISSUE_TIMEOUT}s per issue; \
+blast radius ${GAIA_MAX_FILES} files / ${GAIA_MAX_DIFF_LINES} lines; \
+cost ceiling $([ "$GAIA_MAX_COST_USD" = 0 ] && echo 'NONE (set GAIA_MAX_COST_USD)' || echo "\$${GAIA_MAX_COST_USD}"); \
+git+gh denied to every agent"
 
 # Fail at STARTUP on a broken publication path, not eleven hours in. The
 # 2026-08-17/18 run pushed nine branches and lost every one of them because
@@ -115,7 +164,9 @@ preflight() {
   # notable omissions: without them a batch gets as far as branching and
   # committing before dying, which is exactly the expensive-late-failure this
   # function exists to prevent.
-  for tool in jq python3 git gh claude pixi; do
+  # `timeout` (coreutils) is what bounds every agent invocation's wall clock. Without it the
+  # guardrail silently does not exist, which is worse than not having it at all.
+  for tool in jq python3 git gh claude pixi timeout awk; do
     command -v "$tool" >/dev/null || { echo "  !!! preflight: '$tool' not on PATH" >&2; fatal=1; }
   done
   # The helper scripts the loop shells out to, per batch.
@@ -123,6 +174,15 @@ preflight() {
                 scripts/gaia-launch/gaia_trace.py; do
     [ -f "$REPO_DIR/$helper" ] || { echo "  !!! preflight: missing $helper" >&2; fatal=1; }
   done
+  # The guardrails are only real if this claude build honours the flags they are expressed
+  # in. --max-turns is accepted but undocumented in `claude --help`, so probe for the failure
+  # mode that matters: a build that REJECTS the flag would abort every invocation, and a
+  # build that silently ignores it would leave the turn cap unenforced. Warn, do not block --
+  # the wall-clock timeout and the post-hoc vcs assertion still hold either way.
+  if ! claude --help 2>&1 | grep -q -- '--disallowed-tools'; then
+    echo "  !!! preflight: this claude ($(claude --version 2>/dev/null)) has no --disallowed-tools;" >&2
+    echo "      agents will NOT be tool-fenced. assert_no_vcs_mutation is then the only guard." >&2
+  fi
   if [ "$fatal" -ne 0 ]; then
     echo "  !!! preflight failed -- refusing to start. Nothing has been changed." >&2
     exit 1
@@ -143,6 +203,235 @@ fingerprint() {
   else
     cksum | cut -d' ' -f1
   fi
+}
+
+# THE dirty-tree predicate. Returns 0 (true) if the working tree has ANY change the
+# pipeline should care about -- tracked modifications, staged changes, OR UNTRACKED FILES.
+#
+# The untracked half is not a nicety. `git diff --quiet && git diff --cached --quiet` is
+# blind to new files, and an agent resolving an issue very often produces exactly that: a
+# new module plus a new test. Two call sites used the blind form and read such an issue as
+# "no changes produced", skipping its commit -- after which the work was either swept into
+# the NEXT issue's `git add -A` under the wrong `Closes #N`, or (if it was the last issue in
+# the batch) left dirty in the tree indefinitely. park_branch always had this right; the
+# commit paths did not. One predicate now, used everywhere, so they cannot drift again.
+tree_dirty() {
+  ! git diff --quiet \
+    || ! git diff --cached --quiet \
+    || [ -n "$(git status --porcelain --untracked-files=normal)" ]
+}
+
+# Fail closed on a tree that is dirty when it has no business being dirty. Every caller
+# passes a `where` describing the moment, so the console says which invariant broke rather
+# than just "dirty". Returns 1 and prints the offending paths; the caller decides whether
+# that is fatal (batch start) or merely loud (post-merge).
+assert_tree_clean() {
+  local where="$1" logfile="${2:-/dev/null}"
+  tree_dirty || return 0
+  {
+    echo "  !!! working tree is DIRTY ${where}; it should be clean here."
+    git status --porcelain --untracked-files=normal | sed 's/^/  | /'
+  } | tee -a "$logfile"
+  return 1
+}
+
+# Move unexpected working-tree residue OUT OF THE WAY without destroying it and without
+# attributing it to anybody's batch. Used at the two points where the tree must be clean
+# but a park would be wrong: before a batch starts (we are on `main` -- parking would
+# commit the residue TO main and then rename main) and after a merge (the batch is already
+# shipped; there is no batch branch left to park onto). Commits the residue to its own
+# throwaway branch and returns to a clean `main`.
+quarantine_residue() {
+  local label="$1" why="$2" logfile="$3"
+  local ref="gaia/residue/${label}-$(date -u +%Y%m%dT%H%M%SZ)"
+  {
+    git checkout -b "$ref" 2>&1 || return 1
+    git add -A 2>&1 || true
+    git commit -m "gaia residue (unreviewed): ${why}
+
+Found in the working tree where it should have been clean. This did NOT pass the gate and
+was NOT part of any reviewed PR. Quarantined here so the next batch starts clean; nothing
+was deleted.
+
+Co-Authored-By: Claude <noreply@anthropic.com>" 2>&1 || true
+    git checkout main 2>&1 || git checkout -f main 2>&1 || true
+  } >> "$logfile" 2>&1
+  echo "  residue quarantined on ${ref} (nothing deleted); inspect: git log -1 --stat ${ref}" | tee -a "$logfile"
+}
+
+# The guardrail that does not depend on the CLI honouring anything. Deny rules are the
+# first line, but they are enforced by `claude`, and the whole point of a runaway guard is
+# that it must hold when the thing it is guarding misbehaves. So: snapshot version control
+# before every agent invocation, and PROVE afterwards that the agent did not move it.
+vcs_state() {
+  printf '%s@%s' \
+    "$(git rev-parse HEAD 2>/dev/null || echo none)" \
+    "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo none)"
+}
+
+# Returns 1 if the agent committed, checked out, or otherwise moved a ref. The caller
+# treats that as a batch failure -- not because the work is necessarily bad, but because
+# the pipeline's accounting of what is on which branch is now wrong, and every downstream
+# guarantee (the Closes #N trailer, the gate, the dashboard-with-its-code) rests on it.
+assert_no_vcs_mutation() {
+  local before="$1" who="$2" logfile="$3" after
+  after="$(vcs_state)"
+  [ "$before" = "$after" ] && return 0
+  {
+    echo "  !!! ${who} MUTATED version control despite being instructed not to."
+    echo "  |   before: ${before}"
+    echo "  |   after:  ${after}"
+    echo "  |   The pipeline owns git. Treating this as a batch failure."
+  } | tee -a "$logfile"
+  return 1
+}
+
+# Accumulate spend by SUMMING every `result` record (a transcript can hold more than one
+# session, and the budget cares about total spend) and halt the whole queue past the
+# ceiling. Checked between issues, not mid-issue: a partially-run issue is worse than a
+# slightly-overspent one, and the point is to bound the RUN, not to kill work in flight.
+accumulate_cost() {
+  local raw="$1" logfile="$2" this
+  [ -f "$raw" ] || return 0
+  this="$(jq -rs '[.[] | select(.type=="result") | .total_cost_usd // 0] | add // 0' "$raw" 2>/dev/null)" || this=0
+  GAIA_RUN_COST="$(awk -v a="$GAIA_RUN_COST" -v b="${this:-0}" 'BEGIN{printf "%.4f", a+b}')"
+  echo "  spend: this issue \$${this:-0}, run total \$${GAIA_RUN_COST}" | tee -a "$logfile"
+}
+
+cost_ceiling_hit() {
+  [ "$GAIA_MAX_COST_USD" = "0" ] && return 1
+  awk -v c="$GAIA_RUN_COST" -v m="$GAIA_MAX_COST_USD" 'BEGIN{exit !(c>=m)}'
+}
+
+# ── Measure, not just ship ───────────────────────────────────────────────────
+# `gaia-run.sh` deliberately leaves the tree dirty and writes down what the agent did and
+# whether the tests passed; `gaia_run_queue.sh` commits, reviews, gates and merges. The
+# split left the DELIVERY path unmeasured: the queue rendered a dashboard a human could
+# read and threw away every number on it. So there was no way to ask whether the pipeline
+# was getting better or worse, only whether any single run felt bad.
+#
+# gaia_trace.py already derives cost, turns, tool histograms, error counts and the subagent
+# roster from the transcript. All the queue has to add is the outcome labels it alone knows
+# -- the gate result, the PR, the blast radius -- and point the same call at the same corpus
+# the harness writes to. One schema, one file, both harnesses.
+write_measurement() {
+  local number="$1" title="$2" raw="$3" dash_rel="$4" branch="$5" pr_number="$6" \
+        outcome="$7" wall_s="$8" logfile="$9"
+  local dir meta files lines
+  dir="$(dirname "$raw")"
+  meta="${dir}/issue-${number}-${ts}.meta.json"
+  files="$(git diff --cached --name-only | wc -l | tr -d ' ')"
+  lines="$(git diff --cached --numstat | awk '{a+=$1+$2} END{print a+0}')"
+  [[ "$files"  =~ ^[0-9]+$ ]] || files=0
+  [[ "$lines"  =~ ^[0-9]+$ ]] || lines=0
+  [[ "$wall_s" =~ ^[0-9]+$ ]] || wall_s=0
+  jq -n \
+    --arg run_id "issue-${number}-${ts}" --arg repo "$REPO_SLUG" --arg issue "$number" \
+    --arg issue_title "$title" --arg git_rev "$(git rev-parse HEAD 2>/dev/null)" \
+    --arg test_cmd "pixi run test && pixi run check-dois" --arg outcome "$outcome" \
+    --arg dir "$dir" --arg claude_version "$(claude --version 2>/dev/null | head -1)" \
+    --argjson wall_s "${wall_s:-0}" --argjson diff_lines "${lines:-0}" \
+    --argjson files_touched "${files:-0}" \
+    --arg harness "gaia_run_queue.sh" --arg branch "$branch" --arg pr "${pr_number:-}" \
+    --arg dashboard "$dash_rel" \
+    --argjson max_turns "$GAIA_MAX_TURNS" --argjson issue_timeout_s "$GAIA_ISSUE_TIMEOUT" \
+    '$ARGS.named | . + {delivery: {harness: .harness, branch: .branch, pr: .pr,
+        dashboard: .dashboard, max_turns: .max_turns, issue_timeout_s: .issue_timeout_s}}' \
+    > "$meta" 2>>"$logfile" || return 0
+  # Deliberately NOT written to the corpus yet. `outcome` is the reward signal, and at
+  # commit time the batch gate has not run -- the honest value is not known. Queue the
+  # meta and its transcript; flush_measurements fills in the real outcome afterwards.
+  GAIA_PENDING_META+=("$meta")
+  GAIA_PENDING_RAW+=("$raw")
+}
+
+# Stamp the batch's actual outcome onto every queued issue record and append them to the
+# corpus. Called on EVERY exit path a batch can take -- gate pass, gate fail, park -- so a
+# failed batch is measured too. A corpus that only contains successes teaches nothing.
+flush_measurements() {
+  local outcome="$1" logfile="$2" i meta
+  for i in "${!GAIA_PENDING_META[@]}"; do
+    meta="${GAIA_PENDING_META[$i]}"
+    [ -f "$meta" ] || continue
+    jq --arg o "$outcome" '.outcome = $o' "$meta" > "${meta}.tmp" 2>>"$logfile" \
+      && mv "${meta}.tmp" "$meta" || rm -f "${meta}.tmp"
+    python3 "$REPO_DIR/scripts/gaia-launch/gaia_trace.py" "${GAIA_PENDING_RAW[$i]}" \
+      --records "$LOG_DIR/records.jsonl" --meta "$meta" >> "$logfile" 2>&1 \
+      || echo "  could not append a corpus record from ${meta}" | tee -a "$logfile"
+  done
+  [ "${#GAIA_PENDING_META[@]}" -gt 0 ] && \
+    echo "  measured: ${#GAIA_PENDING_META[@]} issue record(s) -> ${LOG_DIR}/records.jsonl (outcome=${outcome})" | tee -a "$logfile"
+  GAIA_PENDING_META=(); GAIA_PENDING_RAW=()
+  return 0
+}
+
+# ── Provenance ledger ────────────────────────────────────────────────────────
+# The Provenance Keeper agent is bypassed in this pipeline (the shell owns git, because it
+# must guarantee the Closes #N trailer and convert a failed commit into a controlled park
+# rather than a `set -e` death). Bypassing the AGENT is fine; dropping the RECORD is not --
+# and until now there was no provenance artifact in this repo at all.
+#
+# So the queue writes the ledger and the Keeper owns and audits the schema. Committed, not
+# gitignored: provenance that lives only in .gaia-runs/ dies with the box it ran on.
+#
+# NOTE the entry carries `parent_rev`, not its own commit sha -- it has to be written BEFORE
+# the commit in order to land inside it. parent_rev plus the commit that contains this line
+# fully identifies the change; git supplies the resulting sha.
+append_provenance() {
+  local number="$1" title="$2" branch="$3" pr_number="$4" dash_rel="$5" raw="$6" logfile="$7"
+  local ledger="$REPO_DIR/docs/provenance/ledger.jsonl" cost turns
+  mkdir -p "$(dirname "$ledger")"
+  # SUMMED over every `result` record in the transcript, because one .raw.jsonl can hold
+  # more than one session (a retry, or a resumed run) and the operator's actual spend is
+  # the sum. Note this can legitimately EXCEED the `cost_usd` that gaia_trace.py puts in
+  # records.jsonl, which is session-scoped (it keeps the LAST result record it sees).
+  # Different questions: the ledger answers "what did this cost", the corpus field answers
+  # "what did this session cost". Hence the distinct names.
+  #
+  # `--argjson` is FATAL on empty or non-numeric input -- it would take the whole ledger
+  # entry down over a truncated transcript, which is exactly when provenance matters most.
+  # Normalise to a number here so jq only ever sees one.
+  cost="$(jq -rs '[.[] | select(.type=="result") | .total_cost_usd // 0] | add // 0' "$raw" 2>/dev/null)"
+  turns="$(jq -rs '[.[] | select(.type=="result") | .num_turns // 0] | add // 0' "$raw" 2>/dev/null)"
+  [[ "$cost"  =~ ^[0-9]+([.][0-9]+)?([eE][-+]?[0-9]+)?$ ]] || cost=0
+  [[ "$turns" =~ ^[0-9]+$ ]] || turns=0
+  jq -nc \
+    --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg issue "$number" --arg issue_title "$title" \
+    --arg branch "$branch" --arg pr "${pr_number:-}" \
+    --arg parent_rev "$(git rev-parse HEAD 2>/dev/null)" \
+    --arg repo "$REPO_SLUG" \
+    --arg harness "gaia_run_queue.sh" \
+    --arg claude_version "$(claude --version 2>/dev/null | head -1)" \
+    --arg env_lock "$( (sha256sum "$REPO_DIR/pixi.lock" 2>/dev/null || echo none) | cut -d" " -f1)" \
+    --arg dashboard "$dash_rel" \
+    --arg transcript "$(basename "$raw")" \
+    --argjson cost_usd_total "${cost:-0}" --argjson turns_total "${turns:-0}" \
+    --arg gate "pixi run test && pixi run check-dois && quarto render docs/twin" \
+    --arg ai_assistance "Written by the gaia multi-agent system (Claude). Not human-authored. Reviewed by an automated code review and an independent auditor gate before merge; see the dashboard for the full trajectory." \
+    '$ARGS.named' >> "$ledger" 2>>"$logfile" \
+    || { echo "  could not append to the provenance ledger for #${number}" | tee -a "$logfile"; return 0; }
+  echo "  provenance: appended ledger entry for #${number} (parent $(git rev-parse --short HEAD 2>/dev/null), \$${cost:-0}, ${turns:-0} turns)" | tee -a "$logfile"
+}
+
+# Blast radius. A minimal correct change for one issue does not touch 200 files. When it
+# does, the most likely explanations are a runaway refactor, a stray build artifact, or
+# residue from something else -- none of which should be committed under this issue's
+# `Closes #N`. Expects the change to be STAGED already, so untracked files are counted.
+blast_radius_ok() {
+  local number="$1" logfile="$2" files lines
+  files="$(git diff --cached --name-only | wc -l | tr -d ' ')"
+  lines="$(git diff --cached --numstat | awk '{a+=$1+$2} END{print a+0}')"
+  echo "  blast radius for #${number}: ${files} files, ${lines} changed lines" | tee -a "$logfile"
+  if [ "$files" -gt "$GAIA_MAX_FILES" ] || [ "$lines" -gt "$GAIA_MAX_DIFF_LINES" ]; then
+    {
+      echo "  !!! #${number} exceeds the blast-radius cap (max ${GAIA_MAX_FILES} files / ${GAIA_MAX_DIFF_LINES} lines)."
+      echo "  |   Raise GAIA_MAX_FILES / GAIA_MAX_DIFF_LINES if this is genuinely a large change."
+      git diff --cached --stat | tail -20 | sed 's/^/  | /'
+    } | tee -a "$logfile"
+    return 1
+  fi
+  return 0
 }
 
 # Every failure path below calls this: it prints WHY inline (exit code + the tail of the actual
@@ -178,7 +467,7 @@ park_branch() {
     # is gitignored in full; the published dashboards live under docs/gaia-runs/
     # and are NOT ignored, so they are picked up here as intended. Formerly
     # the rendered dashboards, so the run logs are unaffected either way.
-    if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+    if tree_dirty; then
       git add -A 2>&1 || true
       git commit -m "gaia WIP (parked, unreviewed): ${reason}
 
@@ -248,11 +537,26 @@ find_conflicting_prs() {
   done <<< "$rivals"
 }
 
-# Ask an INDEPENDENT auditor to judge two competing proposals. The auditor is
-# deliberately given both diffs and both issue statements but is NOT told which
-# branch is "ours" -- the point is an objective verdict, not a rubber stamp for
+# COLLISION arbitration. Read the name literally: this is a detector for branches that
+# textually collide, NOT a bake-off between two designs commissioned for the same problem.
+#
+# The pair it judges is whatever two batches happened to touch the same files. They are
+# almost always resolving DIFFERENT issues -- e.g. #215 (sparse GMRF/SPDE Matern, issue
+# #163) and #216 (stationary-grid covariance, issue #154), which collided in
+# observability.py while answering two different questions. "Which is better, A or B?" is
+# not even well posed for such a pair, which is why `reconcile` is a first-class verdict
+# and why the prompt below explicitly invites it.
+#
+# A genuine A/B would require the SAME issue set resolved twice on two branches by two
+# independent orchestrator runs, and then arbitrated. That is a different mechanism and
+# this is not it. Do not read a verdict here as "the project chose design A".
+#
+# What it IS good for: making a silent, incompatible double-merge impossible.
+#
+# The auditor is deliberately given both diffs and both issue statements but is NOT told
+# which branch is "ours" -- the point is an objective verdict, not a rubber stamp for
 # whichever batch happened to run second.
-arbitrate_pair() {
+arbitrate_collision() {
   local branch="$1" pr_number="$2" rival_branch="$3" rival_num="$4" files="$5" logfile="$6"
   local out verdict dir
   # The gaia-auditor is READ-ONLY BY DESIGN -- its tool grant is
@@ -265,7 +569,7 @@ arbitrate_pair() {
   git diff "$(git merge-base main FETCH_HEAD)...FETCH_HEAD" > "$dir/proposal-B.diff" 2>>"$logfile" || true
   gh pr view "$pr_number" --json title,body,number > "$dir/proposal-A-pr.json" 2>>"$logfile" || true
   gh pr view "$rival_num"  --json title,body,number > "$dir/proposal-B-pr.json" 2>>"$logfile" || true
-  out="$(claude -p "Use the gaia-auditor agent as an impartial ARBITRATOR between two competing
+  out="$(timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" claude -p "Use the gaia-auditor agent as an impartial ARBITRATOR between two competing
 pull requests in ${REPO_DIR} (${REPO_SLUG}). They modify the same files and cannot both be merged
 as written. You are not an author of either. Judge them on the merits.
 
@@ -291,7 +595,9 @@ Finish your reply with EXACTLY one fenced json block and nothing after it:
  \"confidence\": \"high\" | \"medium\" | \"low\",
  \"rationale\": \"<=6 sentences, concrete, citing the code\",
  \"reconciliation\": \"if verdict is reconcile: how to combine them; else empty\"}
-\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" || out=""
+\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions \
+    --max-turns "$GAIA_AUX_MAX_TURNS" \
+    --disallowed-tools "${GAIA_READONLY_DENY[@]}" 2>>"$logfile")" || out=""
   # Take the LAST json block: the auditor's prose may quote earlier examples.
   verdict="$(printf '%s' "$out" | awk '/^```json/{f=1;buf="";next} /^```/{if(f){last=buf;f=0}next} f{buf=buf$0"\n"} END{printf "%s", last}')"
   rm -rf "$dir"
@@ -341,7 +647,7 @@ add_label() {
 # Returns 0 if this PR may proceed to review/merge, 1 if arbitration ruled
 # against it (or could not decide). Either way BOTH PRs get the verdict posted,
 # so the losing side is never silently dropped.
-arbitrate_against_rivals() {
+arbitrate_collisions() {
   local branch="$1" pr_number="$2" logfile="$3"
   local conflicts rival_num rival_branch files verdict v conf rationale recon proceed=0
   [ "$GAIA_ARBITRATION" = "1" ] || return 0
@@ -352,16 +658,22 @@ arbitrate_against_rivals() {
     [ -z "${rival_num:-}" ] && continue
     echo "  !!! PR #${pr_number} conflicts with open PR #${rival_num} on: ${files}" | tee -a "$logfile"
     echo "  calling an independent gaia-auditor to arbitrate (logged to $logfile)..." | tee -a "$logfile"
-    verdict="$(arbitrate_pair "$branch" "$pr_number" "$rival_branch" "$rival_num" "$files" "$logfile")"
+    verdict="$(arbitrate_collision "$branch" "$pr_number" "$rival_branch" "$rival_num" "$files" "$logfile")"
     v="$(jq -r '.verdict // "escalate"' <<<"$verdict")"
     conf="$(jq -r '.confidence // "low"' <<<"$verdict")"
     rationale="$(jq -r '.rationale // ""' <<<"$verdict")"
     recon="$(jq -r '.reconciliation // ""' <<<"$verdict")"
     echo "  arbitration verdict: ${v} (confidence ${conf})" | tee -a "$logfile"
 
-    local note="## Automated arbitration
+    local note="## Automated collision arbitration
 
 PR #${pr_number} (\`${branch}\`) and PR #${rival_num} (\`${rival_branch}\`) modify the same files and **cannot both merge as written**.
+
+> **What this is.** A *collision* detector: these two branches were cut from \`main\` independently and
+> happened to touch the same files. They are most likely resolving **different** issues. This is **not**
+> an A/B bake-off between two designs commissioned for the same problem, and a verdict of \"A\" does not
+> mean the project has chosen design A -- it means A is the one that should land first. If the two are
+> solving different problems that merely collide textually, the correct verdict is \`reconcile\`.
 
 **Files in conflict:** \`${files}\`
 
@@ -410,12 +722,12 @@ audit_pr_convergence() {
   local out verdict conv blocking rationale dir
   [ "$GAIA_AUDIT_GATE" = "1" ] || return 0
   echo "  auditor convergence gate on PR #${pr_number}..." | tee -a "$logfile"
-  # Same constraint as arbitrate_pair: the auditor has no Bash, so the diff and
+  # Same constraint as arbitrate_collision: the auditor has no Bash, so the diff and
   # the review comments are written out for it to Read rather than fetch.
   dir="$(mktemp -d)"
   git diff "$(git merge-base main "$branch")...$branch" > "$dir/final.diff" 2>>"$logfile" || true
   printf '%s\n' "${review_comments:-(no inline review comments were left)}" > "$dir/review-comments.txt"
-  out="$(claude -p "Use the gaia-auditor agent to decide whether PR #${pr_number} (branch ${branch},
+  out="$(timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" claude -p "Use the gaia-auditor agent to decide whether PR #${pr_number} (branch ${branch},
 resolving ${numbers_csv}) in ${REPO_DIR} is genuinely ready to merge. You are an independent
 reviewer, not the author. Be objective and be willing to block.
 
@@ -441,7 +753,9 @@ Finish your reply with EXACTLY one fenced json block and nothing after it:
 {\"converged\": true | false,
  \"blocking\": [\"one line per unresolved problem; empty array if none\"],
  \"rationale\": \"<=6 sentences citing the code\"}
-\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" || out=""
+\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions \
+    --max-turns "$GAIA_AUX_MAX_TURNS" \
+    --disallowed-tools "${GAIA_READONLY_DENY[@]}" 2>>"$logfile")" || out=""
   verdict="$(printf '%s' "$out" | awk '/^```json/{f=1;buf="";next} /^```/{if(f){last=buf;f=0}next} f{buf=buf$0"\n"} END{printf "%s", last}')"
   rm -rf "$dir"
   if [ -z "$verdict" ] || ! jq -e . >/dev/null 2>&1 <<<"$verdict"; then
@@ -524,6 +838,21 @@ while IFS= read -r batch_json; do
     continue
   fi
 
+  # A batch must START from a clean tree. Anything dirty here is residue from a previous
+  # batch (or a human's half-finished edit), and `git add -A` below would sweep it into
+  # this batch's first commit, attributing someone else's work to this issue and shipping
+  # it unreviewed. Fail closed: park whatever is here under its own branch, then skip.
+  # NOTE: we are on `main` here, so this must NOT call park_branch -- that would commit the
+  # residue onto main and then rename main out from under the queue.
+  if ! assert_tree_clean "before starting ${numbers_csv}" "$logfile"; then
+    quarantine_residue "prebatch-$(jq -r '.issues[0].number' <<<"$batch_json")" \
+      "tree was already dirty before ${numbers_csv} started" "$logfile"
+  fi
+  if ! assert_tree_clean "after quarantining, before starting ${numbers_csv}" "$logfile"; then
+    report_failure "could not get to a clean tree before ${numbers_csv}; skipping this batch rather than committing someone else's work" "$logfile" 1
+    continue
+  fi
+
   git checkout -B "$branch" main
 
   # Resolve the batch ONE ISSUE AT A TIME so each fix lands as its own commit that names the issue
@@ -543,6 +872,13 @@ while IFS= read -r batch_json; do
       echo "  stop requested; not starting #${number}. Work so far stays on ${branch}." | tee -a "$logfile"
       break
     fi
+    # Budget check BETWEEN issues, never mid-issue: a half-resolved issue is worse than a
+    # slightly-overspent run, and the point is to bound the run, not to kill work in flight.
+    if cost_ceiling_hit; then
+      echo "  cost ceiling reached (\$${GAIA_RUN_COST} >= \$${GAIA_MAX_COST_USD}); not starting #${number}. Work so far stays on ${branch}." | tee -a "$logfile"
+      GAIA_STOP=1
+      break
+    fi
     title="$(jq -r --arg n "$number" '.issues[] | select((.number|tostring)==$n) | .title' <<<"$batch_json")"
     echo "  resolving #${number} (${title}) [live below, also logged to $logfile]..." | tee -a "$logfile"
     # stream-json (piped through gaia_ticker.py) instead of plain text: gives a live, per-agent
@@ -550,23 +886,45 @@ while IFS= read -r batch_json; do
     # stream) AND a raw transcript this loop can render into a dashboard below. Claude's own stderr
     # goes straight to $logfile, same as it always did; only its stdout changes shape.
     raw="$LOG_DIR/issue-${number}-${ts}.raw.jsonl"
-    claude -p "Use the gaia orchestrator to resolve GitHub issue #${number} (\"${title}\") in ${REPO_SLUG}.
+    issue_start_epoch="$(date +%s)"
+    vcs_before="$(vcs_state)"
+    # --max-turns and the timeout are the two bounds that hold when nothing else does: an
+    # agent that has lost the plot burns turns, and one that has deadlocked burns only wall
+    # clock. Neither was bounded before -- gaia-run.sh capped turns, the queue did not, so
+    # the DELIVERY path was the unbounded one. --kill-after gives claude a TERM to flush its
+    # transcript (which is the recovery material) before SIGKILL.
+    timeout --signal=TERM --kill-after=60 "$GAIA_ISSUE_TIMEOUT" \
+      claude -p "Use the gaia orchestrator to resolve GitHub issue #${number} (\"${title}\") in ${REPO_SLUG}.
 Follow /gaia:ground-rules. Make the minimal correct change (code, tests, and/or docs) for THIS issue only.
-Do not commit -- leave the working tree dirty for the pipeline to commit." \
+Do not commit -- leave the working tree dirty for the pipeline to commit.
+The pipeline owns git and gh; committing, pushing, branching and merging are denied to you
+at the tool level, and the queue verifies afterwards that no ref moved." \
         --permission-mode acceptEdits \
         --dangerously-skip-permissions \
+        --max-turns "$GAIA_MAX_TURNS" \
+        --disallowed-tools "${GAIA_VCS_DENY[@]}" \
         --output-format stream-json \
         --verbose \
         2>>"$logfile" \
       | python3 "$REPO_DIR/scripts/gaia-launch/gaia_ticker.py" 2>>"$logfile" \
       | tee "$raw" >/dev/null \
       && issue_rc=0 || issue_rc=$?
+    accumulate_cost "$raw" "$logfile"
+    if [ "$issue_rc" -eq 124 ]; then
+      report_failure "orchestrator on #${number} hit the ${GAIA_ISSUE_TIMEOUT}s wall-clock cap and was terminated; parking the batch ${numbers_csv}" "$logfile" "$issue_rc"
+      batch_failed=1
+      break
+    fi
     if [ "$issue_rc" -ne 0 ]; then
       report_failure "orchestrator failed on #${number}; discarding the whole batch ${numbers_csv}" "$logfile" "$issue_rc"
       batch_failed=1
       break
     fi
-    if git diff --quiet && git diff --cached --quiet; then
+    if ! assert_no_vcs_mutation "$vcs_before" "the orchestrator on #${number}" "$logfile"; then
+      batch_failed=1
+      break
+    fi
+    if ! tree_dirty; then
       echo "  no changes produced for #${number}; skipping its commit (see $logfile)" | tee -a "$logfile"
       continue
     fi
@@ -581,7 +939,23 @@ Do not commit -- leave the working tree dirty for the pipeline to commit." \
       >> "$logfile" 2>&1 \
       || echo "  could not build dashboard.html for #${number}; committing the code change without it" | tee -a "$logfile"
 
+    # Written BEFORE staging so the ledger entry is committed alongside the code it
+    # describes -- same discipline as the dashboard. Provenance that lands in a later
+    # commit than its change is provenance you have to reconstruct.
+    append_provenance "$number" "$title" "$branch" "$pr_number" "$dash_rel" "$raw" "$logfile"
+
     git add -A
+    # Blast radius, checked with everything STAGED so untracked files count. Over the cap the
+    # batch is parked rather than committed: whatever produced a 200-file diff for one issue,
+    # it is not something to ship under that issue's `Closes #N` without a human looking.
+    if ! blast_radius_ok "$number" "$logfile"; then
+      report_failure "#${number} exceeded the blast-radius cap; parking the batch ${numbers_csv} instead of committing it" "$logfile" 1
+      batch_failed=1
+      break
+    fi
+    write_measurement "$number" "$title" "$raw" "$dash_rel" "$branch" "$pr_number" \
+      "committed" "$(( $(date +%s) - issue_start_epoch ))" "$logfile"
+
     # Guard commit AND push explicitly: under `set -euo pipefail` a bare failing git command (a
     # commit hook, missing identity, a transient push error) would kill the WHOLE script before
     # abandon_branch/report_failure ever run, leaving partial batch state behind. Convert either
@@ -632,11 +1006,13 @@ ${closes_lines}" \
   done <<< "$numbers"
 
   if [ "$batch_failed" -ne 0 ]; then
+    flush_measurements "fail" "$logfile"
     park_branch "$branch" "$logfile" "batch failed on ${numbers_csv}"
     continue
   fi
   if [ "$any_committed" -eq 0 ]; then
     echo "  no changes produced for any issue in ${numbers_csv}; skipping (see $logfile)" | tee -a "$logfile"
+    flush_measurements "unverified" "$logfile"
     # A genuinely empty batch: nothing committed AND nothing pushed. Dropping the
     # local pointer loses no work -- but only after PROVING it is identical to
     # main and the tree is clean, rather than assuming it.
@@ -657,6 +1033,7 @@ ${closes_lines}" \
   echo "  pre-flight gate: pixi run test && pixi run check-dois" | tee -a "$logfile"
   { pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; } && test_rc=0 || test_rc=$?
   if [ "$test_rc" -ne 0 ]; then
+    flush_measurements "fail" "$logfile"
     report_failure "pre-flight gate FAILED for ${numbers_csv}; PR left as draft, issues stay open" "$logfile" "$test_rc"
     [ -n "$pr_number" ] && gh pr comment "$pr_number" --body "Pre-flight gate failed (\`pixi run test\` / \`check-dois\`); left as a draft for a human. See \`${logfile}\`." >> "$logfile" 2>&1 || true
     park_branch "$branch" "$logfile" "pre-flight gate failed for ${numbers_csv}"
@@ -664,18 +1041,25 @@ ${closes_lines}" \
   fi
   pixi run quarto render docs/twin --to html >> "$logfile" 2>&1 && quarto_rc=0 || quarto_rc=$?
   if [ "$quarto_rc" -ne 0 ]; then
+    flush_measurements "fail" "$logfile"
     report_failure "quarto render failed for ${numbers_csv}; PR left as draft" "$logfile" "$quarto_rc"
     [ -n "$pr_number" ] && gh pr comment "$pr_number" --body "Quarto render failed; left as a draft for a human. See \`${logfile}\`." >> "$logfile" 2>&1 || true
     park_branch "$branch" "$logfile" "quarto render failed for ${numbers_csv}"
     continue
   fi
 
+  # The gate is green: every issue committed in this batch is now known to have passed
+  # `pixi run test`, `check-dois` and the twin render. That is the reward signal, so write
+  # the corpus records now rather than at merge time -- merge depends on Copilot's mood and
+  # a human's availability, neither of which says anything about whether the agent was right.
+  flush_measurements "pass" "$logfile"
+
   # A bare `var="$(cmd)"` with no exit-code guard would, under `set -e`, silently kill the WHOLE
   # script (not just this batch) if `cmd` fails -- there is no later stage to report or recover.
   # Guard it, and fall back to a minimal body/message (still carrying the Closes lines) so a
   # lab-notebook drafting failure never blocks the actual PR from opening or merging.
   echo "  drafting PR description via gaia-lab-notebook (logged to $logfile)..." | tee -a "$logfile"
-  pr_body="$(claude -p "Use the gaia-lab-notebook agent to write a clear, scientist-facing pull
+  pr_body="$(timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" claude -p "Use the gaia-lab-notebook agent to write a clear, scientist-facing pull
 request description for the change on branch ${branch} in ${REPO_DIR}, which together
 resolves this batch of related issues (grouped under '${readable_key}'):
 
@@ -685,7 +1069,9 @@ Read the actual diff (git diff main...${branch}) -- don't guess. Explain in plai
 language: what was wrong across these issues, what changed, and what it means
 scientifically. No filler, no restating the diff line by line. End the body with
 these literal lines, one per issue:
-${closes_lines}" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" \
+${closes_lines}" --permission-mode acceptEdits --dangerously-skip-permissions \
+    --max-turns "$GAIA_AUX_MAX_TURNS" \
+    --disallowed-tools "${GAIA_READONLY_DENY[@]}" 2>>"$logfile")" \
     && pr_body_rc=0 || pr_body_rc=$?
   if [ "$pr_body_rc" -ne 0 ] || [ -z "$pr_body" ]; then
     report_failure "gaia-lab-notebook failed to draft the PR body for ${numbers_csv}; using a minimal body" "$logfile" "$pr_body_rc"
@@ -741,13 +1127,18 @@ ${missing_closes}"
     -f "reviewers[]=${COPILOT_REVIEWER}" >> "$logfile" 2>&1 \
     || echo "  could not request Copilot review via API; add it once by hand and re-run" | tee -a "$logfile"
 
-  # ARBITRATION. Batches are cut from main in parallel, so a sibling batch can
-  # have proposed a COMPETING design for the same module without either agent
-  # ever seeing the other. Test for a real merge conflict against every other
-  # open gaia PR and, on a hit, hand both diffs to an independent auditor. A
-  # blocked PR stays READY (so it still gets reviewed) and is labelled
-  # needs-human-decision; it simply never auto-merges.
-  if ! arbitrate_against_rivals "$branch" "$pr_number" "$logfile"; then
+  # COLLISION ARBITRATION. Batches are cut from main in parallel, so a sibling
+  # batch can have touched the same module without either agent ever seeing the
+  # other. Test for a real merge conflict against every other open gaia PR and,
+  # on a hit, hand both diffs to an independent auditor. A blocked PR stays
+  # READY (so it still gets reviewed) and is labelled needs-human-decision; it
+  # simply never auto-merges.
+  #
+  # This detects COLLISIONS. It is not a bake-off: the two PRs are whatever
+  # happened to overlap, usually resolving different issues, so the auditor is
+  # answering "which lands first / can these be reconciled", not "which design
+  # is better for one shared problem". See arbitrate_collision() above.
+  if ! arbitrate_collisions "$branch" "$pr_number" "$logfile"; then
     echo "  arbitration blocked PR #${pr_number}; left ready for review and labelled for a human" | tee -a "$logfile"
     git checkout main >> "$logfile" 2>&1 || true
     continue
@@ -817,12 +1208,22 @@ wrong or out of scope, leave a note explaining why instead of blindly complying.
 Do not commit -- leave the working tree dirty."
 
     echo "  running gaia orchestrator's revision pass on PR #${pr_number} round ${review_round} (live below, also logged to $logfile)..." | tee -a "$logfile"
-    claude -p "$revise_prompt" \
+    vcs_before="$(vcs_state)"
+    timeout --signal=TERM --kill-after=60 "$GAIA_ISSUE_TIMEOUT" \
+      claude -p "$revise_prompt" \
       --permission-mode acceptEdits \
       --dangerously-skip-permissions \
-      2>&1 | tee -a "$logfile" || echo "  revision pass errored; continuing to gate check" | tee -a "$logfile"
+      --max-turns "$GAIA_MAX_TURNS" \
+      --disallowed-tools "${GAIA_VCS_DENY[@]}" \
+      2>&1 | tee -a "$logfile" || echo "  revision pass errored or timed out; continuing to gate check" | tee -a "$logfile"
+    # A revision pass that committed has already put unreviewed work on the branch under a
+    # message the pipeline did not write. Stop before pushing more on top of it.
+    if ! assert_no_vcs_mutation "$vcs_before" "the revision pass on PR #${pr_number}" "$logfile"; then
+      gate_ok=0
+      break
+    fi
 
-    if ! git diff --quiet || ! git diff --cached --quiet; then
+    if tree_dirty; then
       echo "  re-running gate after revision round ${review_round}" | tee -a "$logfile"
       if pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; then
         git add -A
@@ -861,7 +1262,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
     continue
   fi
 
-  close_message="$(claude -p "Use the gaia-lab-notebook agent to write a short, clear message for a
+  close_message="$(timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" claude -p "Use the gaia-lab-notebook agent to write a short, clear message for a
 research scientist explaining that this batch of related issues has just been resolved
 and merged via PR #${pr_number} in ${REPO_DIR} (grouped under '${readable_key}'):
 
@@ -870,7 +1271,9 @@ ${issue_bullets}
 Read the actual diff on that branch -- don't guess. Plain language: what was wrong,
 what changed, what it means for the science/results. This will be posted as the
 closing comment on each issue in the batch." \
-    --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" \
+    --permission-mode acceptEdits --dangerously-skip-permissions \
+    --max-turns "$GAIA_AUX_MAX_TURNS" \
+    --disallowed-tools "${GAIA_READONLY_DENY[@]}" 2>>"$logfile")" \
     && close_message_rc=0 || close_message_rc=$?
   if [ "$close_message_rc" -ne 0 ] || [ -z "$close_message" ]; then
     report_failure "gaia-lab-notebook failed to draft the close message for ${numbers_csv}; using a minimal message" "$logfile" "$close_message_rc"
@@ -889,6 +1292,18 @@ closing comment on each issue in the batch." \
       || echo "  could not comment on issue #$number (already merged/closed via 'Closes #N', so this is cosmetic)" | tee -a "$logfile"
   done <<< "$numbers"
   echo "  merged PR #$pr_number, closed ${numbers_csv}" | tee -a "$logfile"
+
+  # A batch that MERGED has, by definition, shipped everything it produced. `gh pr merge
+  # --delete-branch` switches back to the base branch, so anything still dirty at this
+  # point is either a build artifact that should be gitignored or agent work that escaped
+  # the commit path -- both of which would otherwise be inherited by the next batch and
+  # blamed on its first issue. This is not fatal (the merge already succeeded and nothing
+  # is at risk), but it must be loud and it must not propagate.
+  git checkout main >> "$logfile" 2>&1 || git checkout -f main >> "$logfile" 2>&1 || true
+  if ! assert_tree_clean "after merging PR #${pr_number} (${numbers_csv})" "$logfile"; then
+    quarantine_residue "postmerge-pr${pr_number}" \
+      "left in the tree after PR #${pr_number} merged" "$logfile"
+  fi
 
   if [ -n "$milestone" ]; then
     epic_number="$(epic_for_milestone "$milestone")" || epic_number=""

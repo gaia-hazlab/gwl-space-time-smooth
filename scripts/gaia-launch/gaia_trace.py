@@ -678,6 +678,11 @@ def record(session, agents, args):
                              if s["kind"] == "tool_use" and s["is_error"]),
         "n_reasoning_blocks": sum(1 for a in agents.values()
                                   for s in a["steps"] if s["kind"] == "thinking"),
+        # delivery — populated only by gaia_run_queue.sh, null for gaia-run.sh.
+        # The queue SHIPS and the harness MEASURES; this is the field that lets both
+        # write into one corpus, so "did the delivery pipeline get better?" is a query
+        # over records.jsonl rather than an archaeology exercise across two log formats.
+        "delivery": meta.get("delivery"),
         # payload
         "final_result": session["result"],
         "artifacts_dir": meta.get("dir"),
