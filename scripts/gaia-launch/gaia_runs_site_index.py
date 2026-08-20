@@ -6,8 +6,13 @@ committed by scripts/gaia_run_queue.sh, for GitHub Pages.
 Usage
   python3 gaia_runs_site_index.py docs/gaia-runs out/index.html
 
-Expected layout (written by gaia_run_queue.sh, one per resolved issue):
-  docs/gaia-runs/issue-<n>/<timestamp>/dashboard.html
+Two layouts are indexed:
+  docs/gaia-runs/issue-<n>/<timestamp>/dashboard.html   one per issue resolved by the queue
+  docs/gaia-runs/pr-<n>/<timestamp>/dashboard.html      one per PR (see gaia_pr_dashboard.sh)
+
+The second exists because the queue renders a dashboard per ISSUE, which covers the PRs it
+opens itself -- but a PR raised from an interactive session produced no dashboard at all,
+so the published index silently omitted exactly the work a human had been involved in.
 
 This only lists what it finds on disk at build time; there is no separate
 database to fall out of sync with the committed files.
@@ -19,19 +24,22 @@ import os
 import sys
 
 
+KINDS = ("issue", "pr")
+
+
 def find_dashboards(root):
-    """[(issue_number, timestamp, path_relative_to_root), ...], newest first."""
-    pattern = os.path.join(root, "issue-*", "*", "dashboard.html")
+    """[(kind, number, timestamp, path_relative_to_root), ...], newest first."""
     rows = []
-    for path in glob.glob(pattern):
-        rel = os.path.relpath(path, root)
-        parts = rel.split(os.sep)
-        if len(parts) != 3:
-            continue  # not the issue-*/<timestamp>/dashboard.html layout we expect
-        issue_dir, stamp, _ = parts
-        issue = issue_dir[len("issue-"):] if issue_dir.startswith("issue-") else issue_dir
-        rows.append((issue, stamp, rel))
-    rows.sort(key=lambda r: r[1], reverse=True)  # timestamp sorts lexicographically
+    for kind in KINDS:
+        for path in glob.glob(os.path.join(root, f"{kind}-*", "*", "dashboard.html")):
+            rel = os.path.relpath(path, root)
+            parts = rel.split(os.sep)
+            if len(parts) != 3:
+                continue  # not the <kind>-<n>/<timestamp>/dashboard.html layout we expect
+            head, stamp, _ = parts
+            rows.append((kind, head[len(kind) + 1:], stamp, rel))
+    # Timestamps are ISO-8601 basic (…T…Z), so lexicographic order is chronological.
+    rows.sort(key=lambda r: r[2], reverse=True)
     return rows
 
 
@@ -60,12 +68,12 @@ TEMPLATE = """<!doctype html>
 </style>
 <div class="wrap">
   <h1>gaia run dashboards</h1>
-  <div class="sub">one row per issue resolved by gaia_run_queue.sh &middot; {n} run(s)</div>
+  <div class="sub">one row per issue resolved by gaia_run_queue.sh, and one per pull request &middot; {n} run(s)</div>
   {body}
 </div>
 """
 
-ROW = ('<tr><td><a href="{href}">#{issue}</a></td><td>{stamp}</td></tr>')
+ROW = ('<tr><td>{kind}</td><td><a href="{href}">#{number}</a></td><td>{stamp}</td></tr>')
 
 
 def render(rows):
@@ -73,10 +81,10 @@ def render(rows):
         body = '<p class="empty">No runs committed yet.</p>'
     else:
         trs = "".join(
-            ROW.format(href=html.escape(rel), issue=html.escape(issue),
-                       stamp=html.escape(stamp))
-            for issue, stamp, rel in rows)
-        body = (f'<table><thead><tr><th>issue</th><th>run</th></tr></thead>'
+            ROW.format(href=html.escape(rel), kind=html.escape(kind),
+                       number=html.escape(number), stamp=html.escape(stamp))
+            for kind, number, stamp, rel in rows)
+        body = (f'<table><thead><tr><th>kind</th><th>ref</th><th>run</th></tr></thead>'
                 f'<tbody>{trs}</tbody></table>')
     return TEMPLATE.format(n=len(rows), body=body)
 
