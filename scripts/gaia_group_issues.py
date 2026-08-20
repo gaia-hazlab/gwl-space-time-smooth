@@ -30,6 +30,7 @@ Emits one JSON object per line (JSONL) to stdout:
   {"key": "...", "branch": "gaia/...", "issues": [{"number": N, "title": "...", "labels": [...]}]}
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -127,9 +128,49 @@ def topic_of(labels):
     return None
 
 
+def only_issues():
+    """Restrict this run to chosen issues: GAIA_ONLY_ISSUES="186" or "153,152".
+
+    For SUPERVISED runs. The queue works whichever batch sorts first, which is not
+    necessarily the batch an operator wants to sit and watch -- the first batch is
+    currently CI/reproducibility work, which routes to no project persona at all. This
+    filters the INPUT rather than the output, so grouping, P0 splitting, chunking,
+    blocker hold-back and ordering all behave exactly as in a real run: the batch that
+    comes out is the batch that would have come out anyway, with the others withheld.
+
+    Unset (the normal case) returns None and changes nothing.
+    """
+    raw = os.environ.get("GAIA_ONLY_ISSUES", "").strip()
+    if not raw:
+        return None
+    picked = {int(tok.lstrip("#")) for tok in re.split(r"[,\s]+", raw) if tok.strip()}
+    if not picked:
+        return None
+    return picked
+
+
 def main():
     issues = fetch_issues()
+    # Blockers are judged against EVERY open issue, never the selected subset. Computing
+    # this after the GAIA_ONLY_ISSUES filter would make an unselected blocker look closed
+    # and silently disable the hold-back guard -- the exact class of quiet degradation
+    # this repo keeps having to design against.
     open_numbers = {issue["number"] for issue in issues}
+
+    only = only_issues()
+    if only is not None:
+        missing = sorted(only - open_numbers)
+        if missing:
+            print("GAIA_ONLY_ISSUES: not open (ignored): "
+                  + ", ".join("#" + str(n) for n in missing), file=sys.stderr)
+        issues = [i for i in issues if i["number"] in only]
+        if not issues:
+            print("GAIA_ONLY_ISSUES matched no open issue -- emitting no batches.",
+                  file=sys.stderr)
+        else:
+            print("GAIA_ONLY_ISSUES: restricting this run to "
+                  + ", ".join("#" + str(i["number"]) for i in issues), file=sys.stderr)
+
     groups = {}
 
     for issue in issues:
