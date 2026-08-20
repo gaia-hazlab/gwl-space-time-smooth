@@ -44,9 +44,15 @@ jobs:
         continue-on-error: true
         run: quarto render docs/twin
 
+      # A ::warning annotation alone is easy to miss (the job still shows green because of
+      # continue-on-error above, and the annotation only shows up if someone opens this run).
+      # Also write to the job summary, which is shown on the run's main page.
       - name: Warn if the site render failed
         if: steps.site.outcome == 'failure'
-        run: echo "::warning title=Multi-doc site render failed::The /twin/ chapters may be stale until the render is fixed."
+        run: |
+          echo "::warning title=Multi-doc site render failed::The /twin/ chapters were not deployed this run; a placeholder page was published instead."
+          echo "### :warning: Multi-doc site (\`/twin/\`) failed to render" >> "$GITHUB_STEP_SUMMARY"
+          echo "The rest of the site (landing page, /report.html, demo pages) still deployed. \`/twin/\` was replaced with a placeholder notice instead of the last successful render — see the \`quarto render docs/twin\` step log above for the error." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stage for Pages
         run: |
@@ -76,6 +82,28 @@ jobs:
       - name: Stage the multi-doc site (only on a clean render)
         if: steps.site.outcome == 'success'
         run: cp -r docs/twin/_site _site/twin
+
+      # Without this, a failed render means /twin/ is simply absent from the artifact, and because
+      # actions/deploy-pages replaces the whole published site rather than merging into it, the
+      # PREVIOUSLY published /twin/ disappears (404) with no visible signal to a site visitor — the
+      # step-summary/annotation above is only visible in the Actions run, not on the site. Publish a
+      # plain notice in its place instead of leaving the path silently missing.
+      - name: Stage a placeholder for the multi-doc site (render failed)
+        if: steps.site.outcome == 'failure'
+        run: |
+          mkdir -p _site/twin
+          cat > _site/twin/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <title>Documentation render failed</title></head>
+          <body style="font-family: sans-serif; max-width: 40em; margin: 3em auto;">
+          <h1>The documentation site failed to render</h1>
+          <p>The last CI run of the multi-chapter documentation (<code>docs/twin/</code>) did not
+          render successfully, so this page is a placeholder rather than the previously published
+          chapters. See the <a href="https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml">quarto-pages workflow runs</a> for the render error.</p>
+          <p><a href="../">Back to the landing page</a></p>
+          </body></html>
+          EOF
 
       - uses: actions/upload-pages-artifact@v3
         with:

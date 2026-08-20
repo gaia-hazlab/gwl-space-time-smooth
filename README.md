@@ -127,7 +127,7 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   │   ├── compute_grid.py           ← canonical 90 m EPSG:5070 grid definition
 │   │   ├── compute_terrain.py        ← HAND, TWI, slope, contributing area from 3DEP DEM
 │   │   ├── hydrogeologic_domains.py  ← domain mask from lithology + HAND + dist-coast (issue #2)
-│   │   └── well_hydrostratigraphy.py ← screen wells to the shallow unconfined water table (issue #46)
+│   │   └── well_hydrostratigraphy.py ← what a well MEASURES: water_table | aquifer_head | unknown (#46, #189)
 │   ├── models/
 │   │   ├── baseline_regression.py   ← Stage 1: random forest + regression kriging (GWL)
 │   │   ├── climate_response.py      ← Stage 2: per-site OLS β-maps
@@ -140,6 +140,8 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   │   ├── downscale.py             ← static-envelope × coarse-driver downscalers + σ budget
 │   │   ├── anchor.py                ← precision-weighted point assimilation (obs anchoring)
 │   │   ├── attribution.py           ← RF permutation feature-importance attribution
+│   │   ├── hydro_state.py           ← the state vocabulary: storage → h_wt → DTW → pore pressure (#187)
+│   │   ├── prior_calibration.py     ← REML Matérn profile over ν from out-of-fold residuals (#192)
 │   │   ├── soil_mechanics.py        ← SCAFFOLD: full soil-mechanics coupling (#19)
 │   │   └── interpolate_{baseline,anomalies}.py ← LEGACY co-kriging (comparison only)
 │   ├── evaluation/
@@ -182,7 +184,7 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 ├── scripts/
 │   ├── gaia_bootstrap.sh            ← one-time remote-server setup (pixi, gh, claude, quarto)
 │   ├── gaia_group_issues.py         ← groups open issues into PR-sized batches (milestone/label)
-│   └── gaia_run_queue.sh            ← runs the queue: orchestrator → PR → Copilot review → merge
+│   └── gaia_run_queue.sh            ← runs the queue: orchestrator → PR → arbitration → review → auditor gate → merge
 │
 └── .github/
     ├── copilot-instructions.md        ← workspace coding rules (updated for GAIA)
@@ -565,7 +567,13 @@ See the report's **Scientific & Data Grounds** for the equations each seam imple
 - [`docs/limitations.md`](docs/limitations.md) — Known limitations, updated continuously
 - [`data/raw/MANIFEST.md`](data/raw/MANIFEST.md) — Registry of all raw datasets with provenance
 - [`docs/gaia-automation.md`](docs/gaia-automation.md) — Running the gaia agents unattended on a
-  remote server: priority-grouped issue queue → PR → Copilot review → merge, kept in sync with GitHub
+  remote server: priority-grouped issue queue → PR → arbitration → Copilot review → auditor gate →
+  merge, kept in sync with GitHub. Includes how to run it safely (start with
+  `GAIA_MAX_BATCHES=1`), how to stop it (kill the *loop*, not the agent), and how to monitor
+  it live or via the published run dashboards
+- [`docs/postmortem/2026-08-18-gaia-run.md`](docs/postmortem/2026-08-18-gaia-run.md) — Post-mortem
+  of the 2026-08-17/18 queue run that lost nine pushed branches to one bad `gh` flag; the
+  recovery procedure, and the guardrails added because of it
 
 ---
 

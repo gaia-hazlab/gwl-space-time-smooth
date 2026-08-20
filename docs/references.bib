@@ -150,9 +150,12 @@
   doi={10.5194/hess-17-4769-2013}
 }
 
+% FIXED 2026-08-18: the author list belonged to a DIFFERENT Cuthbert et al. (2019)
+% paper (the sub-Saharan Africa groundwater-resilience one). The DOI and title are
+% correct; the authors are now those registered for this DOI.
 @article{cuthbert2019global,
   title={Global patterns and dynamics of climate--groundwater interactions},
-  author={Cuthbert, Mark O and Taylor, Richard G and Favreau, Guillaume and Todd, Martin C and Shamsudduha, Mohammad and Villholth, Karen G and MacDonald, Alan M and Scanlon, Bridget R and Kotchoni, D{\'e}royal OV and Vouillamoz, Jean-Michel and others},
+  author={Cuthbert, M. O. and Gleeson, T. and Moosdorf, N. and Befus, K. M. and Schneider, A. and Hartmann, J. and Lehner, B.},
   journal={Nature Climate Change},
   volume={9},
   number={2},
@@ -899,4 +902,327 @@
   number={B6},
   year={2003},
   doi={10.1029/2001JB001521}
+}
+
+@book{matern1960spatial,
+  title={Spatial Variation},
+  author={Mat{\'e}rn, Bertil},
+  series={Meddelanden fr{\aa}n Statens Skogsforskningsinstitut},
+  volume={49},
+  number={5},
+  year={1960},
+  publisher={Statens Skogsforskningsinstitut, Stockholm},
+  note={Reprinted as Lecture Notes in Statistics 36, Springer, 1986}
+}
+
+@article{whittle1954stationary,
+  title={On stationary processes in the plane},
+  author={Whittle, Peter},
+  journal={Biometrika},
+  volume={41},
+  number={3/4},
+  pages={434--449},
+  year={1954},
+  doi={10.2307/2332724}
+}
+
+@article{guttorp2006matern,
+  title={Studies in the history of probability and statistics XLIX: On the Mat{\'e}rn correlation family},
+  author={Guttorp, Peter and Gneiting, Tilmann},
+  journal={Biometrika},
+  volume={93},
+  number={4},
+  pages={989--995},
+  year={2006},
+  doi={10.1093/biomet/93.4.989}
+}
+
+@article{handcock1993bayesian,
+  title={A {B}ayesian analysis of kriging},
+  author={Handcock, Mark S. and Stein, Michael L.},
+  journal={Technometrics},
+  volume={35},
+  number={4},
+  pages={403--410},
+  year={1993},
+  doi={10.1080/00401706.1993.10485354}
+}
+
+@book{stein1999interpolation,
+  title={Interpolation of Spatial Data: Some Theory for Kriging},
+  author={Stein, Michael L.},
+  year={1999},
+  publisher={Springer},
+  address={New York},
+  series={Springer Series in Statistics},
+  doi={10.1007/978-1-4612-1494-6}
+}
+
+@article{zhang2004inconsistent,
+  title={Inconsistent estimation and asymptotically equal interpolations in model-based geostatistics},
+  author={Zhang, Hao},
+  journal={Journal of the American Statistical Association},
+  volume={99},
+  number={465},
+  pages={250--261},
+  year={2004},
+  doi={10.1198/016214504000000241}
+}
+
+@article{lindgren2011explicit,
+  title={An explicit link between {G}aussian fields and {G}aussian {M}arkov random fields: the stochastic partial differential equation approach},
+  author={Lindgren, Finn and Rue, H{\aa}vard and Lindstr{\"o}m, Johan},
+  journal={Journal of the Royal Statistical Society: Series B (Statistical Methodology)},
+  volume={73},
+  number={4},
+  pages={423--498},
+  year={2011},
+  doi={10.1111/j.1467-9868.2011.00777.x}
+}
+
+@article{minasny2005matern,
+  title={The {M}at{\'e}rn function as a general model for soil variograms},
+  author={Minasny, Budiman and McBratney, Alex B.},
+  journal={Geoderma},
+  volume={128},
+  number={3-4},
+  pages={192--207},
+  year={2005},
+  doi={10.1016/j.geoderma.2005.04.003}
+}
+
+@article{gneiting2010matern,
+  title={Mat{\'e}rn cross-covariance functions for multivariate random fields},
+  author={Gneiting, Tilmann and Kleiber, William and Schlather, Martin},
+  journal={Journal of the American Statistical Association},
+  volume={105},
+  number={491},
+  pages={1167--1177},
+  year={2010},
+  doi={10.1198/jasa.2010.tm09420}
+}
+
+@book{gelhar1993stochastic,
+  title={Stochastic Subsurface Hydrology},
+  author={Gelhar, Lynn W.},
+  year={1993},
+  publisher={Prentice Hall},
+  address={Englewood Cliffs, NJ}
+}
+
+@book{dagan1989flow,
+  title={Flow and Transport in Porous Formations},
+  author={Dagan, Gedeon},
+  year={1989},
+  publisher={Springer},
+  address={Berlin},
+  doi={10.1007/978-3-642-75015-1}
+}
+
+% FIXED 2026-08-18: the title did not match the DOI metadata (a paraphrase, not the
+% registered title). Corrected against api.crossref.org/works/10.1029/WR018i004p01053.
+% Retained as a pre-2001 FOUNDATIONAL citation for the spectral log-K-to-head transfer
+% only -- it is not used to justify any numerical prior value (see the prior audit,
+% docs/reviews/hydrology-geostatistics-prior-audit-2026-08.md).
+@article{mizell1982spectral,
+  title={Stochastic analysis of spatial variability in two-dimensional steady groundwater flow assuming stationary and nonstationary heads},
+  author={Mizell, Steve A. and Gutjahr, Allan L. and Gelhar, Lynn W.},
+  journal={Water Resources Research},
+  volume={18},
+  number={4},
+  pages={1053--1067},
+  year={1982},
+  doi={10.1029/WR018i004p01053}
+}
+
+@book{rubin2003applied,
+  title={Applied Stochastic Hydrogeology},
+  author={Rubin, Yoram},
+  year={2003},
+  publisher={Oxford University Press},
+  address={New York},
+  doi={10.1093/oso/9780195138047.001.0001}
+}
+
+@article{western2002scaling,
+  title={Scaling of soil moisture: A hydrologic perspective},
+  author={Western, Andrew W. and Grayson, Rodger B. and Bl{\"o}schl, G{\"u}nter},
+  journal={Annual Review of Earth and Planetary Sciences},
+  volume={30},
+  pages={149--180},
+  year={2002},
+  doi={10.1146/annurev.earth.30.091201.140434}
+}
+
+@article{vereecken2014soilmoisture,
+  title={On the spatio-temporal dynamics of soil moisture at the field scale},
+% FIXED 2026-08-18: the author list did not match the DOI metadata (it was the
+% author list of a different Vereecken et al. paper). Corrected against
+% api.crossref.org/works/10.1016/j.jhydrol.2013.11.061.
+  author={Vereecken, H. and Huisman, J. A. and Pachepsky, Y. and Montzka, C. and van der Kruk, J. and Bogena, H. and Weiherm{\"u}ller, L. and Herbst, M. and Martinez, G. and Vanderborght, J.},
+  journal={Journal of Hydrology},
+  volume={516},
+  pages={76--96},
+  year={2014},
+  doi={10.1016/j.jhydrol.2013.11.061}
+}
+
+@book{diggle2007modelbased,
+  title={Model-based Geostatistics},
+  author={Diggle, Peter J. and Ribeiro Jr., Paulo J.},
+  year={2007},
+  publisher={Springer},
+  address={New York},
+  series={Springer Series in Statistics},
+  doi={10.1007/978-0-387-48536-2}
+}
+
+% =============================================================================
+%  ADDED 2026-08-18 — hydrology / geostatistics / hazard prior audit.
+%  Every entry below was verified against api.crossref.org/works/{doi} on
+%  2026-08-18: title, author list, year, and journal match the DOI metadata.
+%  Two entries carry an online-first/issue year split, noted inline.
+% =============================================================================
+
+@article{bolin2020rational,
+  title={The Rational {SPDE} Approach for {G}aussian Random Fields With General Smoothness},
+  author={Bolin, David and Kirchner, Kristin},
+  journal={Journal of Computational and Graphical Statistics},
+  volume={29},
+  number={2},
+  pages={274--285},
+  year={2020},
+  doi={10.1080/10618600.2019.1665537},
+  note={Crossref issued date is 2019 (online first); the JCGS issue is 29(2), 2020}
+}
+
+@article{haitjema2005subdued,
+  title={Are Water Tables a Subdued Replica of the Topography?},
+  author={Haitjema, Henk M. and Mitchell-Bruker, Sherry},
+  journal={Groundwater},
+  volume={43},
+  number={6},
+  pages={781--786},
+  year={2005},
+  doi={10.1111/j.1745-6584.2005.00090.x}
+}
+
+@article{varouchakis2019spatiotemporal,
+  title={Spatiotemporal geostatistical modeling of groundwater levels under a {B}ayesian framework using means of physical background},
+  author={Varouchakis, Emmanouil A. and Theodoridou, Panagiota G. and Karatzas, George P.},
+  journal={Journal of Hydrology},
+  volume={575},
+  pages={487--498},
+  year={2019},
+  doi={10.1016/j.jhydrol.2019.05.055}
+}
+
+@article{varouchakis2022complex,
+  title={Spatiotemporal Geostatistical Analysis of Groundwater Level in Aquifer Systems of Complex Hydrogeology},
+  author={Varouchakis, Emmanouil A. and Guardiola-Albert, Carolina and Karatzas, George P.},
+  journal={Water Resources Research},
+  volume={58},
+  number={3},
+  pages={e2021WR029988},
+  year={2022},
+  doi={10.1029/2021WR029988}
+}
+
+@article{ryu2005footprint,
+  title={Characterization of footprint-scale surface soil moisture variability using {G}aussian and beta distribution functions during the {S}outhern {G}reat {P}lains 1997 ({SGP97}) hydrology experiment},
+  author={Ryu, Dongryeol and Famiglietti, James S.},
+  journal={Water Resources Research},
+  volume={41},
+  number={12},
+  pages={W12433},
+  year={2005},
+  doi={10.1029/2004WR003835}
+}
+
+@article{zhang2023oklahoma,
+  title={Monitoring Terrestrial Water Storage, Drought and Seasonal Changes in Central {O}klahoma With Ambient Seismic Noise},
+  author={Zhang, Shuo and Luo, Bingxu and Ben-Zion, Yehuda and Lumley, David E. and Zhu, Hejun},
+  journal={Geophysical Research Letters},
+  volume={50},
+  number={17},
+  pages={e2023GL103419},
+  year={2023},
+  doi={10.1029/2023GL103419}
+}
+
+@article{lu2025deepsoilmoisture,
+  title={Mapping Large-Scale Deep Soil Moisture Variations Using Ambient Seismic Noise},
+  author={Lu, Yang and Wang, Qing-Yu and Stehly, Laurent and Bodet, Ludovic and Campillo, Michel and Bokelmann, G{\"o}tz},
+  journal={Geophysical Research Letters},
+  volume={52},
+  number={20},
+  pages={e2025GL117302},
+  year={2025},
+  doi={10.1029/2025GL117302}
+}
+
+@article{feng2026utah,
+  title={A Decadal Survey of the Near-Surface Seismic Velocity Response to Hydrological Variations in {U}tah, {U}nited {S}tates},
+  author={Feng, Kuan-Fu and Denolle, Marine and Lin, Fan-Chi and van Dam, Tonie},
+  journal={Journal of Geophysical Research: Solid Earth},
+  volume={131},
+  number={1},
+  pages={e2024JB030689},
+  year={2026},
+  doi={10.1029/2024JB030689}
+}
+
+@article{zhang2025oklahomamapping,
+  title={Mapping Spatiotemporal Variations of Near-Surface Seismic Velocity to Monitor Groundwater in Central {O}klahoma},
+  author={Zhang, Shuo and Luo, Bingxu and Zheng, Yujie and Lumley, David and Sen, Mrinal K. and Zhu, Hejun},
+  journal={Geophysical Research Letters},
+  volume={52},
+  number={17},
+  pages={e2025GL115201},
+  year={2025},
+  doi={10.1029/2025GL115201}
+}
+
+@article{thompson2007vscorrelation,
+  title={Spatial correlation of shear-wave velocity in the {S}an {F}rancisco {B}ay {A}rea sediments},
+  author={Thompson, Eric M. and Baise, Laurie G. and Kayen, Robert E.},
+  journal={Soil Dynamics and Earthquake Engineering},
+  volume={27},
+  number={2},
+  pages={144--152},
+  year={2007},
+  doi={10.1016/j.soildyn.2006.05.004}
+}
+
+@article{thomson2020canterbury,
+  title={Generalised parametric functions and spatial correlations for seismic velocities in the {C}anterbury, {N}ew {Z}ealand region from surface-wave-based site characterisation},
+  author={Thomson, Ethan M. and Bradley, Brendon A. and Lee, Robin L. and Wotherspoon, Liam M. and Wood, Clinton M. and Cox, Brady R.},
+  journal={Soil Dynamics and Earthquake Engineering},
+  volume={128},
+  pages={105834},
+  year={2020},
+  doi={10.1016/j.soildyn.2019.105834}
+}
+
+@article{bogaard2016landslidehydrology,
+  title={Landslide hydrology: from hydrology to pore pressure},
+  author={Bogaard, Thom A. and Greco, Roberto},
+  journal={WIREs Water},
+  volume={3},
+  number={3},
+  pages={439--459},
+  year={2016},
+  doi={10.1002/wat2.1126},
+  note={Crossref issued date is 2015 (online first); the WIREs Water issue is 3(3), 2016}
+}
+
+@article{pelascini2022hillslope,
+  title={Finite-hillslope analysis of landslides triggered by excess pore water pressure: the roles of atmospheric pressure and rainfall infiltration during typhoons},
+  author={Pelascini, Lucas and Steer, Philippe and Mouyen, Maxime and Longuevergne, Laurent},
+  journal={Natural Hazards and Earth System Sciences},
+  volume={22},
+  number={10},
+  pages={3125--3141},
+  year={2022},
+  doi={10.5194/nhess-22-3125-2022}
 }

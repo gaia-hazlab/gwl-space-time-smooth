@@ -263,13 +263,29 @@ fills the fine 90 m static envelope, $\theta_t=\theta_{wp}+w_t(\theta_{fc}-\thet
 $\theta_{sat}$ — so the 90 m spatial texture is the static envelope while the temporal signal stays at
 the driver scale.
 
-## The groundwater-level pipeline
+## The groundwater pipeline: what is carried, and in which variable
 
-The operational GWL estimate writes the field in **anomaly space**, so each stage owns one term:
+The operational estimate writes the field in **anomaly space**, so each stage owns one term. The
+variable it is written in is **depth to water table** $D$, positive downward, because that is what a
+well reports and what the liquefaction product consumes:
 
 $$
-h(x,t)=\underbrace{\overline{\mathrm{DTW}}(x)}_{\text{baseline mean}}+\underbrace{\Delta h(x,t)}_{\text{dynamics}}+\underbrace{r(x,t)}_{\text{assimilation residual}}.
+D(x,t)=\underbrace{\overline{D}(x)}_{\text{baseline mean}}+\underbrace{\Delta D(x,t)}_{\text{dynamics}}+\underbrace{r(x,t)}_{\text{assimilation residual}} .
 $$
+
+An earlier version of this equation wrote the left-hand side as $h$ and the dynamic term as $\Delta h$
+while the baseline was $\overline{\mathrm{DTW}}$ — mixing head and depth in one sum, which differ by
+sign and by the land-surface datum. They convert exactly and without a parameter, since $z_s$ is
+time-invariant:
+
+$$D = z_s - h_{wt}, \qquad \Delta D = -\,\Delta h_{wt},$$
+
+so the same three terms in head space are $h_{wt} = \overline{h_{wt}} + \Delta h_{wt} - r$, and the
+*covariance* of the dynamic term is identical in either variable
+([Assimilation](04-assimilation.qmd#what-the-state-actually-is-storage-head-depth-to-water-aquifer-head-pore-pressure)).
+Neither is the canonical evolving state in the target architecture — that is groundwater **storage**,
+from which head and then depth are diagnosed (#187, `src/models/hydro_state.py`); the anomaly
+decomposition above is what the snapshot estimator carries today.
 
 The **baseline** is an observation-anchored random forest on **HAND** (Height Above Nearest Drainage)
 and SOLUS/terrain covariates — deliberately excluding coordinates so it cannot memorise well locations.
@@ -278,3 +294,9 @@ climate-response β-map (per-site regression on SPI-3, ΔSWE, PDO), which reprod
 memory; the higher rungs add a transfer-function/linear-reservoir memory (the same water table advanced
 above). The **residual** is ordinary kriging of the observed well anomalies, precision-weighted into the
 state ([Assimilation](04-assimilation.qmd)).
+
+That β-map's fourth term, the atmospheric-river coefficient β₄, is set to 0 today — a stated placeholder
+held there until the Stage IV intercomparison delivers a ranked precipitation product. So in the operative
+model, atmospheric rivers contribute nothing to the GWL estimate: the implemented Stage-2 dynamics are
+linear, memoryless, and AR-blind, and the transfer-function/linear-reservoir rungs above remain planned,
+not built.

@@ -402,14 +402,25 @@ geotechnical models expect).
 
 Attribution is answered at two levels. **Field level** — a random forest over all features (static
 covariates HAND/TWI/slope/clay/sand + the dv/v observation) shows what actually explains each field:
-**Vs30 is ~100% terrain (HAND)**, groundwater ~61% HAND + ~26% clay, soil moisture ~89% sand. dv/v is
-a small field-level term in this MVP *by construction* — it only perturbs the state near the seismic
-stations. **Update level** — the precision-weighted assimilation share shows which sensor sets the
-near-station correction: ~94% wells (GWL), ~95% seismic dv/v (soil moisture), ~99% seismic (Vs30).
-The first is the honest field-wide accounting; the second describes only the near-station refinement.
+**Vs30 is ~100% terrain (HAND)**, groundwater ~61% HAND + ~26% clay, soil moisture ~89% sand.
+**Caveat.** Those field-level shares largely restate how the twin was built. The θ panel is the
+static Saxton-Rawls θ_fc envelope (a closed form in sand/clay) plus the near-station dv/v increment,
+so ~89% sand is self-recovery, not a finding; the groundwater share is inherited from a baseline RF
+fit to real wells, reflecting that fitted mapping, not an independent finding. The ~100% HAND share
+holds only under the synthetic HAND-ramp fallback, where Vs30 is *defined* from HAND and is likewise
+self-recovery; but the twin now records vs30_90m.tif (Wald-Allen slope proxy) as its Vs30 source,
+under which that attribution fails, so the entire quoted Vs30 row — the HAND share and the
+small-dv/v claim alike — is stale and is being reconciled separately. These become independent
+findings only once the covariate relations are learned from observed fields rather than imposed.
+dv/v is a small field-level term in this MVP *by construction* — it only perturbs the state near the
+seismic stations. **Update level** — the precision-weighted assimilation share shows which sensor
+sets the near-station correction: ~94% wells (GWL), ~95% seismic dv/v (soil moisture), ~99% seismic
+(Vs30). The first is a field-wide accounting of the fields *as constructed* (see caveat); the second
+only the near-station refinement.
 
 ![Attribution: RF feature importance per state (top; covariates dominate, dv/v minor at the field
-level) and the sensor share of the near-station update (bottom).](../figures/demo/digital_twin_attribution.png)
+level — largely by construction, see caveat) and the sensor share of the near-station update
+(bottom).](../figures/demo/digital_twin_attribution.png)
 
 This is an **MVP with no big-data compute**: the dv/v is a physically realistic synthetic — low
 frequencies track slow groundwater, high frequencies track fast ET and rainfall — while the wells,
@@ -417,8 +428,13 @@ SNOTEL, and seismic geometry are real. **Data**: NWIS wells, NRCS SNOTEL, UW+CC 
 3DEP, TerraClimate/PRISM forcing, MERRA-2/SMAP validation. **Assumptions**: dv/v depth sensitivity
 `L≈Vs/3f`; poroelastic head for GWL (relative, not absolute); dynamic-capillary stiffening for soil
 moisture; `Vs30(t)=base·(1+⟨dVs/Vs⟩_0-30m)`; precision-weighted assimilation reverting to the model
-off-station. **Evaluation**: GWL block-CV RMSE ≈18.5 m, soil moisture vs MERRA-2 r=0.85 (bias −0.08,
-RMSE 0.095), dv/v band recovery r>0.95, assimilation σ reduction ~53% (WTD) / ~91% (θ) near stations.
+off-station. **Evaluation** — each number tagged by its basis: GWL block-CV RMSE ≈18.5 m (**REAL** — held-out
+wells); soil moisture vs MERRA-2 r=0.85 (bias −0.08, RMSE 0.095) (**MODEL cross-check** — another
+model's reanalysis; consistency, not validation); dv/v band recovery r>0.95 (**SYNTHETIC** — the
+inverse operator recovering an imposed signal); assimilation σ reduction ~53% (WTD) / ~91% (θ) near
+stations (**SYNTHETIC**). The SYNTHETIC entries are pipeline demonstrations, not skill: they show the
+machinery runs end to end and recovers what it was given, not how well the twin tracks the real
+subsurface.
 **Next**: real multi-year waveform dv/v, borehole poroelastic calibration to head in metres, SNOTEL
 SWE assimilation, and Earth2Studio weather-forecast forcing to turn the twin forward in time.
 

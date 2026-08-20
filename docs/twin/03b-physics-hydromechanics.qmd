@@ -31,6 +31,22 @@ hydrological grounds share one static description of the subsurface. This stiffn
 to the Sanger liquefaction GLM [@sanger2025liquefaction] and, with the water table, to the LandLab
 landslide chain ([Hazard integration](07-hazard-integration.qmd)).
 
+::: {.callout-note}
+## Static near-surface velocity needs its own geostatistics, not the hydrologic prior
+Everything below concerns the *dynamic* velocity change. The **static** $V_S$ / $V_{S30}$ / $V_S(z)$
+field is a different statistical object and must not inherit the water-table or soil-moisture spatial
+prior. It is positive-valued (so a lognormal or otherwise transformed marginal, not a Gaussian one),
+geological rather than hydrologic, multiscale, and plausibly nonstationary — a fill-and-alluvium
+province and a glacially overconsolidated till do not share a correlation structure. Published shallow
+$V_S$ correlation studies span geotechnical to basin scales precisely because they are mapping
+different geology: @thompson2007vscorrelation for San Francisco Bay sediments and
+@thomson2020canterbury for the Canterbury region. The repo carries a per-cell marginal $\sigma$ with a
+lognormal option (`src.data.fetch_vs30.nehrp_class_probabilities`) and **no** spatial correlation model
+at all; `PRIOR_HYPERPARAMETERS` has no $V_S$ entry, so no hydrologic $(\sigma, L, \nu)$ can leak into
+it by default. Marginal transform, spatial correlation, and geological conditioning are three separate
+audits (#54, #84, #86, #144).
+:::
+
 ## Petrophysical link: velocity, stiffness, and water
 
 The two grounds meet in petrophysics: **water changes stiffness, and $\delta v/v$ measures the
@@ -58,7 +74,15 @@ effective pressure* $P_e$.
 
 Below the water table the effective stress is overburden minus pore pressure (Terzaghi/Biot
 [@biot1941general]); a head change $\Delta h$ raises pore pressure by $\rho_w g\,\Delta h$, lowers
-effective stress, and softens the frame. In the poroelastic surface-wave form the pore-pressure term
+effective stress, and softens the frame. Be specific about *which* head: for the shallow saturated
+band the coda samples, $\Delta h$ is a change in the **water-table head** $h_{wt}$ — equivalently, up
+to sign, a change in depth to water — and the pore-pressure response is the hydrostatic one below a
+moving phreatic surface. In a **confined or semiconfined** interval the same $\delta v/v$ physics
+applies to the hydraulic head $H$ of *that* interval, which can change by metres with no water-table
+movement whatever, and the Péclet argument below (drained vs undrained moduli) is where the two
+regimes stop being interchangeable. The operational $k_{sat}$ is calibrated against shallow
+water-table variation, so applying it to a deep-aquifer head signal is an extrapolation rather than a
+conversion ([Assimilation](04-assimilation.qmd#what-the-state-actually-is-storage-head-depth-to-water-aquifer-head-pore-pressure), #198). In the poroelastic surface-wave form the pore-pressure term
 $u^0$ reduces velocity, $\left(\delta V_S/V_S\right)_{\rm Rayleigh} = -\tfrac{\mu'}{2\mu}u^0 +
 \tfrac{\mu'+1}{12\mu}T^0_{33}$, and the underlying acoustoelastic (third-order-elastic) sensitivity
 $\delta v/v = \beta\,\epsilon_{kk}$ is bridged to the seismological moduli by

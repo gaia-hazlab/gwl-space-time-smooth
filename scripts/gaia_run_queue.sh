@@ -5,24 +5,40 @@
 # a real PR lifecycle per batch:
 #
 #   branch -> orchestrator resolves the whole batch together -> local
-#   pre-flight gate -> open ONE PR (Closes #a, #b, #c) -> request Copilot
-#   review -> wait -> revise-and-re-review, up to REVIEW_MAX_ROUNDS times,
-#   stopping early once Copilot has nothing new to say -> wait for GitHub
-#   Actions checks green -> squash-merge -> every issue in the batch closes
-#   via "Closes #N", plus a scientist-facing close comment written by the
-#   gaia-lab-notebook agent on each issue and (if the batch belongs to a
-#   milestone) a progress note on that milestone's epic tracker -- the epic
-#   itself is never closed by this script.
+#   pre-flight gate -> open ONE PR (Closes #a, #b, #c) -> ARBITRATION against
+#   competing open gaia PRs -> request Copilot review -> wait ->
+#   revise-and-re-review, up to REVIEW_MAX_ROUNDS times -> AUDITOR CONVERGENCE
+#   GATE -> wait for GitHub Actions checks green -> squash-merge -> every issue
+#   in the batch closes via "Closes #N", plus a scientist-facing close comment
+#   written by the gaia-lab-notebook agent on each issue and (if the batch
+#   belongs to a milestone) a progress note on that milestone's epic tracker --
+#   the epic itself is never closed by this script.
 #
-# Copilot's code review NEVER submits an "Approve" state -- only ever
-# COMMENTED -- so "converged" means its inline comments stopped changing
-# between rounds, not that it approved. The merge step therefore relies on
-# main's ruleset having a bypass_actor entry for this token (bypass_mode
-# pull_request, so direct-push protections on main still apply to it) --
-# without that, the required-approving-review rule blocks the merge forever.
+# ARBITRATION (see arbitrate_against_rivals). Batches are cut from main in
+# parallel, so two batches can independently propose COMPETING designs for the
+# same module and neither agent ever sees the other -- exactly what happened on
+# 2026-08-17/18 with #163 (SparseMaternPrior) vs #154 (StationaryGridPrior).
+# Before a PR is offered for review, its branch is tested for real merge
+# conflicts against every other open gaia PR. On a hit, an INDEPENDENT
+# gaia-auditor is given both diffs and both issue statements and asked for an
+# objective verdict, which is posted on BOTH PRs. The blocked side is labelled
+# needs-human-decision and never auto-merges, but stays READY FOR REVIEW -- a
+# draft PR gets no code review, and the human adjudicating a design collision
+# needs a review of both sides. See docs/postmortem/2026-08-18-gaia-run.md.
 #
-# Any failure at any stage leaves the PR/issues OPEN for a human and does
-# NOT merge.
+# CONVERGENCE. Copilot's code review NEVER submits an "Approve" state -- only
+# ever COMMENTED -- so Copilot alone cannot gate a merge. Its comments stopping
+# is a necessary but NOT sufficient signal (an unchanged fingerprint can just
+# mean the revision pass ignored the feedback). The real gate is a gaia-auditor
+# that reads the final diff plus the outstanding review comments and returns a
+# structured converged/blocked verdict. A merge requires BOTH: Copilot quiet and
+# the auditor satisfied. The merge step still relies on main's ruleset having a
+# bypass_actor entry for this token (bypass_mode pull_request, so direct-push
+# protections on main still apply to it).
+#
+# Any failure at any stage leaves the PR/issues OPEN for a human and does NOT
+# merge. Failure NEVER deletes a branch, local or remote: work is committed,
+# pushed and parked under gaia/parked/* so it is always recoverable (park_branch).
 #
 # Requires: branch protection on main must actually allow this token to
 # merge (or the merge step will just fail loudly, which is fine); jq.
@@ -38,11 +54,82 @@ REVIEW_WAIT_TRIES=40      # 40 * 30s = 20 min max wait for each Copilot pass
 REVIEW_WAIT_INTERVAL=30
 REVIEW_MAX_ROUNDS=3       # cap on revise-and-re-review rounds; see the convergence note above
 
+# Arbitration + auditor gate. Both default ON: they are what stops two agents
+# silently shipping incompatible designs for the same module, and what stops a
+# revision pass that ignored its review from merging anyway.
+GAIA_ARBITRATION="${GAIA_ARBITRATION:-1}"      # 0 disables rival-PR arbitration
+GAIA_AUDIT_GATE="${GAIA_AUDIT_GATE:-1}"        # 0 disables the auditor merge gate
+GAIA_MAX_BATCHES="${GAIA_MAX_BATCHES:-0}"      # 0 = drain the queue; N = stop after N batches
+
 : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}"
 
 cd "$REPO_DIR"
 mkdir -p "$LOG_DIR"
 REPO_SLUG="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+
+# One killable process group. The 2026-08-17/18 incident ran for another hour
+# after the operator killed what they believed was the run: they had killed a
+# `claude -p` CHILD, and this loop simply started the next issue. Record the
+# loop's own PID where a human can find it, and make a TERM/INT stop the LOOP
+# rather than just whatever child happens to be running.
+GAIA_PIDFILE="$LOG_DIR/gaia_run_queue.pid"
+if [ -f "$GAIA_PIDFILE" ] && kill -0 "$(cat "$GAIA_PIDFILE" 2>/dev/null)" 2>/dev/null; then
+  echo "!!! another gaia_run_queue.sh is already running (PID $(cat "$GAIA_PIDFILE")). Stop it first:" >&2
+  echo "      kill \$(cat $GAIA_PIDFILE)" >&2
+  exit 1
+fi
+echo $$ > "$GAIA_PIDFILE"
+GAIA_STOP=0
+gaia_request_stop() {
+  GAIA_STOP=1
+  echo "" >&2
+  echo "  !!! stop requested -- finishing the current issue, then halting the queue." >&2
+  echo "      (a second TERM kills immediately -- work already COMMITTED is safe on the branch," >&2
+  echo "       but anything uncommitted at that instant is left in the working tree, not pushed)" >&2
+  trap - TERM INT
+}
+trap gaia_request_stop TERM INT
+trap 'rm -f "$GAIA_PIDFILE"' EXIT
+echo "gaia queue PID $$ (stop with: kill $$   or   kill \$(cat $GAIA_PIDFILE))"
+
+# Fail at STARTUP on a broken publication path, not eleven hours in. The
+# 2026-08-17/18 run pushed nine branches and lost every one of them because
+# `gh pr create --json` is not a flag that exists -- the error surfaced only
+# AFTER each batch had done its work, and the failure path then deleted the
+# branch. Anything that must work for a batch to be publishable is checked here.
+preflight() {
+  local fatal=0
+  if ! gh auth status >/dev/null 2>&1; then
+    echo "  !!! preflight: 'gh auth status' failed -- no usable GitHub credential" >&2; fatal=1
+  fi
+  # `gh pr create` has NO --json flag (never has). If a future refactor
+  # reintroduces one, this is the tripwire.
+  if gh pr create --help 2>&1 | grep -qE '^\s+--json'; then
+    echo "  !!! preflight: this gh's 'pr create' now has --json; open_draft_pr can be simplified" >&2
+  fi
+  # The number-resolution path open_draft_pr actually depends on.
+  if ! gh pr view --help 2>&1 | grep -qE '^\s+--json'; then
+    echo "  !!! preflight: 'gh pr view' has no --json -- cannot resolve PR numbers" >&2; fatal=1
+  fi
+  # Every binary a batch cannot complete without. `claude` and `pixi` were the
+  # notable omissions: without them a batch gets as far as branching and
+  # committing before dying, which is exactly the expensive-late-failure this
+  # function exists to prevent.
+  for tool in jq python3 git gh claude pixi; do
+    command -v "$tool" >/dev/null || { echo "  !!! preflight: '$tool' not on PATH" >&2; fatal=1; }
+  done
+  # The helper scripts the loop shells out to, per batch.
+  for helper in scripts/gaia_group_issues.py scripts/gaia-launch/gaia_ticker.py \
+                scripts/gaia-launch/gaia_trace.py; do
+    [ -f "$REPO_DIR/$helper" ] || { echo "  !!! preflight: missing $helper" >&2; fatal=1; }
+  done
+  if [ "$fatal" -ne 0 ]; then
+    echo "  !!! preflight failed -- refusing to start. Nothing has been changed." >&2
+    exit 1
+  fi
+  echo "  preflight OK (gh $(gh --version | head -1 | awk '{print $3}'), repo ${REPO_SLUG})"
+}
+preflight
 
 # A stable fingerprint of stdin, for the convergence check below -- NOT a security primitive, so
 # any of these is fine; `shasum` is macOS/Perl-native and not guaranteed on a fresh Linux box (the
@@ -72,23 +159,148 @@ report_failure() {
   } | tee -a "$logfile"
 }
 
-abandon_branch() {
-  local branch="$1" logfile="$2"
+# Park, never destroy. The predecessor of this function ran `git reset --hard`,
+# `git clean -fd`, `git branch -D` AND `git push origin --delete` on ANY non-zero
+# exit -- including a typo in a gh flag. On 2026-08-17/18 that destroyed 730
+# uncommitted lines of issue #176 work outright (never staged, so not even
+# recoverable from the object database) and deleted nine successfully-pushed
+# branches from the remote. Nothing here deletes anything: in-flight work is
+# COMMITTED, PUSHED, and the local branch renamed out of the way so the next
+# batch's `checkout -B` cannot clobber it.
+park_branch() {
+  local branch="$1" logfile="$2" reason="${3:-batch failed}"
+  local parked="gaia/parked/${branch#gaia/}-$(date -u +%Y%m%dT%H%M%SZ)"
   {
-    echo "  abandoning branch ${branch}:"
+    echo "  parking branch ${branch} (${reason}):"
     git diff --stat 2>&1
-    # Clean the working tree FIRST, while still on $branch: reset drops tracked edits, clean drops
-    # new untracked files (but `-e .gaia-runs` preserves the run logs, which are NOT gitignored, so
-    # a bare `git clean` would delete this very logfile). Doing this BEFORE switching means the
-    # subsequent `git checkout main` can't be aborted by untracked files that would be overwritten
-    # -- otherwise, under set -e, a failed checkout would kill the script mid-cleanup and the
-    # orchestrator's uncommitted work would leak onto main and get swept into the next batch.
-    git reset --hard HEAD 2>&1 || true
-    git clean -fd -e .gaia-runs 2>&1 || true
+    # Preserve any uncommitted work as a real commit rather than discarding it.
+    # `git add -A` picks up untracked files too. .gaia-runs/ (logs, transcripts)
+    # is gitignored in full; the published dashboards live under docs/gaia-runs/
+    # and are NOT ignored, so they are picked up here as intended. Formerly
+    # the rendered dashboards, so the run logs are unaffected either way.
+    if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+      git add -A 2>&1 || true
+      git commit -m "gaia WIP (parked, unreviewed): ${reason}
+
+Uncommitted work preserved automatically when the batch was parked.
+This commit has NOT passed the gate and has NOT been reviewed.
+
+Co-Authored-By: Claude <noreply@anthropic.com>" 2>&1 || true
+    fi
+    # Publish before parking so the work survives loss of this machine.
+    git push -u origin "$branch" 2>&1 || echo "  (could not push ${branch}; it remains locally at $(git rev-parse --short HEAD 2>/dev/null))"
     git checkout main 2>&1 || git checkout -f main 2>&1 || true
-    git branch -D "$branch" 2>&1 || true
-    git push origin --delete "$branch" 2>&1 || true
+    git branch -m "$branch" "$parked" 2>&1 || true
+    echo "  parked as local branch ${parked}; remote branch ${branch} left in place."
+    echo "  recover with:  git checkout ${parked}    (or: git fetch origin ${branch})"
   } >> "$logfile" 2>&1
+  echo "  parked ${branch} -> ${parked} (nothing deleted; see $logfile)" | tee -a "$logfile"
+}
+
+# `gh pr create` prints the PR URL on stdout and has NO --json flag. Resolving
+# the number through `gh pr view` afterwards is the whole fix for the bug that
+# stranded the 2026-08-17/18 run.
+pr_number_for_branch() {
+  gh pr view "$1" --json number -q .number 2>/dev/null
+}
+
+open_draft_pr() {
+  local branch="$1" title="$2" body="$3" logfile="$4" n=""
+  gh pr create --draft --base main --head "$branch" \
+    --title "$title" --body "$body" >> "$logfile" 2>&1 || true
+  # Read the number back rather than parsing create's output: this also
+  # transparently adopts a PR that already exists for this head.
+  n="$(pr_number_for_branch "$branch")" || n=""
+  [ -n "$n" ] && [ "$n" != "null" ] || return 1
+  printf '%s' "$n"
+}
+
+# Files this branch changes relative to its merge-base with main.
+changed_files_for_ref() {
+  local ref="$1" base
+  base="$(git merge-base main "$ref" 2>/dev/null)" || return 1
+  git diff --name-only "$base" "$ref" 2>/dev/null
+}
+
+# Other open gaia PRs whose branches would genuinely CONFLICT with this one --
+# not merely touch a shared file. Overlap is the cheap prefilter; merge-tree is
+# the real test. Note --write-tree DOES write a tree object to the object
+# database (it is how merge-tree reports the merged result); what it does not
+# do is move any ref, touch the index, or alter the working tree. The stray
+# trees are unreachable and get collected by a normal gc.
+find_conflicting_prs() {
+  local branch="$1" logfile="$2" mine rivals rival_branch rival_num base overlap
+  mine="$(changed_files_for_ref "$branch")" || return 0
+  [ -n "$mine" ] || return 0
+  rivals="$(gh pr list --state open --json number,headRefName \
+    --jq '.[] | select(.headRefName | startswith("gaia/")) | "\(.number)\t\(.headRefName)"' 2>>"$logfile")" || return 0
+  while IFS=$'\t' read -r rival_num rival_branch; do
+    [ -z "${rival_branch:-}" ] && continue
+    [ "$rival_branch" = "$branch" ] && continue
+    git fetch -q origin "$rival_branch" 2>>"$logfile" || continue
+    overlap="$(comm -12 <(printf '%s\n' "$mine" | sort -u) \
+                        <(changed_files_for_ref FETCH_HEAD 2>/dev/null | sort -u) 2>/dev/null)" || continue
+    [ -n "$overlap" ] || continue
+    base="$(git merge-base "$branch" FETCH_HEAD 2>/dev/null)" || continue
+    if ! git merge-tree --write-tree --merge-base="$base" "$branch" FETCH_HEAD >/dev/null 2>&1; then
+      printf '%s\t%s\t%s\n' "$rival_num" "$rival_branch" "$(printf '%s' "$overlap" | tr '\n' ',' | sed 's/,$//')"
+    fi
+  done <<< "$rivals"
+}
+
+# Ask an INDEPENDENT auditor to judge two competing proposals. The auditor is
+# deliberately given both diffs and both issue statements but is NOT told which
+# branch is "ours" -- the point is an objective verdict, not a rubber stamp for
+# whichever batch happened to run second.
+arbitrate_pair() {
+  local branch="$1" pr_number="$2" rival_branch="$3" rival_num="$4" files="$5" logfile="$6"
+  local out verdict dir
+  # The gaia-auditor is READ-ONLY BY DESIGN -- its tool grant is
+  # Read/Grep/Glob/WebSearch/WebFetch/Skill, with no Bash. Telling it to run
+  # `git diff` would simply fail. So the caller (which does have git)
+  # materialises everything it needs to judge, and hands it file paths to Read.
+  dir="$(mktemp -d)"
+  git diff "$(git merge-base main "$branch")...$branch" > "$dir/proposal-A.diff" 2>>"$logfile" || true
+  git fetch -q origin "$rival_branch" 2>>"$logfile" || true
+  git diff "$(git merge-base main FETCH_HEAD)...FETCH_HEAD" > "$dir/proposal-B.diff" 2>>"$logfile" || true
+  gh pr view "$pr_number" --json title,body,number > "$dir/proposal-A-pr.json" 2>>"$logfile" || true
+  gh pr view "$rival_num"  --json title,body,number > "$dir/proposal-B-pr.json" 2>>"$logfile" || true
+  out="$(claude -p "Use the gaia-auditor agent as an impartial ARBITRATOR between two competing
+pull requests in ${REPO_DIR} (${REPO_SLUG}). They modify the same files and cannot both be merged
+as written. You are not an author of either. Judge them on the merits.
+
+Proposal A: PR #${pr_number}, branch ${branch}
+Proposal B: PR #${rival_num}, branch ${rival_branch}
+Files in conflict: ${files}
+
+Everything you need has been materialised for you -- Read these files, do not guess and do not
+try to run git or gh (you have no shell):
+  ${dir}/proposal-A.diff      full diff of A against its merge-base with main
+  ${dir}/proposal-B.diff      full diff of B against its merge-base with main
+  ${dir}/proposal-A-pr.json   A's PR title and body (states the issue it closes)
+  ${dir}/proposal-B-pr.json   B's PR title and body
+You may also Read/Grep the current checkout for surrounding context.
+
+Assess: correctness; scientific and numerical soundness; scalability; test coverage; API and
+maintenance cost; and whether one subsumes the other. If they are solving genuinely different
+problems that merely collide textually, say so -- that verdict is 'reconcile'.
+
+Finish your reply with EXACTLY one fenced json block and nothing after it:
+\`\`\`json
+{\"verdict\": \"A\" | \"B\" | \"reconcile\" | \"escalate\",
+ \"confidence\": \"high\" | \"medium\" | \"low\",
+ \"rationale\": \"<=6 sentences, concrete, citing the code\",
+ \"reconciliation\": \"if verdict is reconcile: how to combine them; else empty\"}
+\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" || out=""
+  # Take the LAST json block: the auditor's prose may quote earlier examples.
+  verdict="$(printf '%s' "$out" | awk '/^```json/{f=1;buf="";next} /^```/{if(f){last=buf;f=0}next} f{buf=buf$0"\n"} END{printf "%s", last}')"
+  rm -rf "$dir"
+  if [ -z "$verdict" ] || ! jq -e . >/dev/null 2>&1 <<<"$verdict"; then
+    printf '%s' "$out" >> "$logfile"
+    printf '{"verdict":"escalate","confidence":"low","rationale":"The arbitrator produced no parseable verdict; escalating to a human.","reconciliation":""}'
+    return 0
+  fi
+  printf '%s' "$verdict"
 }
 
 wait_for_copilot_review() {
@@ -116,6 +328,157 @@ wait_for_copilot_review() {
   return 1
 }
 
+# `gh pr edit --add-label` goes through GraphQL and needs the read:org scope,
+# which a plain repo+workflow token does not have -- it fails with a scope error
+# that has nothing to do with labels. The REST issues/labels endpoint needs only
+# `repo`, so use that and keep the automation working on a least-privilege token.
+add_label() {
+  local number="$1" label="$2" logfile="$3"
+  gh api "repos/${REPO_SLUG}/issues/${number}/labels" -f "labels[]=${label}" >> "$logfile" 2>&1 \
+    || echo "  could not label #${number} with ${label}; add it by hand" | tee -a "$logfile"
+}
+
+# Returns 0 if this PR may proceed to review/merge, 1 if arbitration ruled
+# against it (or could not decide). Either way BOTH PRs get the verdict posted,
+# so the losing side is never silently dropped.
+arbitrate_against_rivals() {
+  local branch="$1" pr_number="$2" logfile="$3"
+  local conflicts rival_num rival_branch files verdict v conf rationale recon proceed=0
+  [ "$GAIA_ARBITRATION" = "1" ] || return 0
+  conflicts="$(find_conflicting_prs "$branch" "$logfile")" || conflicts=""
+  [ -n "$conflicts" ] || { echo "  no competing open gaia PR conflicts with ${branch}" | tee -a "$logfile"; return 0; }
+
+  while IFS=$'\t' read -r rival_num rival_branch files; do
+    [ -z "${rival_num:-}" ] && continue
+    echo "  !!! PR #${pr_number} conflicts with open PR #${rival_num} on: ${files}" | tee -a "$logfile"
+    echo "  calling an independent gaia-auditor to arbitrate (logged to $logfile)..." | tee -a "$logfile"
+    verdict="$(arbitrate_pair "$branch" "$pr_number" "$rival_branch" "$rival_num" "$files" "$logfile")"
+    v="$(jq -r '.verdict // "escalate"' <<<"$verdict")"
+    conf="$(jq -r '.confidence // "low"' <<<"$verdict")"
+    rationale="$(jq -r '.rationale // ""' <<<"$verdict")"
+    recon="$(jq -r '.reconciliation // ""' <<<"$verdict")"
+    echo "  arbitration verdict: ${v} (confidence ${conf})" | tee -a "$logfile"
+
+    local note="## Automated arbitration
+
+PR #${pr_number} (\`${branch}\`) and PR #${rival_num} (\`${rival_branch}\`) modify the same files and **cannot both merge as written**.
+
+**Files in conflict:** \`${files}\`
+
+An independent \`gaia-auditor\` — not an author of either change — reviewed both diffs and both issue statements.
+
+**Verdict: ${v}** (confidence: ${conf})
+
+${rationale}"
+    [ -n "$recon" ] && note="${note}
+
+**Suggested reconciliation:** ${recon}"
+    note="${note}
+
+This verdict is advisory and was produced by an autonomous agent. **A human decides.** Neither PR will be auto-merged while this conflict stands. See \`docs/postmortem/2026-08-18-gaia-run.md\`."
+
+    gh pr comment "$pr_number" --body "$note" >> "$logfile" 2>&1 || true
+    gh pr comment "$rival_num" --body "$note" >> "$logfile" 2>&1 || true
+
+    # Block by LABEL, not by demoting to draft. A draft PR does not get a
+    # Copilot review, so demoting the loser would silently deny it the very
+    # review a human needs in order to adjudicate. Returning non-zero already
+    # stops the merge; the label makes the block visible and filterable.
+    gh label create needs-human-decision --color B60205 \
+      --description "Automated arbitration found a competing PR; a human must choose" >/dev/null 2>&1 || true
+    case "$v" in
+      A) echo "  arbitrator favours THIS PR (#${pr_number}); #${rival_num} needs rework by a human" | tee -a "$logfile"
+         add_label "$rival_num" needs-human-decision "$logfile" ;;
+      B) echo "  arbitrator favours the rival (#${rival_num}); #${pr_number} blocked pending your decision" | tee -a "$logfile"
+         add_label "$pr_number" needs-human-decision "$logfile"
+         proceed=1 ;;
+      *) echo "  arbitrator returned '${v}' -- both PRs left open for a human; not merging" | tee -a "$logfile"
+         add_label "$pr_number" needs-human-decision "$logfile"
+         add_label "$rival_num" needs-human-decision "$logfile"
+         proceed=1 ;;
+    esac
+  done <<< "$conflicts"
+  return "$proceed"
+}
+
+# The real merge gate. Copilot never approves, and an unchanged comment
+# fingerprint can equally mean "the revision pass ignored the review" -- so a
+# separate auditor reads the FINAL diff against the outstanding comments and
+# says whether the PR is actually done. Returns 0 = converged, 1 = blocked.
+audit_pr_convergence() {
+  local pr_number="$1" branch="$2" numbers_csv="$3" review_comments="$4" logfile="$5"
+  local out verdict conv blocking rationale dir
+  [ "$GAIA_AUDIT_GATE" = "1" ] || return 0
+  echo "  auditor convergence gate on PR #${pr_number}..." | tee -a "$logfile"
+  # Same constraint as arbitrate_pair: the auditor has no Bash, so the diff and
+  # the review comments are written out for it to Read rather than fetch.
+  dir="$(mktemp -d)"
+  git diff "$(git merge-base main "$branch")...$branch" > "$dir/final.diff" 2>>"$logfile" || true
+  printf '%s\n' "${review_comments:-(no inline review comments were left)}" > "$dir/review-comments.txt"
+  out="$(claude -p "Use the gaia-auditor agent to decide whether PR #${pr_number} (branch ${branch},
+resolving ${numbers_csv}) in ${REPO_DIR} is genuinely ready to merge. You are an independent
+reviewer, not the author. Be objective and be willing to block.
+
+Everything you need has been materialised -- Read these, do not guess and do not try to run git
+or gh (you have no shell):
+  ${dir}/final.diff             the complete final diff against main
+  ${dir}/review-comments.txt    the code-review comments left on the PR
+You may also Read/Grep the current checkout for surrounding context.
+
+Some review comments may already be addressed, some may have been ignored, and some may be wrong.
+
+Decide, on the evidence in the diff:
+  1. Is each substantive review comment either ADDRESSED in the code or explicitly and correctly
+     rebutted? A comment that was silently ignored is NOT addressed.
+  2. Does the change actually resolve the issues it claims to close?
+  3. Is it correct, tested, and free of obvious scientific or numerical errors?
+  4. Are there NEW problems the change introduces that review did not catch?
+
+Do not accept a change merely because review went quiet. Block if anything material is unresolved.
+
+Finish your reply with EXACTLY one fenced json block and nothing after it:
+\`\`\`json
+{\"converged\": true | false,
+ \"blocking\": [\"one line per unresolved problem; empty array if none\"],
+ \"rationale\": \"<=6 sentences citing the code\"}
+\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions 2>>"$logfile")" || out=""
+  verdict="$(printf '%s' "$out" | awk '/^```json/{f=1;buf="";next} /^```/{if(f){last=buf;f=0}next} f{buf=buf$0"\n"} END{printf "%s", last}')"
+  rm -rf "$dir"
+  if [ -z "$verdict" ] || ! jq -e . >/dev/null 2>&1 <<<"$verdict"; then
+    printf '%s' "$out" >> "$logfile"
+    echo "  auditor produced no parseable verdict; treating as BLOCKED (fail closed)" | tee -a "$logfile"
+    gh pr comment "$pr_number" --body "## Automated auditor gate
+
+The auditor did not return a parseable verdict, so this PR is **blocked** rather than merged (fail closed). A human should review it. See \`docs/postmortem/2026-08-18-gaia-run.md\`." >> "$logfile" 2>&1 || true
+    return 1
+  fi
+  conv="$(jq -r '.converged // false' <<<"$verdict")"
+  blocking="$(jq -r '(.blocking // []) | map("- " + .) | join("\n")' <<<"$verdict")"
+  rationale="$(jq -r '.rationale // ""' <<<"$verdict")"
+  if [ "$conv" = "true" ]; then
+    echo "  auditor: CONVERGED" | tee -a "$logfile"
+    gh pr comment "$pr_number" --body "## Automated auditor gate — converged
+
+An independent \`gaia-auditor\` reviewed the final diff against the outstanding review comments and found nothing material unresolved.
+
+${rationale}
+
+Produced by an autonomous agent; this is a gate, not a substitute for human review." >> "$logfile" 2>&1 || true
+    return 0
+  fi
+  echo "  auditor: BLOCKED -- leaving PR #${pr_number} open for a human" | tee -a "$logfile"
+  gh pr comment "$pr_number" --body "## Automated auditor gate — blocked
+
+An independent \`gaia-auditor\` reviewed the final diff against the outstanding review comments and found unresolved problems. **This PR was not merged.**
+
+${blocking:-- (no specific items returned)}
+
+${rationale}
+
+Produced by an autonomous agent. A human should resolve these before merging." >> "$logfile" 2>&1 || true
+  return 1
+}
+
 epic_for_milestone() {
   local milestone="$1"
   [ -z "$milestone" ] && return 0
@@ -126,8 +489,18 @@ epic_for_milestone() {
 git checkout main
 git pull --ff-only origin main
 
+batch_count=0
 while IFS= read -r batch_json; do
   [ -z "$batch_json" ] && continue
+  if [ "$GAIA_STOP" -ne 0 ]; then
+    echo "=== stop requested; halting the queue before the next batch ==="
+    break
+  fi
+  if [ "$GAIA_MAX_BATCHES" -gt 0 ] && [ "$batch_count" -ge "$GAIA_MAX_BATCHES" ]; then
+    echo "=== GAIA_MAX_BATCHES=${GAIA_MAX_BATCHES} reached; stopping (remaining batches untouched) ==="
+    break
+  fi
+  batch_count=$((batch_count + 1))
 
   branch="$(jq -r .branch <<<"$batch_json")"
   key="$(jq -r .key <<<"$batch_json")"
@@ -166,6 +539,10 @@ while IFS= read -r batch_json; do
   pr_number=""
   while IFS= read -r number; do
     [ -z "$number" ] && continue
+    if [ "$GAIA_STOP" -ne 0 ]; then
+      echo "  stop requested; not starting #${number}. Work so far stays on ${branch}." | tee -a "$logfile"
+      break
+    fi
     title="$(jq -r --arg n "$number" '.issues[] | select((.number|tostring)==$n) | .title' <<<"$batch_json")"
     echo "  resolving #${number} (${title}) [live below, also logged to $logfile]..." | tee -a "$logfile"
     # stream-json (piped through gaia_ticker.py) instead of plain text: gives a live, per-agent
@@ -235,15 +612,18 @@ Co-Authored-By: Claude <noreply@anthropic.com>" >> "$logfile" 2>&1 && commit_rc=
       break
     fi
     if [ -z "$pr_number" ]; then
-      pr_number="$(gh pr create --draft --base main --head "$branch" \
-        --title "gaia: ${readable_key} (${numbers_csv})" \
-        --body "Draft -- the gaia orchestrator is resolving ${numbers_csv} (${readable_key}), one commit per issue. Marked ready for review once every issue in the batch is committed and the local gate (test + check-dois + quarto render) passes.
+      # NOTE: `gh pr create` has no --json flag. Passing one made it exit non-zero
+      # on every batch of the 2026-08-17/18 run, which tripped the (then
+      # destructive) failure path and deleted nine already-pushed branches.
+      # open_draft_pr creates, then reads the number back via `gh pr view`.
+      pr_number="$(open_draft_pr "$branch" \
+        "gaia: ${readable_key} (${numbers_csv})" \
+        "Draft -- the gaia orchestrator is resolving ${numbers_csv} (${readable_key}), one commit per issue. Marked ready for review once every issue in the batch is committed and the local gate (test + check-dois + quarto render) passes.
 
 ${closes_lines}" \
-        --json number -q .number 2>>"$logfile" || gh pr view "$branch" --json number -q .number 2>>"$logfile")" \
-        && draft_rc=0 || draft_rc=$?
+        "$logfile")" && draft_rc=0 || draft_rc=$?
       if [ "$draft_rc" -ne 0 ] || [ -z "$pr_number" ]; then
-        report_failure "could not open draft PR for ${numbers_csv}; abandoning batch" "$logfile" "$draft_rc"
+        report_failure "could not open draft PR for ${numbers_csv}; parking batch" "$logfile" "$draft_rc"
         batch_failed=1
         break
       fi
@@ -252,30 +632,41 @@ ${closes_lines}" \
   done <<< "$numbers"
 
   if [ "$batch_failed" -ne 0 ]; then
-    abandon_branch "$branch" "$logfile"
+    park_branch "$branch" "$logfile" "batch failed on ${numbers_csv}"
     continue
   fi
   if [ "$any_committed" -eq 0 ]; then
     echo "  no changes produced for any issue in ${numbers_csv}; skipping (see $logfile)" | tee -a "$logfile"
-    abandon_branch "$branch" "$logfile"
+    # A genuinely empty batch: nothing committed AND nothing pushed. Dropping the
+    # local pointer loses no work -- but only after PROVING it is identical to
+    # main and the tree is clean, rather than assuming it.
+    git checkout main >> "$logfile" 2>&1 || git checkout -f main >> "$logfile" 2>&1 || true
+    if [ -z "$(git log --oneline "main..${branch}" 2>/dev/null)" ] && [ -z "$(git status --porcelain)" ]; then
+      git branch -d "$branch" >> "$logfile" 2>&1 || true
+    else
+      park_branch "$branch" "$logfile" "no-op batch, but the branch was not identical to main"
+    fi
     continue
   fi
 
   # Gate the accumulated batch ONCE (one quarto render per batch, not per issue). The per-issue
   # commits have already been pushed to the DRAFT PR above; this whole-branch gate is what must
-  # pass before the PR is flipped to ready-for-review below. On failure the batch is abandoned
-  # (draft PR + branch deleted), so a not-yet-green draft never reaches review or the --merge.
+  # pass before the PR is flipped to ready-for-review below. On failure the batch is PARKED --
+  # branch and draft PR both survive -- so a not-yet-green draft never reaches review or the
+  # --merge, but its work is never destroyed either.
   echo "  pre-flight gate: pixi run test && pixi run check-dois" | tee -a "$logfile"
   { pixi run test >> "$logfile" 2>&1 && pixi run check-dois >> "$logfile" 2>&1; } && test_rc=0 || test_rc=$?
   if [ "$test_rc" -ne 0 ]; then
-    report_failure "pre-flight gate FAILED for ${numbers_csv}; discarding, issues stay open" "$logfile" "$test_rc"
-    abandon_branch "$branch" "$logfile"
+    report_failure "pre-flight gate FAILED for ${numbers_csv}; PR left as draft, issues stay open" "$logfile" "$test_rc"
+    [ -n "$pr_number" ] && gh pr comment "$pr_number" --body "Pre-flight gate failed (\`pixi run test\` / \`check-dois\`); left as a draft for a human. See \`${logfile}\`." >> "$logfile" 2>&1 || true
+    park_branch "$branch" "$logfile" "pre-flight gate failed for ${numbers_csv}"
     continue
   fi
   pixi run quarto render docs/twin --to html >> "$logfile" 2>&1 && quarto_rc=0 || quarto_rc=$?
   if [ "$quarto_rc" -ne 0 ]; then
-    report_failure "quarto render failed for ${numbers_csv}; discarding" "$logfile" "$quarto_rc"
-    abandon_branch "$branch" "$logfile"
+    report_failure "quarto render failed for ${numbers_csv}; PR left as draft" "$logfile" "$quarto_rc"
+    [ -n "$pr_number" ] && gh pr comment "$pr_number" --body "Quarto render failed; left as a draft for a human. See \`${logfile}\`." >> "$logfile" 2>&1 || true
+    park_branch "$branch" "$logfile" "quarto render failed for ${numbers_csv}"
     continue
   fi
 
@@ -326,13 +717,41 @@ ${missing_closes}"
   # committed and gated, swap the placeholder body for the real one and mark it ready for review.
   gh pr edit "$pr_number" --title "gaia: ${readable_key} (${numbers_csv})" --body "$pr_body" >> "$logfile" 2>&1 \
     || echo "  could not update PR #${pr_number} body; the draft placeholder stands" | tee -a "$logfile"
-  gh pr ready "$pr_number" >> "$logfile" 2>&1 \
-    && echo "  marked PR #${pr_number} ready for review (${numbers_csv})" | tee -a "$logfile" \
-    || echo "  could not mark PR #${pr_number} ready; mark it by hand" | tee -a "$logfile"
+  # Mark ready, then VERIFY it took. A PR left in draft gets no Copilot review at
+  # all, so the whole review stage would silently no-op -- a failure that looks
+  # identical to "Copilot had nothing to say". Retry once, then say so loudly.
+  gh pr ready "$pr_number" >> "$logfile" 2>&1 || true
+  if [ "$(gh pr view "$pr_number" --json isDraft -q .isDraft 2>>"$logfile")" = "true" ]; then
+    echo "  PR #${pr_number} still in draft after 'gh pr ready'; retrying once" | tee -a "$logfile"
+    sleep 5
+    gh pr ready "$pr_number" >> "$logfile" 2>&1 || true
+  fi
+  if [ "$(gh pr view "$pr_number" --json isDraft -q .isDraft 2>>"$logfile")" = "true" ]; then
+    echo "  !!! PR #${pr_number} is STILL a draft -- Copilot will not review it. Mark it ready by hand: gh pr ready ${pr_number}" | tee -a "$logfile"
+    gh pr comment "$pr_number" --body "This PR could not be marked ready for review automatically, so **no code review was triggered**. Mark it ready by hand (\`gh pr ready ${pr_number}\`) to get one." >> "$logfile" 2>&1 || true
+  else
+    echo "  marked PR #${pr_number} ready for review (${numbers_csv})" | tee -a "$logfile"
+  fi
 
+  # Request review BEFORE arbitration. If this batch collides with a sibling PR,
+  # a human has to choose between them -- and they should have a code review of
+  # BOTH sides in front of them when they do. Requesting afterwards would skip
+  # review entirely on any PR that arbitration blocks.
   gh api "repos/${REPO_SLUG}/pulls/${pr_number}/requested_reviewers" \
     -f "reviewers[]=${COPILOT_REVIEWER}" >> "$logfile" 2>&1 \
     || echo "  could not request Copilot review via API; add it once by hand and re-run" | tee -a "$logfile"
+
+  # ARBITRATION. Batches are cut from main in parallel, so a sibling batch can
+  # have proposed a COMPETING design for the same module without either agent
+  # ever seeing the other. Test for a real merge conflict against every other
+  # open gaia PR and, on a hit, hand both diffs to an independent auditor. A
+  # blocked PR stays READY (so it still gets reviewed) and is labelled
+  # needs-human-decision; it simply never auto-merges.
+  if ! arbitrate_against_rivals "$branch" "$pr_number" "$logfile"; then
+    echo "  arbitration blocked PR #${pr_number}; left ready for review and labelled for a human" | tee -a "$logfile"
+    git checkout main >> "$logfile" 2>&1 || true
+    continue
+  fi
 
   # Iterate-until-convergence, not one fixed round: Copilot's code review NEVER submits an
   # "Approve" state (confirmed empirically -- it only ever leaves a COMMENTED review), so waiting
@@ -428,6 +847,17 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
   echo "  waiting for GitHub Actions checks..." | tee -a "$logfile"
   if ! gh pr checks "$pr_number" --watch --fail-fast >> "$logfile" 2>&1; then
     echo "  checks did not pass on PR #$pr_number; leaving open for a human" | tee -a "$logfile"
+    continue
+  fi
+
+  # THE MERGE GATE. Copilot going quiet is necessary but not sufficient -- an
+  # unchanged comment fingerprint reads identically whether the revision pass
+  # addressed the feedback or ignored it. An independent auditor reads the final
+  # diff against the outstanding comments and has to agree before anything
+  # merges. It fails CLOSED: no parseable verdict means blocked, not merged.
+  if ! audit_pr_convergence "$pr_number" "$branch" "$numbers_csv" "${review_comments:-}" "$logfile"; then
+    echo "  auditor gate blocked PR #${pr_number}; NOT merging, issues stay open" | tee -a "$logfile"
+    git checkout main >> "$logfile" 2>&1 || true
     continue
   fi
 

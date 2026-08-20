@@ -17,7 +17,7 @@ vs. gray marker edges, and that same `employed` flag is the single source of tru
 
 | network | status | observes | constrains |
 |---|---|---|---|
-| **NWIS wells** | employed | depth to water, at a point | the **saturated store** — state, and its seasonal amplitude and phase |
+| **NWIS wells** | employed | the hydraulic head of the **screened interval**, at a point — depth to water only where that interval brackets the phreatic surface | the **saturated store** — state, and its seasonal amplitude and phase. Only sites classified `measurement_target == water_table` may enter as direct $h_{wt}$/DTW observations ([assimilation](04-assimilation.qmd#which-wells-actually-observe-the-water-table)) |
 | **USGS gauges** | employed | streamflow, integrated over a basin | the **fluxes** — runoff, interflow, baseflow, via a hydrograph separation |
 | **SNOTEL** | employed | SWE and soil moisture, at a point | the **snowpack** — the recharge clock, and the vadose store |
 | **Seismic (UW/CC)** | employed | dv/v, over a *volume* between stations | shallow **moisture change**, at storm timescales |
@@ -121,23 +121,52 @@ right instrument for short-lead, event-scale validation of the moisture state; t
 the right instruments for the cumulative antecedent state and the flux partition.
 :::
 
-## Observability: resolution and information gain
+## Observability: variance reduction and information gain
 
 The sensitivity map says *where an instrument responds*. The design question is sharper: **how much
 does each network actually reduce the uncertainty of the state, and where?** This is a linear-Gaussian
-inverse problem (`src/models/observability.py`). The state — a GWL anomaly, or a soil-moisture anomaly
-— has a Gaussian prior of correlation length $L$ (the model's own error covariance), and each sensor
-is a linear functional of it: a **point** operator for a well or a SNOTEL site, and a **footprint**
-operator — the coda kernel — for dv/v. The two states are observed by different instruments:
+inverse problem (`src/models/observability.py`). The state is an **anomaly about the deterministic
+baseline** — the water-table-head anomaly $\Delta h_{wt}$ (equivalently, up to sign, the DTW anomaly),
+or the soil-moisture anomaly — and it carries a Matérn prior of correlation length $L$, which is the
+model's own *error* covariance and **not** a claim that absolute WTD is a stationary Gaussian field
+([assimilation](04-assimilation.qmd#the-prior-lives-on-the-residual-not-on-the-absolute-water-table-landscape)).
+Each sensor is a linear functional of that anomaly: a **point** operator for a well or a SNOTEL site,
+and a **footprint** operator — the coda kernel — for dv/v. The two states are observed by different
+instruments:
 
-$$\text{GWL} \;\leftarrow\; \text{wells (point)} + \text{dv/v deep band (volume)},
+$$\Delta h_{wt} \;\leftarrow\; \text{water-table wells (point)} + \text{dv/v deep band (volume)},
 \qquad
-\text{SM} \;\leftarrow\; \text{SNOTEL (point)} + \text{dv/v shallow band (volume)}.$$
+\Delta\theta \;\leftarrow\; \text{SNOTEL (point)} + \text{dv/v shallow band (volume)}.$$
 
 From the Gaussian posterior covariance $C_\text{post} = C - CG^\top(GCG^\top + C_d)^{-1}GC$ we read,
-per cell, the **resolution** $R = 1 - C_\text{post}/C \in [0,1]$ (the fraction of prior variance the
-network removes), the **information gain** $\tfrac12\ln(C/C_\text{post})$ in nats, and the **marginal
-gain** of one network beyond another, $R(A\cup B) - R(B)$.
+per cell, the **variance-reduction ratio** $R = 1 - C_\text{post}/C \in [0,1]$ (the fraction of prior
+variance the network removes), the **information gain** $\tfrac12\ln(C/C_\text{post})$ in nats, and the
+**marginal gain** of one network beyond another, $R(A\cup B) - R(B)$.
+
+::: {.callout-important}
+## "Resolution" here means variance reduction, and that is not spatial resolving power
+$R(j) = 1 - \mathrm{Var}_\text{post}(j)/\mathrm{Var}_\text{prior}(j)$ is a **fractional posterior
+variance reduction at cell $j$**. It is a useful and honest quantity, and it is what every map in this
+section shows. It is *not*, by itself, evidence that the state is resolved at 90 m.
+
+The distinction bites hardest exactly where this chapter leans hardest on dv/v. A coda kernel averages
+over kilometres; pushed through the update it can drive $R$ above 0.9 at a 90 m cell while the
+estimate at that cell is a broad volume average. Variance fell; localization did not follow.
+
+What answers the resolving-power question is a row of the **Bayesian resolution (averaging-kernel)
+operator** $A = CG^\top(GCG^\top+C_d)^{-1}G$, whose row $j$ is $\partial\hat m_j/\partial m$ — the
+weighting over the *true* field that the estimate at $j$ actually forms. `src/models/observability.py`
+exposes three diagnostics built on it: `averaging_kernel()` (the rows themselves),
+`resolution_width_km()` (the $|A_{j\cdot}|$-weighted RMS distance from cell $j$ — an effective
+localization width), and `degrees_of_freedom_for_signal()` ($\mathrm{tr}\,A$ — how many independent
+things the whole observing system determines, bounded by the number of observations). A unit test
+constructs the exact trap: two observations with $R > 0.9$ at the same cell whose averaging widths
+differ by more than an order of magnitude.
+
+The function is still called `resolution()` for backward compatibility — every figure and notebook in
+this chapter calls it — but it is an alias of `variance_reduction_ratio()`, and the quantity is the
+ratio. **Do not read a high diagonal variance reduction as 90 m localization.**
+:::
 
 ![**Observability of the twin, static layers and USGS gauges included.** Rows: GWL (top), soil
 moisture (bottom). Columns: the static layers alone (see below); the point network alone; dv/v alone;
@@ -170,38 +199,68 @@ Three results the maps make concrete:
 - **dv/v extends GWL observation into the ungauged mountains.** Wells sit in the lowland; the marginal-
   gain panel shows dv/v adding resolution precisely in the headwater terrain where wells are absent and
   where the baseline water table is an extrapolation (the applicability-domain caveat below).
-- **The design is legible.** Because resolution is a scale-free ratio, these maps depend only on the
-  correlation length and the instrument noise-to-prior ratios — not on the absolute prior variance — so
-  they read as *where each network is worth its cost*, and where a new station would add the most.
+- **The design is legible.** Because the variance-reduction ratio is scale-free, these maps depend
+  only on the correlation length, the smoothness and the instrument noise-to-prior ratios — not on the
+  absolute prior variance — so they read as *where each network is worth its cost*, and where a new
+  station would add the most. They do **not** read as maps of spatial resolving power, for the reason
+  in the callout above; the dv/v columns in particular are the ones to read as "variance fell here",
+  not "the field is resolved here".
 
 ::: {.callout-note}
-## What is prior, and what is calibratable
-The correlation lengths ($L_\text{GWL} > L_\text{SM}$, since the water table varies more smoothly than
-soil moisture) and the per-instrument noise are physical inputs, not fits: the deep dv/v band is a
-weaker, noisier handle on the water table than a well, and the shallow band a moderate handle on
-moisture. Together with the coda parameters (the sensitivity section above) they should be set from
-the network's measured performance; the maps' *pattern* is robust to them, the absolute resolution is
-not.
+## What is prior, and what is calibratable — all of it is calibratable
+An earlier version of this callout described the correlation lengths and prior variances as "physical
+inputs, not fits". That was too strong. $\sigma$, $L$ and $\nu$ are **prior hyperparameters**:
+informed by physics and literature, but uncertain and ultimately to be calibrated from the twin's
+out-of-fold residuals and held-out observations. The current values —
+$L_\text{GWL} = 12$ km, $L_\text{SM} = 8$ km, in this repo's $\sqrt{2\nu}$ range convention — are
+**provisional**, not measured physical constants, and under fixed-domain asymptotics $\sigma$ and $L$
+are not even separately identifiable [@zhang2004inconsistent]. The *ordering*
+$L_\text{GWL} > L_\text{SM}$ is the defensible part; the numbers are placeholders pending
+`scripts/calibrate_spatial_prior.py`, whose machine-readable artifact these chapters are meant to cite
+instead ([assimilation](04-assimilation.qmd#the-calibration-experiment-that-is-supposed-to-settle-this)).
+
+The per-instrument noise is on the same footing: the deep dv/v band is a weaker, noisier handle on the
+water table than a well and the shallow band a moderate handle on moisture, but the numbers should be
+set from the network's *measured* performance, not asserted. The maps' *pattern* is robust to all of
+this; the absolute variance reduction is not.
 :::
 
 ::: {.callout-note}
-## The prior is Matern, not squared-exponential, and can be made terrain-aware
-`GaussianPrior` defaults to a Matern-3/2 correlation (once-differentiable), not the earlier
+## The prior is Matérn on the *anomaly*, and its barrier mask is an approximation, not a truth
+`GaussianPrior` defaults to a Matérn-3/2 correlation (once-differentiable), not the earlier
 squared-exponential (issue #163) — a stationary Gaussian random field is smoother ($C^\infty$) than a
-terrain-driven hydraulic head or moisture field, which has kinks at drainage divides and lithologic
-contacts, actually has. It also takes an optional per-cell `region_id` (e.g. a drainage-basin label)
-that forces correlation to zero across regions, so a ridge cell and a valley cell 90 m apart are not
-implicitly assumed to communicate just because they are close in Euclidean distance — the figures above
-do not yet pass one in, so they still assume within-basin isotropy — **implemented** at the coarsened
-assimilation grid the twin actually solves on (`notebooks/make_twin_gif.py`); the dense $(n,n)$ `C` is
-not tractable at the full 90 m domain. **Planned** (milestone: Applied math — DA estimator
-correctness): a sparse GMRF/SPDE precision representation, which would give both the terrain-awareness
-and the scalability at once.
+terrain-driven head or moisture *residual*, which has kinks at drainage divides and lithologic
+contacts, actually is. What $\nu$ means, why the water-table anomaly and soil moisture must **not**
+share a value, why $\nu = 3/2$ is a working hypothesis rather than a literature constant, and what is
+identifiable from an infill network are all set out in
+[the assimilation chapter](04-assimilation.qmd#the-spatial-prior-what-it-is-on-and-what-its-parameters-are-worth).
+
+The prior also takes an optional per-cell `region_id` (aliased `barrier_id`) that forces correlation to
+zero across labels, so a ridge cell and a valley cell 90 m apart are not implicitly assumed to
+communicate just because they are close in Euclidean distance. Its status needs stating plainly: this
+is a **hydrographic localization / barrier approximation**, not an exact physical covariance boundary.
+A surface drainage divide is not necessarily a groundwater divide — groundwater crosses topographic
+basin boundaries wherever aquifer geometry and hydraulic gradient say it does, and whether the water
+table follows topography at all is conditional on recharge and transmissivity
+[@haitjema2005subdued]. A hard zero is an infinitely strong statement about a boundary that is usually
+partial. Preferred labels are therefore the **hydrogeologic domains** of
+`src/features/hydrogeologic_domains.py` rather than drainage basins, and a *soft* connectivity weight
+is the better long-term construct (#163, #188, #192). The figures above do not yet pass a label in, so
+they still assume within-domain isotropy. The masking is **implemented** at the coarsened assimilation
+grid the twin actually solves on (`notebooks/make_twin_gif.py`); the dense $(n,n)$ `C` is not tractable
+at the full 90 m domain.
+
+**Planned** (milestone: Applied math — DA estimator correctness): an operator-form representation that
+supplies $\mathrm{diag}(B)$, $BG^\top$ and $GBG^\top$ without ever forming $B$ (#154/#163). Note that
+the *classical local* sparse GMRF/SPDE construction exists only for integer $\alpha$, hence integer
+$\nu$, so adopting it as prototyped would silently change $\nu = 1.5 \to 1$; rational SPDE methods
+reach general smoothness [@bolin2020rational]. Either way the choice of numerical backend must follow
+the statistical model, not select it.
 :::
 
 ## The static layers resolve space; the sensor network resolves the rest
 
-The resolution maps above answer "how much does the **sensor network** reduce variance relative to
+The variance-reduction maps above answer "how much does the **sensor network** reduce variance relative to
 a spatially flat prior" — by construction they credit zero spatial information to HAND, soil
 texture, or terrain, because that flat prior has no spatial structure of its own. But
 [the structural model](00-structural-model.qmd#the-baseline-water-table-observation-anchored-not-assumed)'s
@@ -227,8 +286,9 @@ and then running the ordinary `blue_update`/`resolution` machinery with the sens
 is **sequential Bayesian updating** — prior from static layers, likelihood from sensors — which is
 mathematically identical to one joint update of a single "virtual observation per pixel + real
 sensor rows" system, but far cheaper: it needs one $n\times n$ solve with the sensor footprints,
-never an $n\times n$ system with one row per grid cell for the static layers too. Three resolutions
-fall out of the same $C_{\text{static}}$, differing only in which variance sits in the denominator:
+never an $n\times n$ system with one row per grid cell for the static layers too. Three
+variance-reduction ratios fall out of the same $C_{\text{static}}$, differing only in which variance
+sits in the denominator:
 
 - $R_{\text{static}}(x) = 1-\sigma_{\text{rf}}(x)^2/\sigma_{\text{flat}}^2$ — static layers against
   a flat (no-covariate, no-well) prior;
@@ -267,7 +327,7 @@ where the ground networks cannot — everywhere, rather than at sites.
   inverting brightness temperature or radar backscatter through a retrieval model, so each is a
   spatially-resolved *estimate* carrying retrieval and vegetation/roughness error. What they uniquely
   provide is **coverage, not accuracy** — a domain-wide constraint where the ground networks are sparse.
-  Because the resolution is a scale-free ratio, a not-yet-flown product can be evaluated for the
+  Because the variance-reduction ratio is scale-free, a not-yet-flown product can be evaluated for the
   coverage it *would* provide.
 - **Surface-water extent.** Optical differencing (e.g. Sentinel-2 NDWI) maps inundation, which is the
   **variable source area** — the valley floors and riparian corridors (HAND $\approx 0$) where the
@@ -381,6 +441,62 @@ The dv/v pipeline is validated end-to-end on a controlled synthetic with a *know
 change: coda-wave stretching recovers the banded $\delta v/v$ at **r > 0.95**, and the depth inversion
 returns the imposed profile within its propagated covariance. This is a **synthetic demonstration** —
 it establishes that the estimator is unbiased, not that the field measurement is.
+
+## The digital-twin MVP metrics — what is skill and what is demonstration
+
+The MVP summary has previously reported these five numbers side by side, with no way for a reader to
+tell from a bare correlation coefficient whether it came from a held-out observation or from a signal
+the pipeline was asked to recover in the first place. Tagged with **basis**, in the order they appear
+in the MVP reporting:
+
+| metric | value | reference | basis |
+|---|---|---|---|
+| groundwater baseline, block-CV RMSE | 18.5 m RMSE, $R^2 = 0.09$ (across 5 shuffle-split draws; $R^2$ sd 0.10, one draw negative) | held-out wells, pooled fixed-block fallback cross-validation — the `--domain`-absent branch of `src/models/baseline_regression.py`, not the per-domain variogram-block run (`data/processed/block_cv_metrics.json`, `pooled.rmse_mean = 18.49`) | **REAL** — the only row on this table scored against real observations withheld from fitting |
+| soil moisture vs MERRA-2 | r = 0.85, bias −0.08, RMSE 0.095 | MERRA-2 root-zone reanalysis — the $r$ is the **domain-mean** correlation over $n=24$ monthly means (`domain_mean_r_rootzone = 0.8546`); the bias and RMSE are **per-cell**, pooled over the 4-cell domain (`root_zone`, whose own per-cell $r$ is 0.84). Two different aggregations, as `notebooks/validate_merra2.py` reports them | **MODEL cross-check** — another model's reanalysis; consistency, not validation (see above) |
+| dv/v band recovery | r > 0.95 | controlled synthetic with a known imposed velocity change | **SYNTHETIC** — the inverse operator recovering the forward operator's own imposed signal; it shows the estimator recovers the imposed pattern, not that the field measurement does (see above) |
+| assimilation posterior σ-reduction | 53% (WTD) / 91% (θ) | `data/processed/dvv_summary.json` (`assimilation.wtd_sigma_reduction = 0.529`, `assimilation.theta_sigma_reduction = 0.912`) | **SYNTHETIC** — a ratio of the model's own most-favourable σ cell against an *assumed prior* σ, not a truth comparison |
+| attribution shares (near-station fraction) | ~94% wells (GWL), ~95% dv/v (soil moisture) | model introspection, [assimilation chapter](04-assimilation.qmd) | **SYNTHETIC** — precision-weight share of the near-station assimilation update, a function of the assumed σ's and station geometry; not an evaluation metric |
+
+The MERRA-2 domain-mean monthly correlation is dominated by the shared seasonal cycle at $n=24$ months
+over 4 cells; that is a small, coarse sample, not a spatially resolved test. The posterior σ-reduction
+is not a skill metric at all: it has no truth comparison and no residual. It is $1 - \min\sigma /
+\sigma_\text{prior}$ — the single most favourable cell in the model's own σ field — measured against a
+hardcoded assumed prior σ (σ_prior = 0.5 m for WTD, 0.05 m³ m⁻³ for θ, hardcoded at
+`old/notebooks/make_dvv_figures.py:180-182, 204-205`).
+The attribution shares are the same kind of number: a precision-weight read-off with
+no reference dataset and no residual, tabulated here only because it was previously reported alongside
+skill numbers, not because it evaluates anything. (The separately-reported Vs30 attribution figure
+is stale against the current summary artifact and is not restated here.)
+
+This table covers the digital-twin MVP metrics specifically; the chapter's other evaluations —
+water-budget, soil-moisture, snow — are in the sections above. Three MVP-adjacent numbers are
+deliberately **not** tabulated: ERA5-Land (no committed comparison artifact), SNOTEL SWE melt-out
+(an in-sample grid search, not a hold-out), and the SNOTEL independent θ comparison
+(`notebooks/validate_snotel.py`: pooled $r$ 0.40 over 788 station-months, median seasonal $r$ 0.54 and
+median anomaly $r$ 0.21 over 5 stations). Those three are different estimands from one run, not
+competing estimates of one quantity, and none of them is a leave-one-station-out score — that script
+holds nothing out, because nothing was ever fitted to SNOTEL θ. The repo's one genuine
+leave-one-station-out score is a separate snow-phase quantity: `notebooks/calibrate_snow.py` refits
+on four stations and scores the fifth, giving `loso_mean_r_calibrated = 0.439` in
+`data/processed/snow_calibration.json`. Its companion `loso_mean_r_default = 0.493` is bit-identical
+to `mean_r_default` — under the default parameters nothing is fitted, so there is nothing to hold out
+and that figure is not an out-of-sample score. The calibrated parameters score $r = 0.499$ in-sample
+but $0.439$ held-out: the tuning does not generalise.
+
+**The SYNTHETIC rows are pipeline demonstrations, not skill.** They establish that the machinery runs
+end to end and that the estimator recovers what it was given; they say nothing about how well the twin
+tracks the real subsurface. Only the REAL row is a skill claim, and the MODEL cross-check row is a
+consistency check against another model, not a validation.
+
+::: {.callout-note}
+## A number and a method pending reconciliation
+The groundwater-level section above states block-CV RMSE ≈ 19 m; the committed artifact
+(`data/processed/block_cv_metrics.json`, `pooled.rmse_mean = 18.49`) and the MVP reporting both give
+18.5 m. The disagreement is not only in the digits: that section describes the score as coming from
+variogram-sized blocks, whereas the committed artifact was written by the `--domain`-absent fallback
+branch, which uses a fixed `--cv-block-km` default of 200 km and never consults a variogram range.
+Neither the number nor the method is reconciled here.
+:::
 
 ## Calibrated uncertainty
 

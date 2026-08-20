@@ -1,14 +1,32 @@
-r"""Observability, resolution, and information gain of the sensor networks (linear-Gaussian design).
+r"""Observability and information gain of the sensor networks (linear-Gaussian design).
 
 This answers a question the sensitivity map (:mod:`src.models.dvv_sensitivity`) raises but does not
-close: given *where* each instrument is sensitive, **how much does it actually tell us about the state
-of the twin — the groundwater level and the soil moisture — and where?**
+close: given *where* each instrument is sensitive, **how much does it actually reduce the uncertainty
+of the state — the water-table-head anomaly and the soil-moisture anomaly — and where?**
+
+## What the state is, precisely
+
+The state field :math:`m(x)` carried here is an **anomaly / residual**, not an absolute level. For
+groundwater it is the water-table-head anomaly :math:`\Delta h_{wt}` about the deterministic baseline
+(the observation-anchored RF/HAND surface), not the absolute depth to water. That distinction is not
+cosmetic: absolute DTW is :math:`D = z_s - h_{wt}`, so it inherits the whole deterministic
+topographic and hydrogeologic structure of the land surface and is emphatically **not** a stationary
+Gaussian Matérn random field over Puget Sound. The stationary Matérn prior below describes the
+*residual* about that baseline, which is the standard drift-plus-residual decomposition of the
+groundwater geostatistics literature (Varouchakis et al. 2019, 2022).
+
+Because :math:`z_s` is time-invariant, :math:`\Delta D = -\Delta h_{wt}` exactly, so the DTW anomaly
+and the head anomaly are one random field up to sign and share one covariance. They must never be
+given separate :math:`(\sigma, L, \nu)` configurations — see :mod:`src.models.hydro_state`.
+
+Distinct from both is the hydraulic head :math:`H = z + p/(\rho_w g)` measured by a **screened**
+piezometer, which equals :math:`h_{wt}` only when the screen brackets the phreatic surface of an
+unconfined aquifer (:mod:`src.features.well_hydrostratigraphy`,
+:func:`water_table_point_footprint`).
 
 ## The framing
 
-The state is a field :math:`m(x)` (a GWL anomaly, or a soil-moisture anomaly) on the analysis grid,
-with a Gaussian prior of variance :math:`\sigma^2` and spatial correlation length :math:`L` — the
-model's own error covariance :math:`C`. Each observation is a **linear functional** of that field,
+Each observation is a **linear functional** of the state,
 
 .. math::  d_i = g_i^\top m + \varepsilon_i, \qquad \varepsilon_i \sim \mathcal N(0, \sigma_{d,i}^2),
 
@@ -19,9 +37,14 @@ a weighted *average* of the state):
 - a **dv/v** station pair or autocorrelation is a *volume* sensor — :math:`g_i` is the coda kernel.
 
 The states are observed by *different* instruments, and that separation is the whole point: the **deep
-(low-frequency) dv/v band and the wells constrain GWL**; the **shallow (high-frequency) dv/v band and
-SNOTEL constrain soil moisture**. dv/v is the only one of the three that is a *volume* measurement, so
-it is the only one that fills the space *between* the point sensors.
+(low-frequency) dv/v band and the wells constrain the water table**; the **shallow (high-frequency)
+dv/v band and SNOTEL constrain soil moisture**. dv/v is the only one of the three that is a *volume*
+measurement, so it is the only one that fills the space *between* the point sensors. dv/v is an
+**observation operator on the hydrologic state**, not a state with its own spatial prior: its
+predicted covariance follows from the hydrologic prior pushed through :math:`G` plus observation
+error, and the scalar :math:`k_{sat}\Delta h` / :math:`S_\theta\Delta\theta` gains are a local
+linearization of a nonlinear, hysteretic petrophysical chain (issue #198), not first-principles
+physics.
 
 ## What is computed
 
@@ -30,26 +53,48 @@ For a set of observations with operator matrix :math:`G` (rows :math:`g_i^\top`)
 
 .. math::  C_\text{post} = C - C G^\top (G C G^\top + C_d)^{-1} G C .
 
-Everything below is a diagonal of this, computed in **observation space** (an
+Most of what follows is a **diagonal** of this, computed in observation space (an
 :math:`n_\text{obs}\times n_\text{obs}` solve, not an :math:`n_\text{cell}` one):
 
-- **resolution** :math:`R(x) = 1 - C_\text{post}(x,x)/C(x,x) \in [0,1]` — the fraction of the prior
-  variance the network removes at each cell. 1 = fully observed, 0 = the model is on its own.
+- **variance-reduction ratio** :math:`R(x) = 1 - C_\text{post}(x,x)/C(x,x) \in [0,1]`
+  (:func:`variance_reduction_ratio`, and its backward-compatible alias :func:`resolution`) — the
+  fraction of the prior variance the network removes at each cell. 1 = fully constrained by data,
+  0 = the model is on its own.
 - **information gain** :math:`I(x) = \tfrac12 \ln\!\big(C(x,x)/C_\text{post}(x,x)\big)` nats — the
   local Kullback–Leibler gain, additive and unbounded, so a cell pinned by several sensors reads as
   more informed than one grazed by one.
 - **marginal gain** of a sensor set *given* another: :math:`R(A\cup B) - R(B)` — where a network adds
   information the others do not already provide. This is the map that says *where dv/v is worth its
-  cost*: where it constrains a state the wells or SNOTEL cannot reach.
+  cost*.
 
-Resolution is a **ratio**, so it is independent of the absolute prior variance :math:`\sigma^2`; only
-the correlation length and the noise-to-prior ratio matter.
+.. important::
+   **Variance reduction is not spatial resolution.** :math:`R(x)` says how much of the prior variance
+   at cell :math:`x` is removed; it says nothing about *which* cells the estimate at :math:`x` is
+   actually averaging over. A single 8 km-footprint dv/v datum can drive :math:`R` high at a 90 m cell
+   while the estimate there is a smooth average over kilometres. The quantity that answers the
+   resolving-power question is a row of the **Bayesian resolution (averaging-kernel) operator**
+   :math:`A = C G^\top (G C G^\top + C_d)^{-1} G`, whose row :math:`j` gives
+   :math:`\partial \hat m_j / \partial m` — see :func:`averaging_kernel`,
+   :func:`resolution_width_km`, and :func:`degrees_of_freedom_for_signal`. The function name
+   ``resolution`` is kept for backward compatibility only; the quantity it returns is the
+   variance-reduction ratio.
+
+:math:`R` is a **ratio**, so it is independent of the absolute prior variance :math:`\sigma^2`; only
+the correlation length, the smoothness, and the noise-to-prior ratio matter.
+
+## Prior hyperparameters are calibratable, not measured constants
+
+:math:`\sigma`, :math:`L` and :math:`\nu` are **prior hyperparameters** informed by physics and
+literature, to be calibrated and diagnosed against the twin's out-of-fold residuals — not physical
+constants. See :data:`PRIOR_HYPERPARAMETERS` for the per-state values in use and their status, and
+``scripts/calibrate_spatial_prior.py`` for the residual-based profile-likelihood/CV experiment that
+is meant to replace them.
 
 ## Scale: the matrix-free prior operator (issue #154)
 
 A dense :math:`(n, n)` prior is the wall. At the twin's full 90 m domain (1889 x 1567 = 2 960 063
 cells) ``C`` alone is ~70 TB, and :meth:`GaussianPrior.cov`'s transient peak is several times that.
-:func:`resolution` and :func:`blue_update` never need ``C`` as a matrix, though -- they consume it
+:func:`variance_reduction_ratio` and :func:`blue_update` never need ``C`` as a matrix, though -- they consume it
 through exactly four things: ``.shape[0]``, ``diag(C)``, ``C @ G.T``, and ``G @ (C @ G.T)``. So the
 prior is treated here as an **operator protocol**: anything with ``.shape``, ``.diagonal()`` and
 ``__matmul__`` is accepted (``np.ndarray`` already satisfies all three, which is why the existing
@@ -76,7 +121,7 @@ regions (1 when unset).
 2 960 063 (full)     0.31 s      5.62 s                         70.1 TB
 ===================  ==========  =============================  ==================================
 
-A full-domain :func:`resolution` with 40 point sensors runs end-to-end in 5.8 s at a 5.9 GB process
+A full-domain :func:`variance_reduction_ratio` with 40 point sensors runs end-to-end in 5.8 s at a 5.9 GB process
 peak -- of which 4.7 GB is ``G`` (0.95 GB) plus the ``(n, n_obs)`` cross-covariance and its transpose,
 i.e. the observation side, not the prior. Including construction the operator overtakes the dense path
 at ~2 000 cells and is 160x faster at 20 000 (16.7 s -> 0.10 s for a 100-column product); below ~2 000
@@ -123,6 +168,12 @@ from scipy.fft import irfft2, next_fast_len, rfft2
 _SQRT3 = 3.0 ** 0.5
 _SQRT5 = 5.0 ** 0.5
 
+#: The range convention this module uses, stated once so every artifact can record it verbatim.
+#: :math:`\kappa = \sqrt{2\nu}/L`, i.e. the argument of the Bessel function is
+#: :math:`\sqrt{2\nu}\,r/L`. Other conventions in wide use (notably Lindgren et al. 2011's
+#: :math:`\sqrt{8\nu}` "practical range") give a DIFFERENT distance for the same number.
+RANGE_CONVENTION = "sqrt(2*nu)*r/L"
+
 # Largest ``n_cell`` for which :meth:`GaussianPrior.cov` will build a dense ``(n, n)`` covariance.
 # 20_000 cells is ~3.2 GB for the final array and ~19 GB peak (``cov`` transiently holds the
 # ``(n, n, 2)`` coordinate difference, its square, the distance, the Matern temporaries and the region
@@ -131,41 +182,141 @@ DENSE_MAX_CELLS = 20_000
 
 
 def matern_correlation(dist_km: ArrayLike, length_km: float, nu: float = 1.5) -> NDArray[np.float64]:
-    r"""Matern correlation at distance ``dist_km`` (smoothness ``nu``, closed forms for 0.5/1.5/2.5).
+    r"""Whittle-Matérn correlation at separation ``dist_km``, range ``length_km``, smoothness ``nu``.
 
-    ``nu=0.5`` is the (rough, once-differentiable-in-expectation) exponential/OU form
-    :math:`\exp(-r)`; ``nu=2.5`` is close to the :math:`C^\infty` squared-exponential without actually
-    being infinitely smooth. Issue #163: the squared-exponential ``GaussianPrior`` used everywhere
-    before this was the :math:`\nu\to\infty` limit, which imposes an implausibly smooth field on a
-    terrain-driven state (real hydraulic head/soil moisture fields have kinks at drainage divides and
-    lithologic contacts); ``nu=1.5`` (the default here) is the standard practical compromise —
-    once-differentiable, not analytic.
+    .. math::
+        \rho_\nu(r) = \frac{2^{1-\nu}}{\Gamma(\nu)}
+                      \left(\frac{\sqrt{2\nu}\,r}{L}\right)^{\!\nu}
+                      K_\nu\!\left(\frac{\sqrt{2\nu}\,r}{L}\right)
+
+    **Convention (:data:`RANGE_CONVENTION`).** The Bessel argument is :math:`\sqrt{2\nu}\,r/L`.
+    Under this convention and *only* under it:
+
+    - :math:`\nu = 1/2` gives :math:`\rho(r) = e^{-r/L}` — the plain exponential/OU form, because
+      :math:`\sqrt{2\nu} = 1` exactly. (It is **not** :math:`e^{-\sqrt{2}\,r/L}`; that error appeared
+      in an earlier version of the assimilation chapter and is corrected there.)
+    - :math:`\nu = 3/2` gives :math:`(1+\sqrt{3}r/L)e^{-\sqrt{3}r/L}`;
+    - :math:`\nu = 5/2` gives :math:`(1+\sqrt{5}r/L+\tfrac53 r^2/L^2)e^{-\sqrt{5}r/L}`.
+
+    A range quoted under a different convention is a different distance. Use
+    :func:`convert_matern_range` before comparing with a published value.
+
+    **Regularity.** A Matérn field is :math:`\lceil\nu\rceil - 1` times mean-square differentiable, so
+    :math:`\nu = 1/2` is continuous but **nowhere** mean-square differentiable, :math:`\nu = 3/2` is
+    once differentiable and no more, and :math:`\nu\to\infty` recovers the :math:`C^\infty`
+    squared-exponential. Issue #163: the squared-exponential prior used everywhere before this was
+    that :math:`\nu\to\infty` limit, which imposes an implausibly smooth field on a terrain-driven
+    state.
+
+    Half-integer :math:`\nu` uses the elementary closed form; any other positive :math:`\nu` (e.g. the
+    1.0 and 2.0 candidates of the calibration grid) goes through
+    :func:`scipy.special.kv`. Both branches agree to floating-point at the half-integers.
+
+    ``nu`` is a **hyperparameter to be calibrated**, not a physical constant; see
+    :data:`PRIOR_HYPERPARAMETERS`.
     """
     if not (np.isfinite(length_km) and length_km > 0):
         raise ValueError(f"length_km must be a positive finite number, got {length_km!r}")
-    r = _SQRT3 if nu == 1.5 else (_SQRT5 if nu == 2.5 else 1.0)
+    if not (np.isfinite(nu) and nu > 0):
+        raise ValueError(f"nu must be a positive finite number, got {nu!r}")
     d = np.asarray(dist_km, dtype="float64") / length_km
-    x = r * d
+    x = (2.0 * nu) ** 0.5 * d
     if nu == 0.5:
         return np.exp(-x)
     if nu == 1.5:
         return (1.0 + x) * np.exp(-x)
     if nu == 2.5:
         return (1.0 + x + x ** 2 / 3.0) * np.exp(-x)
-    raise ValueError(f"nu must be one of 0.5, 1.5, 2.5 (closed-form only), got {nu!r}")
+    # general nu: 2^(1-nu)/Gamma(nu) * x^nu * K_nu(x), with the removable singularity at x=0 set to 1
+    from scipy.special import gammaln, kv                 # local import: scipy only needed off the fast path
+
+    out = np.ones_like(x, dtype="float64") if np.ndim(x) else np.float64(1.0)
+    pos = np.asarray(x) > 0
+    if np.any(pos):
+        xp = np.asarray(x)[pos] if np.ndim(x) else np.asarray([x])
+        val = np.exp((1.0 - nu) * np.log(2.0) - gammaln(nu) + nu * np.log(xp)) * kv(nu, xp)
+        val = np.nan_to_num(val, nan=0.0, posinf=0.0, neginf=0.0)   # K_nu underflows to 0 at large x
+        if np.ndim(x):
+            out = np.asarray(out)
+            out[pos] = val
+        else:
+            out = np.float64(val[0])
+    return np.clip(out, 0.0, 1.0)
+
+
+def convert_matern_range(length_km: float, nu: float, to: str = "lindgren") -> float:
+    r"""Convert a range from this module's :math:`\sqrt{2\nu}` convention to another.
+
+    ``to="lindgren"`` returns the @lindgren2011explicit *practical range* :math:`\rho`, defined so the
+    Bessel argument is :math:`\sqrt{8\nu}\,r/\rho`; matching the two arguments gives
+    :math:`\rho = 2L`. ``to="kappa"`` returns the SPDE inverse-range
+    :math:`\kappa = \sqrt{2\nu}/L` (units km\ :sup:`-1`), the parameter that actually appears in the
+    operator :math:`(\kappa^2-\Delta)^{\alpha/2}`.
+
+    Reporting a range without its convention is the single easiest way to make two studies look like
+    they disagree when they do not, which is why every calibration artifact records
+    :data:`RANGE_CONVENTION` verbatim.
+    """
+    if not (np.isfinite(length_km) and length_km > 0):
+        raise ValueError(f"length_km must be a positive finite number, got {length_km!r}")
+    if to == "lindgren":
+        return 2.0 * float(length_km)
+    if to == "kappa":
+        return float((2.0 * nu) ** 0.5 / length_km)
+    raise ValueError(f"to must be 'lindgren' or 'kappa', got {to!r}")
+
+
+def microergodic_parameter(sigma: float, length_km: float, nu: float) -> float:
+    r"""The consistently-estimable Matérn combination, **written in this module's convention**.
+
+    Under fixed-domain (infill) asymptotics @zhang2004inconsistent proves that :math:`\sigma^2` and the
+    range are *not* separately consistently estimable at any sampling density; for known :math:`\nu`
+    what is consistently estimable is the microergodic combination
+
+    .. math::  \sigma^2 \kappa^{2\nu}, \qquad \kappa = \sqrt{2\nu}/L .
+
+    Writing it as a bare :math:`\sigma^2/L^{2\nu}` is convention-dependent and drops the
+    :math:`(2\nu)^{\nu}` factor — harmless when comparing two fits at the *same* :math:`\nu`, wrong as
+    soon as :math:`\nu` varies, which is exactly what the calibration experiment does. This function
+    is the convention-aware form; its value also has :math:`\nu`-dependent units
+    (m\ :sup:`2` km\ :sup:`-2ν`), so it is comparable across fits only at fixed :math:`\nu`.
+    """
+    return float(sigma ** 2 * convert_matern_range(length_km, nu, to="kappa") ** (2.0 * nu))
 
 
 @dataclass(frozen=True)
 class GaussianPrior:
-    """A stationary prior over the state field: variance ``sigma^2``, Matern correlation ``length_km``.
+    r"""A stationary prior on the state **anomaly/residual**: variance ``sigma^2``, Matérn ``length_km``.
 
-    ``nu`` is the Matern smoothness (0.5 / 1.5 / 2.5; default 1.5 -- see :func:`matern_correlation`).
-    ``region_id``, if given (one label per cell, e.g. a drainage-basin or HAND-derived hydrologic-unit
-    ID), makes the prior **terrain-aware**: correlation is forced to zero between cells in different
-    regions, regardless of their Euclidean distance. Without it, a stationary isotropic kernel lets a
-    ridge cell and a valley cell 90 m apart correlate exactly as strongly as two valley cells 90 m
-    apart, leaking constraint across a divide the two sides of which do not hydraulically communicate
-    (issue #163) -- ``region_id`` is the cheap, exact fix for that leakage.
+    This is a prior on :math:`\delta h` in :math:`h_{wt} = h_{\text{baseline}} + \delta h` (or the
+    equivalent soil-moisture anomaly), **not** on the absolute water-table/DTW landscape — see the
+    module docstring.
+
+    ``nu`` is the Matérn smoothness (any positive value; default 1.5). The default exists so old call
+    sites keep working, but **groundwater and soil moisture must not silently share it**: pass ``nu``
+    explicitly, or build the prior with :func:`prior_for_state`, which reads the per-state values and
+    their calibration status from :data:`PRIOR_HYPERPARAMETERS`.
+
+    ``region_id`` (aliased ``barrier_id``), if given -- one label per cell -- forces correlation to
+    zero between cells with different labels, regardless of Euclidean distance. Its scientific status
+    matters and has been overstated before:
+
+    - It **is** a hydrographic **localization / barrier approximation**. It stops a stationary
+      isotropic kernel from letting a ridge cell and a valley cell 90 m apart correlate as strongly as
+      two valley cells, and it is a cheap, exact anti-leakage device (issue #163).
+    - It is **not** a hydrogeologic truth. A surface drainage divide is not necessarily a groundwater
+      divide: groundwater crosses topographic basin boundaries wherever aquifer geometry and hydraulic
+      gradients say it does, and whether the water table follows topography at all is itself
+      conditional [@haitjema2005subdued]. A hard zero is an infinitely strong statement about a
+      boundary that is usually only partial.
+    - Preferred labels are therefore **hydrogeologic domains**
+      (:mod:`src.features.hydrogeologic_domains`) rather than drainage basins, and the longer-term fix
+      is a *soft* connectivity/barrier weight rather than a 0/1 mask (issues #163, #188, #192).
+
+    It does not by itself solve the separate scalability problem of a dense ``(n, n)`` ``C`` at full
+    90 m domain scale, which the twin avoids by solving on a coarsened assimilation grid
+    (`notebooks/make_twin_gif.py`); an operator-form representation is issue #154/#163 work, and the
+    statistical model must be chosen independently of which backend carries it.
 
     :meth:`cov` builds the **dense** ``(n, n)`` covariance and is capped at :data:`DENSE_MAX_CELLS`
     cells; above that it raises rather than attempt a 70 TB allocation. The scalable path is
@@ -181,6 +332,18 @@ class GaussianPrior:
     length_km: float
     nu: float = 1.5
     region_id: NDArray[np.int64] | None = None
+    barrier_id: NDArray[np.int64] | None = None
+
+    def __post_init__(self) -> None:
+        # ``barrier_id`` is the semantically honest name (a localization barrier, not a physical
+        # region); ``region_id`` is kept because every existing call site uses it. Accept either,
+        # store one, and refuse a contradictory pair rather than silently preferring one.
+        if self.barrier_id is not None and self.region_id is not None:
+            if not np.array_equal(np.asarray(self.region_id), np.asarray(self.barrier_id)):
+                raise ValueError("pass region_id OR barrier_id (they are aliases), not two different arrays")
+        elif self.barrier_id is not None:
+            object.__setattr__(self, "region_id", self.barrier_id)
+        object.__setattr__(self, "barrier_id", self.region_id)
 
     def _mask(self, region_a: NDArray | None, region_b: NDArray | None) -> NDArray[np.float64] | float:
         if region_a is None or region_b is None:
@@ -479,14 +642,141 @@ class StationaryGridPrior:
         return out[:, 0] if flat else out
 
 
+# --- per-state prior hyperparameters ---------------------------------------------------------------
+# STATUS LABELS ARE PART OF THE SCIENCE. Every value below is a prior hyperparameter -- informed by
+# physics and literature, to be calibrated from out-of-fold residuals -- not a measured constant.
+# Nothing here is empirically calibrated for Puget Sound yet; `scripts/calibrate_spatial_prior.py`
+# is the experiment that is meant to replace these numbers, and it writes the artifact that
+# docs/twin/04-assimilation.qmd and 05-state-evaluation.qmd should cite.
+#
+# Why a registry at all: before this, both states were built from ONE `GaussianPrior` default, so a
+# single `nu=1.5` silently governed the water table AND soil moisture. The literature does not
+# support that (see below). Separating them here is a configuration change, not a numerical one --
+# the values in use are unchanged, so no production output moves; only their status and their
+# independence do.
+
+#: Candidate smoothness grids for the residual-based calibration experiment (issue #192).
+#: Groundwater: 1.0/1.5/2.0 as the working region, 0.5 retained as a rough comparison.
+#: Soil moisture: 0.5/1.0/1.5, with 0.5-1 the literature-motivated rougher region.
+NU_CANDIDATES = {
+    "water_table_head_anomaly": (0.5, 1.0, 1.5, 2.0),
+    "soil_moisture_anomaly": (0.5, 1.0, 1.5),
+}
+
+
+@dataclass(frozen=True)
+class PriorHyperparameters:
+    """Provisional :math:`(\\sigma, L, \\nu)` for one state, with an explicit calibration status.
+
+    ``status`` is one of ``"working_hypothesis"`` (physically plausible, argued, not estimated),
+    ``"inherited_default"`` (in use because a shared default put it there; NOT argued for this
+    state), or ``"calibrated"`` (estimated from residuals, with an artifact to point at). Nothing in
+    this repo is ``"calibrated"`` today.
+    """
+
+    state: str
+    sigma: float
+    length_km: float
+    nu: float
+    units: str
+    status: str
+    note: str
+    range_convention: str = RANGE_CONVENTION
+
+    def prior(self, region_id: NDArray[np.int64] | None = None) -> GaussianPrior:
+        """Build the :class:`GaussianPrior` these hyperparameters describe."""
+        return GaussianPrior(sigma=self.sigma, length_km=self.length_km, nu=self.nu,
+                             region_id=region_id)
+
+
+PRIOR_HYPERPARAMETERS: dict[str, PriorHyperparameters] = {
+    # The water-table-head anomaly. Delta D = -Delta h_wt, so the DTW anomaly is THE SAME field up to
+    # sign and deliberately has no separate entry -- adding one would be the error
+    # src.models.hydro_state.assert_anomaly_covariance_identity exists to catch.
+    "water_table_head_anomaly": PriorHyperparameters(
+        state="water_table_head_anomaly",
+        sigma=0.5, length_km=12.0, nu=1.5, units="m",
+        status="working_hypothesis",
+        note=(
+            "nu=1.5 is a moderately smooth WORKING REGULARITY PRIOR, not a published hydrogeologic "
+            "constant. The defensible argument is directional only: head is a filtered functional of "
+            "log-K under steady flow, so head residuals are expected to be SMOOTHER than the "
+            "material-property field, which places nu above 1/2; stream/contact breaks in slope place "
+            "it below the C-infinity limit. That argument does not select 1.5 over 1.0 or 2.0. "
+            "sigma and L are prior specifications; under fixed-domain asymptotics only the "
+            "microergodic combination sigma^2 kappa^(2nu) is consistently estimable "
+            "(@zhang2004inconsistent), and nothing here has been estimated for Puget Sound."),
+    ),
+    # Soil moisture. Kept at the value currently in production so this audit changes no output, but
+    # the status is honest: it is inherited, not argued.
+    "soil_moisture_anomaly": PriorHyperparameters(
+        state="soil_moisture_anomaly",
+        sigma=0.03, length_km=8.0, nu=1.5, units="m3 m-3",
+        status="inherited_default",
+        note=(
+            "nu=1.5 here is INHERITED from the shared GaussianPrior default and is NOT supported by "
+            "the soil-moisture literature, which describes rougher, strongly state-, scale-, "
+            "support-, depth- and season-dependent spatial structure (@vereecken2014soilmoisture); "
+            "@minasny2005matern recover low Matern smoothness (~0.25-0.50) for several measured SOIL "
+            "PROPERTIES, which is evidence about Matern behaviour of soil variables, NOT a "
+            "determination of nu for monthly Puget Sound soil moisture. No single literature value "
+            "-- including 0.5 -- is established. Changing this default would move production "
+            "products, so it is left in place and flagged: it must be set by the residual "
+            "calibration, reported as a before/after scientific change, not by this audit."),
+    ),
+}
+
+
+def prior_for_state(state: str, region_id: NDArray[np.int64] | None = None,
+                    nu: float | None = None, sigma: float | None = None,
+                    length_km: float | None = None) -> GaussianPrior:
+    """Build the prior for a named state from :data:`PRIOR_HYPERPARAMETERS`, with optional overrides.
+
+    Use this instead of ``GaussianPrior(sigma, L)`` so that the water table and soil moisture cannot
+    silently inherit one another's smoothness. Overrides are for sensitivity runs and for the
+    calibration experiment, which sweeps ``nu`` and re-estimates ``sigma``/``length_km`` at each.
+    """
+    if state not in PRIOR_HYPERPARAMETERS:
+        raise KeyError(f"unknown state {state!r}; known: {sorted(PRIOR_HYPERPARAMETERS)}")
+    hp = PRIOR_HYPERPARAMETERS[state]
+    return GaussianPrior(
+        sigma=hp.sigma if sigma is None else sigma,
+        length_km=hp.length_km if length_km is None else length_km,
+        nu=hp.nu if nu is None else nu,
+        region_id=region_id,
+    )
+
+
 # --- the temporal axis --------------------------------------------------------------------------
 # Spatial resolution is only half the design. A state that changes fast is observed well only by a
 # stream that samples fast: soil moisture responds to a storm within DAYS, so a satellite that revisits
 # once a week aliases the very events dv/v or an hourly probe resolves. The two states have very
 # different temporal correlation times, which is why the same sensor is worth different amounts for each.
+#
+# STATUS: these are PROVISIONAL HYPERPARAMETERS, not universal physical constants (issue #205). Each
+# is an order-of-magnitude reading of a decorrelation timescale, and both are known to be
+# state-dependent -- soil-moisture memory is far shorter in a draining wet soil than in a dry one, and
+# a water-table tau depends on specific yield and drainage geometry, which vary across the domain by
+# more than the difference between these two numbers. They should be ESTIMATED from the autocovariance
+# of the twin's own residuals (per state, and stratified wet/dry), not quoted. Until they are, do not
+# describe "5 d" and "120 d" as measured properties of the Puget Sound subsurface.
+#
+# Key naming: "gwl" is a LEGACY label meaning the water-table-head anomaly (equivalently, up to sign,
+# the DTW anomaly -- see src.models.hydro_state). It is deliberately NOT the groundwater storage
+# state of the target architecture, and it is NOT a screened-aquifer hydraulic head. The key string
+# is kept because ObsStream.states, effective_observability() and several notebooks index on it;
+# STATE_LABELS maps it to the unambiguous name.
 TEMPORAL_TAU_DAYS = {
-    "soil_moisture": 5.0,     # a storm wets, then drains, over days
-    "gwl": 120.0,             # the water table integrates months (the snowmelt-clocked seasonal cycle)
+    "soil_moisture": 5.0,     # a storm wets, then drains, over days -- provisional
+    "gwl": 120.0,             # the water table integrates months (snowmelt-clocked) -- provisional
+}
+
+#: Legacy state key -> the unambiguous quantity it denotes, and the matching
+#: :data:`PRIOR_HYPERPARAMETERS` entry. Kept as a crosswalk rather than a rename so no call site
+#: breaks while the vocabulary is being cleaned up.
+STATE_LABELS = {
+    "gwl": "water_table_head_anomaly",
+    "soil_moisture": "soil_moisture_anomaly",
 }
 
 
@@ -497,9 +787,13 @@ def ou_correlation(lag_days: ArrayLike, tau_days: float) -> NDArray[np.float64]:
     :math:`\tau`: :math:`\mathrm{corr}(m(t), m(t-\Delta t)) = \exp(-\Delta t/\tau)`. This is the single
     building block both :func:`temporal_resolution` and a lagged datum's effective operator/noise
     (:func:`lagged_observation`) are derived from -- there is no independent factor of 2 anywhere; that
-    would be borrowed from the *spatial* squared-exponential kernel (:class:`GaussianPrior`, whose
-    :math:`\exp(-d^2/2L^2)` form is for a smooth Gaussian random field, not a first-order Markov process
-    in time) and does not belong here.
+    would be borrowed from a *spatial* squared-exponential kernel (whose :math:`\exp(-d^2/2L^2)` form
+    is for a smooth Gaussian random field, not a first-order Markov process in time) and does not
+    belong here. Note that the spatial prior is no longer squared-exponential: :class:`GaussianPrior`
+    is Matern (:func:`matern_correlation`), and its :math:`\nu=1/2` case is the *spatial* analogue of
+    this OU form.
+
+    ``tau_days`` is a provisional hyperparameter -- see :data:`TEMPORAL_TAU_DAYS`.
     """
     if not (np.isfinite(tau_days) and tau_days > 0):
         raise ValueError(f"tau_days must be a positive finite number, got {tau_days!r}")
@@ -648,6 +942,42 @@ def point_footprint(coords_km: NDArray[np.float64], loc_km: ArrayLike,
     return out
 
 
+def water_table_point_footprint(coords_km: NDArray[np.float64], loc_km: ArrayLike,
+                                measurement_target: str, width_km: float = 0.5
+                                ) -> NDArray[np.float64]:
+    r"""Point operator for the **shallow water-table head** state — gated on the observation semantic.
+
+    A water level in a well is a hydraulic head :math:`H = z + p/(\rho_w g)` for the well's *screened
+    interval*. It equals :math:`h_{wt}` only when that interval brackets the phreatic surface of an
+    unconfined aquifer. The exact linear point operator is therefore correct for a shallow
+    water-table well and **wrong** for a confined, semiconfined, perched, deep or artesian one: such a
+    well would pin the shallow water table to a potentiometric surface set somewhere else entirely,
+    and the error is a category error, not extra noise.
+
+    ``measurement_target`` must be ``"water_table"``
+    (:func:`src.features.well_hydrostratigraphy.measurement_target`). ``"aquifer_head"`` and
+    ``"unknown"`` both raise: a deep well may be extremely valuable, but it needs a depth/aquifer
+    operator or its own hydraulic-head state, and an unclassifiable well must be flagged rather than
+    silently assigned to :math:`h_{wt}` (issue #189).
+
+    :func:`point_footprint` remains available and ungated for states where the semantic does not
+    apply (soil-moisture probes, and callers that have already screened their wells).
+    """
+    from src.features.well_hydrostratigraphy import MEASUREMENT_TARGETS
+
+    if measurement_target not in MEASUREMENT_TARGETS:
+        raise ValueError(f"measurement_target must be one of {MEASUREMENT_TARGETS}, "
+                         f"got {measurement_target!r}")
+    if measurement_target != "water_table":
+        raise ValueError(
+            f"refusing to build a shallow water-table point operator for a "
+            f"measurement_target={measurement_target!r} observation. A screened/deep/confined well "
+            "measures the hydraulic head of ITS OWN interval, which is not h_wt; route it through a "
+            "depth/aquifer operator or a separate hydraulic-head diagnostic. An 'unknown' well must "
+            "be flagged, not assigned to the water table (issue #189).")
+    return point_footprint(coords_km, loc_km, width_km)
+
+
 def normalise_footprint(g: ArrayLike) -> NDArray[np.float64]:
     """Normalise a footprint (e.g. a coda kernel sampled on the grid) to sum to 1.
 
@@ -743,13 +1073,29 @@ def _as_prior(P):
     return np.asarray(P, dtype="float64")                 # lists, nested sequences, etc.
 
 
-def resolution(prior_cov: NDArray[np.float64], G: NDArray[np.float64],
-               noise_var: ArrayLike) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    r"""Per-cell resolution and posterior variance for observations ``G`` with noise ``noise_var``.
+def variance_reduction_ratio(prior_cov: NDArray[np.float64], G: NDArray[np.float64],
+                             noise_var: ArrayLike) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    r"""Per-cell **fractional posterior variance reduction** and posterior variance.
+
+    .. math::  R(j) = 1 - \frac{\mathrm{Var}_\text{post}(j)}{\mathrm{Var}_\text{prior}(j)} \in [0,1]
 
     ``G`` is ``(n_obs, n_cell)`` (each row a footprint summing to 1); ``noise_var`` is a scalar or an
     ``(n_obs,)`` array of :math:`\sigma_{d,i}^2` in the same units as the prior variance. Returns
-    ``(resolution, var_post)``, both length ``n_cell``. Empty ``G`` returns zero resolution.
+    ``(R, var_post)``, both length ``n_cell``. Empty ``G`` returns zero reduction.
+
+    .. important::
+       This is **not** spatial resolution and does not by itself establish spatial resolving power.
+       :math:`R(j)` is a statement about the *variance* at cell :math:`j`, not about *which* part of
+       the field the estimate at :math:`j` averages. A dv/v datum whose coda kernel spans kilometres
+       can push :math:`R` toward 1 at a 90 m cell while the estimate there is a broad volume average;
+       reading that as "resolved at 90 m" is precisely the inference this docstring exists to block.
+       For resolving power use :func:`averaging_kernel` (rows of the Bayesian resolution operator),
+       :func:`resolution_width_km` (an effective localization width), and
+       :func:`degrees_of_freedom_for_signal` (how many independent things the data actually
+       determine).
+
+       :func:`resolution` is a backward-compatible alias of this function and returns the same
+       quantity.
 
     ``prior_cov`` may be a dense ``(n_cell, n_cell)`` array **or** any operator satisfying the prior
     protocol (``.shape``, ``.diagonal()``, ``__matmul__``) -- e.g. a :class:`StationaryGridPrior` from
@@ -773,6 +1119,99 @@ def resolution(prior_cov: NDArray[np.float64], G: NDArray[np.float64],
     var_post = var_prior - reduction
     res = np.where(var_prior > 0, reduction / var_prior, 0.0)
     return res, var_post
+
+
+#: Backward-compatible alias. The name is kept because it is used across notebooks, figures and
+#: tests; the QUANTITY is the fractional posterior variance reduction, not spatial resolution. See
+#: :func:`variance_reduction_ratio`.
+resolution = variance_reduction_ratio
+
+
+def averaging_kernel(prior_cov: NDArray[np.float64], G: NDArray[np.float64], noise_var: ArrayLike,
+                     rows: ArrayLike | None = None) -> NDArray[np.float64]:
+    r"""Rows of the Bayesian **resolution (averaging-kernel) operator** :math:`A`.
+
+    .. math::  \hat m - m_b = A\,(m - m_b) + \text{noise}, \qquad
+               A = C G^\top \big(G C G^\top + C_d\big)^{-1} G .
+
+    Row :math:`j` of :math:`A` is :math:`\partial \hat m_j/\partial m` — the weighting over the *true*
+    field that the estimate at cell :math:`j` actually forms. This is the quantity that answers "what
+    does this network resolve, and over what footprint", which a diagonal variance ratio cannot:
+    a delta-like row means cell :math:`j` is genuinely resolved at grid scale; a broad row means the
+    estimate there is a smooth average however small :math:`\mathrm{Var}_\text{post}(j)` is.
+
+    ``rows`` selects which cells to return (default: all — an ``(n_cell, n_cell)`` array, so pass a
+    subset on any real grid). Returns ``(len(rows), n_cell)``.
+
+    Note that :math:`\mathrm{diag}(A)` and the variance-reduction ratio are *different* numbers: for a
+    single point observation of cell :math:`j` with noise :math:`\sigma_d^2` and prior variance
+    :math:`\sigma^2`, :math:`A_{jj} = R(j) = \sigma^2/(\sigma^2+\sigma_d^2)`, but as soon as
+    observations are correlated with neighbouring cells the two diverge, and only :math:`A` says where
+    the information came from.
+    """
+    C = np.asarray(prior_cov, dtype="float64")
+    G = np.atleast_2d(np.asarray(G, dtype="float64"))
+    n = C.shape[0]
+    idx = np.arange(n) if rows is None else np.atleast_1d(np.asarray(rows, dtype=int))
+    if G.size == 0 or G.shape[0] == 0:
+        return np.zeros((idx.size, n), dtype="float64")
+    nv = np.broadcast_to(np.asarray(noise_var, dtype="float64"), (G.shape[0],))
+    CG = C @ G.T                                      # (n_cell, n_obs)
+    M = G @ CG + np.diag(nv)                          # (n_obs, n_obs)
+    return CG[idx, :] @ np.linalg.solve(M, G)         # (len(idx), n_cell)
+
+
+def resolution_width_km(prior_cov: NDArray[np.float64], G: NDArray[np.float64], noise_var: ArrayLike,
+                        coords_km: NDArray[np.float64], rows: ArrayLike | None = None
+                        ) -> NDArray[np.float64]:
+    r"""Effective spatial width (km) of the averaging kernel at the selected cells.
+
+    For row :math:`j` of :math:`A` (:func:`averaging_kernel`), the width is the
+    :math:`|A_{j\cdot}|`-weighted RMS distance from cell :math:`j`,
+
+    .. math::  W_j = \sqrt{\frac{\sum_k |A_{jk}|\,\|x_k-x_j\|^2}{\sum_k |A_{jk}|}} ,
+
+    i.e. the radius of gyration of the weighting the estimate at :math:`j` applies to the true field.
+    Absolute values are used because an averaging kernel can carry small negative side-lobes, which
+    are spread, not cancellation.
+
+    A cell with a *high* variance-reduction ratio and a *large* :math:`W_j` is well constrained in
+    variance but poorly localized — the case the "90 m resolution" reading gets wrong. Cells with no
+    constraint at all (all-zero row) return NaN rather than 0, because "unconstrained" is not
+    "perfectly localized".
+    """
+    A = averaging_kernel(prior_cov, G, noise_var, rows=rows)
+    c = np.asarray(coords_km, dtype="float64")
+    n = c.shape[0]
+    idx = np.arange(n) if rows is None else np.atleast_1d(np.asarray(rows, dtype=int))
+    w = np.abs(A)
+    tot = w.sum(axis=1)
+    d2 = np.sum((c[None, :, :] - c[idx][:, None, :]) ** 2, axis=-1)     # (len(idx), n_cell)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = np.sqrt(np.sum(w * d2, axis=1) / tot)
+    return np.where(tot > 0, out, np.nan)
+
+
+def degrees_of_freedom_for_signal(prior_cov: NDArray[np.float64], G: NDArray[np.float64],
+                                  noise_var: ArrayLike) -> float:
+    r"""Degrees of freedom for signal, :math:`\mathrm{DFS} = \mathrm{tr}(A)`.
+
+    The number of independent linear combinations of the state the data actually determine. Bounded
+    above by ``n_obs`` (the data cannot determine more numbers than they contain) and by ``n_cell``.
+    Where the variance-reduction map says *where* uncertainty fell, DFS says *how much* was learned in
+    total — the honest scalar summary of an observing system, and the one that does not inflate when a
+    broad-footprint sensor lowers the variance of many correlated cells at once.
+
+    Computed as :math:`\mathrm{tr}\big((GCG^\top+C_d)^{-1}GCG^\top\big)`, an ``n_obs`` solve, so it is
+    cheap even on a large grid.
+    """
+    C = np.asarray(prior_cov, dtype="float64")
+    G = np.atleast_2d(np.asarray(G, dtype="float64"))
+    if G.size == 0 or G.shape[0] == 0:
+        return 0.0
+    nv = np.broadcast_to(np.asarray(noise_var, dtype="float64"), (G.shape[0],))
+    S = G @ (C @ G.T)                                 # (n_obs, n_obs) = G C G^T
+    return float(np.trace(np.linalg.solve(S + np.diag(nv), S)))
 
 
 def blue_update(prior_cov: NDArray[np.float64], G: NDArray[np.float64], d: ArrayLike,
