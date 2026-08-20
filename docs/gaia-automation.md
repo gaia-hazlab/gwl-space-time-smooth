@@ -511,6 +511,9 @@ a batch has already done its work.
 | `GAIA_MAX_COST_USD` | `0` | `0` = uncapped; otherwise halt the queue between issues past this |
 | `GAIA_SCIENCE_GATE` | `1` | `0` skips plan pre-registration and the science panel (not recommended) |
 | `GAIA_PLAN_REVISIONS` | `1` | Plan revisions allowed after a panel block, before parking |
+| `GAIA_PLAN_TIMEOUT` | `2700` | Wall clock for the planning session. Separate from `GAIA_AUX_TIMEOUT` on purpose — see below |
+| `GAIA_PLAN_MAX_TURNS` | `40` | Turns for the planning session |
+| `GAIA_ONLY_ISSUES` | *(unset)* | Supervised runs: restrict the queue to these issues, e.g. `186` or `153,152`. Filters the input to grouping, so ordering and blocker hold-back are unchanged |
 | `GAIA_GATE_INTEGRITY` | `1` | `0` disables gate-weakening detection (not recommended) |
 | `GAIA_FAIL_STRIKES` | `3` | Identical failure signatures tolerated before a line is stopped |
 
@@ -565,6 +568,40 @@ So before any editing agent runs:
 
 This is our own **ground rule 3** ("design-review first — audit a plan once before resources
 are spent") made mechanical. The queue had never once done it.
+
+#### What the first supervised run cost us
+
+The gate's first real run (issue #186, 2026-08-20) never reached the panel. It is worth
+recording why, because every fix below is a direct consequence.
+
+The planning session was killed by `timeout` at **1205s against a 1200s cap**, and the queue
+reported *"plan is not valid JSON"*. Three separate defects stacked up:
+
+1. **The wrong persona.** Planning was asked of `gaia-orchestrator`, whose entire charter is
+   to decompose work and delegate it. It did: it dispatched a subagent in the background and
+   then idled, waiting. Its tool timeline shows ~90 seconds of reading and eighteen minutes
+   of waiting. A *delegating* persona cannot produce a *terminal artifact* under a deadline.
+   Planning now runs on `gaia-study-designer`, which returns a plan as its output and — the
+   part that actually matters — has **no `Agent` tool in its grant**, so it physically cannot
+   fan out. The prompt also requires a foreground dispatch.
+
+2. **One error message for every failure.** `|| plan_raw=""` discarded the exit code, so
+   timeout, crash, contract violation and genuine schema error all surfaced identically.
+   The queue now reports `124`/`137` as a timeout distinctly, and `gaia_plan.py --from-stream`
+   names which of the five failure modes occurred.
+
+3. **Nothing survived.** `claude -p` in text mode prints only at the end, so a killed session
+   yielded an empty string and twenty minutes were unrecoverable. Planning now writes
+   `--output-format stream-json` and the plan is read from the transcript, which is written
+   incrementally — a session killed after emitting its plan still yields that plan.
+
+Planning also has its own timeout now. It had been borrowing `GAIA_AUX_TIMEOUT`, which was
+sized for a short auditor verdict; planning reads the issue *and* the code it would touch.
+
+And a fourth, quieter one: a batch that died at the gate recorded **nothing**, because
+`write_measurement` is only reached at commit time. The corpus meant to answer "does
+reviewing plans change outcomes?" could not see the runs where the gate acted. Gate exits now
+write a record keyed by cause — `plan-timeout`, `plan-invalid`, `panel-block`.
 
 #### The personas are verified, not assumed
 
@@ -778,6 +815,29 @@ grep -n 'parked\|arbitration verdict\|auditor:' .gaia-runs/batch-*.log
 ```
 
 ### 3. The dashboards
+
+**Who is on the roster.** Agents are named by family, so a reader can tell the two apart
+without parsing a prefix:
+
+| Rendered | Means |
+|---|---|
+| `Gaia · Auditor` | the general research family, from the installed plugin — any project using gaia gets these |
+| `Twin · Hydrogeologist` | written for **this** twin, derived from `docs/reviews/` and carrying that record's standing concerns as priors |
+
+The distinction is not cosmetic: a generic reviewer does not know that an 18.5 m baseline
+RMSE cannot serve a sub-metre liquefaction requirement. Project personas are also rendered in
+a heavier weight via `data-fam="twin"`. The **corpus keeps the raw `subagent_type`** —
+display names are for humans, and changing a corpus field's value space mid-stream would
+break every query across older records.
+
+**Agents that never acted are hidden.** A `Task` block created an agent entry as soon as it
+was *seen*; if that subagent's steps never appeared in the transcript, it was rendered as a
+full channel and a full card with zero calls, zero reasoning and zero errors. One real run
+(issue #158) showed **twelve agents of which ten were phantoms**, four of them duplicate
+names. `n_agents` in the corpus counted them too, so every "how many agents did this take?"
+figure was inflated at the source. Pass `--all-agents` to see them. An empty agent whose
+descendant did real work is kept, so the tree stays connected.
+
 
 For every issue that produced a commit, the queue renders a **self-contained HTML
 dashboard** — the agent call graph, the full transcript, tool counts, cost and duration —

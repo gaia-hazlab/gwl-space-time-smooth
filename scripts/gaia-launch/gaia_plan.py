@@ -28,6 +28,12 @@ import json
 import sys
 from pathlib import Path
 
+# The panel already knows how to read a stream-json transcript and pull the last fenced
+# json block out of it. One copy of that logic, not two: if the CLI's stream shape ever
+# changes, there must not be a second reader that quietly keeps working on the old one.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gaia_panel import dispatched, final_text, last_json_block  # noqa: E402
+
 # Deliberately small. Every field is something a reviewer or a later comparison actually
 # uses; a field nobody reads is a field the agent learns to pad.
 SCHEMA = {
@@ -132,6 +138,52 @@ def compare(plan: dict, actual: dict) -> tuple[str, list[str]]:
     return md, warn
 
 
+def from_stream(raw_path: str, expect: str | None = None) -> tuple[dict | None, list[str], list[str]]:
+    """Pull the plan out of a stream-json planning transcript.
+
+    Returns (plan, errors, warnings). The point of reading the STREAM rather than the
+    process's stdout is recoverability: `claude -p` in text mode prints only at the very
+    end, so a session killed by `timeout` yields an empty string and twenty minutes of
+    work is unrecoverable. The stream is written incrementally, so a killed session still
+    leaves everything it had done -- and this can still find a plan in it if one was
+    emitted before the kill.
+
+    That is not a hypothetical. The first supervised run of this gate lost a 20-minute
+    planning session exactly this way, and reported it as "plan is not valid JSON".
+    """
+    path = Path(raw_path)
+    if not path.exists() or not path.stat().st_size:
+        return None, ["the planning session produced no transcript at all "
+                      "(killed before it wrote anything, or it never started)"], []
+
+    warnings: list[str] = []
+    if expect:
+        # Prose ("Use the gaia-study-designer agent") is not dispatch. Whether the persona
+        # was actually loaded -- its system prompt, its tool grant, its model tier -- is a
+        # fact in the transcript. Unlike the panel this WARNS rather than blocks: the plan
+        # it produced is about to be reviewed by the panel on its merits either way, and
+        # the panel is where this pipeline fails closed.
+        got = dispatched(str(path))
+        if expect not in got:
+            warnings.append(
+                f"{expect} was never dispatched as a subagent "
+                f"(saw: {', '.join(sorted(got)) or 'none'}); the plan is the base model in "
+                f"costume -- the persona's name, none of its charter")
+
+    text = final_text(str(path))
+    if not text.strip():
+        return None, ["the planning session left a transcript but never produced a final "
+                      "reply (almost always: killed mid-flight by the timeout)"], warnings
+
+    plan = last_json_block(text)
+    if plan is None:
+        return None, ["the planning session replied, but with no parseable fenced ```json "
+                      "block -- it did not follow the output contract"], warnings
+
+    errs = validate(plan)
+    return (None if errs else plan), errs, warnings
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -140,10 +192,28 @@ def main() -> int:
     p.add_argument("--compare", metavar="PLAN")
     p.add_argument("--actual", metavar="ACTUAL")
     p.add_argument("--issue", type=int)
+    p.add_argument("--from-stream", metavar="RAW_JSONL",
+                   help="extract+validate the plan from a stream-json planning transcript")
+    p.add_argument("--out", metavar="PLAN_JSON", help="where to write the extracted plan")
+    p.add_argument("--expect", metavar="SUBAGENT_TYPE",
+                   help="warn if this persona was never actually dispatched")
     a = p.parse_args()
 
     def load(path):
         return json.loads(Path(path).read_text(encoding="utf-8"))
+
+    if a.from_stream:
+        plan, errs, warns = from_stream(a.from_stream, a.expect)
+        for w in warns:
+            print(f"  !!! plan: {w}", file=sys.stderr)
+        for e in errs:
+            print(f"  !!! plan: {e}", file=sys.stderr)
+        if plan is None:
+            return 1
+        if a.out:
+            Path(a.out).write_text(json.dumps(plan, indent=2), encoding="utf-8")
+        print("plan: valid", file=sys.stderr)
+        return 0
 
     if a.validate:
         try:
