@@ -240,6 +240,30 @@ assert_tree_clean() {
   return 1
 }
 
+# The ONLY sanctioned way back to main. `git checkout -f main` overwrites local modifications
+# to tracked files, so using it as a fallback for a failed checkout does exactly what the
+# no-deletion invariant forbids -- and a failed checkout is, by definition, the case where the
+# tree has something in it worth not deleting. Three call sites had that fallback.
+# (Copilot review, PR #218 round 2.)
+#
+# So: force ONLY when the tree is provably clean, in which case the force cannot destroy
+# anything and is just robustness against a stale index. Otherwise refuse and let the caller
+# decide -- every caller's correct response to "dirty tree here" is quarantine or halt, never
+# discard.
+return_to_main() {
+  local logfile="${1:-/dev/null}"
+  git checkout main >> "$logfile" 2>&1 && return 0
+  if tree_dirty; then
+    {
+      echo "  !!! could not return to main and the tree is DIRTY; refusing to force."
+      git status --porcelain --untracked-files=normal | sed 's/^/  | /'
+    } | tee -a "$logfile"
+    return 1
+  fi
+  git checkout -f main >> "$logfile" 2>&1 || return 1
+  return 0
+}
+
 # Move unexpected working-tree residue OUT OF THE WAY without destroying it and without
 # attributing it to anybody's batch. Used at the two points where the tree must be clean
 # but a park would be wrong: before a batch starts (we are on `main` -- parking would
@@ -511,7 +535,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>" 2>&1 || true
     fi
     # Publish before parking so the work survives loss of this machine.
     git push -u origin "$branch" 2>&1 || echo "  (could not push ${branch}; it remains locally at $(git rev-parse --short HEAD 2>/dev/null))"
-    git checkout main 2>&1 || git checkout -f main 2>&1 || true
+    return_to_main 2>&1 || echo "  (staying put: tree is dirty and forcing would discard it)"
     git branch -m "$branch" "$parked" 2>&1 || true
     echo "  parked as local branch ${parked}; remote branch ${branch} left in place."
     echo "  recover with:  git checkout ${parked}    (or: git fetch origin ${branch})"
@@ -1058,7 +1082,7 @@ ${closes_lines}" \
     # A genuinely empty batch: nothing committed AND nothing pushed. Dropping the
     # local pointer loses no work -- but only after PROVING it is identical to
     # main and the tree is clean, rather than assuming it.
-    git checkout main >> "$logfile" 2>&1 || git checkout -f main >> "$logfile" 2>&1 || true
+    return_to_main "$logfile" || true
     if [ -z "$(git log --oneline "main..${branch}" 2>/dev/null)" ] && [ -z "$(git status --porcelain)" ]; then
       git branch -d "$branch" >> "$logfile" 2>&1 || true
     else
@@ -1341,8 +1365,11 @@ closing comment on each issue in the batch." \
   # the commit path -- both of which would otherwise be inherited by the next batch and
   # blamed on its first issue. This is not fatal (the merge already succeeded and nothing
   # is at risk), but it must be loud and it must not propagate.
-  git checkout main >> "$logfile" 2>&1 || git checkout -f main >> "$logfile" 2>&1 || true
-  if ! assert_tree_clean "after merging PR #${pr_number} (${numbers_csv})" "$logfile"; then
+  # INSPECT BEFORE MOVING. The previous order checked out main (forcing on failure) and only
+  # then looked for residue -- so tracked-file residue was discarded by the forced checkout
+  # before quarantine ever saw it. Quarantining first is the whole fix. (Copilot, PR #218 r2.)
+  if tree_dirty; then
+    assert_tree_clean "after merging PR #${pr_number} (${numbers_csv})" "$logfile" || true
     # The merge already succeeded, so nothing shipped is at risk -- but the same reasoning
     # applies to what is left behind: if it could not be preserved, no later batch may run.
     if ! quarantine_residue "postmerge-pr${pr_number}" \
@@ -1350,6 +1377,9 @@ closing comment on each issue in the batch." \
       report_failure "PR #${pr_number} merged, but post-merge residue could not be preserved; HALTING the queue with the tree untouched" "$logfile" 1
       GAIA_STOP=1
     fi
+  elif ! return_to_main "$logfile"; then
+    report_failure "PR #${pr_number} merged, but could not return to main; HALTING rather than forcing" "$logfile" 1
+    GAIA_STOP=1
   fi
 
   if [ -n "$milestone" ]; then
