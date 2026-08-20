@@ -620,8 +620,10 @@ up the launcher tests, goes 163 → 199.
 
 ## 11. Appendix — proposed issue edits, ranked, with patch text
 
-**Not applied.** Nothing below has been posted to GitHub. Each block is ready-to-paste comment text (or
-a body replacement where marked) for review first.
+**Applied 2026-08-19.** All 13 blocks are now on GitHub: ranks 2-13 as comments (16 comments, since
+rank 4 posts to both #127 and #128 and rank 13 splits across #188, #160, #18 and #32), and rank 1 as a
+body replacement on #163 — with the original body archived as a comment on that issue first, so
+nothing was overwritten without a record. The text below is retained as the source of those edits.
 
 Ranking is by *risk that the issue as written leads someone to do the wrong thing*, not by effort.
 
