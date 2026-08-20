@@ -89,6 +89,71 @@ literature, to be calibrated and diagnosed against the twin's out-of-fold residu
 constants. See :data:`PRIOR_HYPERPARAMETERS` for the per-state values in use and their status, and
 ``scripts/calibrate_spatial_prior.py`` for the residual-based profile-likelihood/CV experiment that
 is meant to replace them.
+
+## Scale: the matrix-free prior operator (issue #154)
+
+A dense :math:`(n, n)` prior is the wall. At the twin's full 90 m domain (1889 x 1567 = 2 960 063
+cells) ``C`` alone is ~70 TB, and :meth:`GaussianPrior.cov`'s transient peak is several times that.
+:func:`variance_reduction_ratio` and :func:`blue_update` never need ``C`` as a matrix, though -- they consume it
+through exactly four things: ``.shape[0]``, ``diag(C)``, ``C @ G.T``, and ``G @ (C @ G.T)``. So the
+prior is treated here as an **operator protocol**: anything with ``.shape``, ``.diagonal()`` and
+``__matmul__`` is accepted (``np.ndarray`` already satisfies all three, which is why the existing
+dense path is untouched and bit-for-bit unchanged).
+
+:class:`StationaryGridPrior` -- built by :meth:`GaussianPrior.operator` -- is the matrix-free backend.
+On a complete uniform raster in row-major (``y`` outer, ``x`` inner) order, which is exactly what
+every caller's ``np.meshgrid(x, y)`` + ``.ravel()`` produces, a stationary isotropic kernel matrix is
+block-Toeplitz-with-Toeplitz-blocks, so ``C @ V`` is an **exact** 2-D convolution evaluated by
+circulant embedding (``scipy.fft``, threaded). This is not an approximation and not a taper: measured
+agreement with the dense ``cov()`` is 3e-15 relative in the worst case over ``nu`` in {0.5, 1.5, 2.5}
+x {plain, ``scale``, ``region_id``, both} -- i.e. double-precision rounding, and on real domain
+coordinates the operator is the MORE accurate of the two (see the class docstring). Cost is
+:math:`O(K\, n \log n)` per column instead of :math:`O(n^2)`, with ``K`` the number of ``region_id``
+regions (1 when unset).
+
+**Measured** on a 48-vCPU host with ``workers=-1``, ``nu=1.5``, ``L=12`` km, 90 m cells:
+
+===================  ==========  =============================  ==================================
+``n_cell``           build       ``C @ G.T``, ``n_obs = 100``   dense ``C`` would be
+===================  ==========  =============================  ==================================
+99 856               0.01 s      0.24 s                         0.08 TB
+490 000              0.05 s      0.90 s                         1.9 TB
+2 960 063 (full)     0.31 s      5.62 s                         70.1 TB
+===================  ==========  =============================  ==================================
+
+A full-domain :func:`variance_reduction_ratio` with 40 point sensors runs end-to-end in 5.8 s at a 5.9 GB process
+peak -- of which 4.7 GB is ``G`` (0.95 GB) plus the ``(n, n_obs)`` cross-covariance and its transpose,
+i.e. the observation side, not the prior. Including construction the operator overtakes the dense path
+at ~2 000 cells and is 160x faster at 20 000 (16.7 s -> 0.10 s for a 100-column product); below ~2 000
+cells a dense BLAS ``GEMM`` is still the quicker matvec, which is exactly why the dense path is kept
+and left untouched.
+
+What the operator **requires**, and what it does **not** do -- both matter, because a scalability claim
+that quietly changes the answer is worse than no claim at all:
+
+- It requires a **complete uniform raster** and a kernel that is **stationary and isotropic within each
+  region**. Per-cell ``scale`` (a prior-sigma multiplier, :math:`C = D C_0 D`) and ``region_id``
+  masking are carried **exactly**, not approximated -- the region partition identity
+  :math:`C = K \circ \sum_k u_k u_k^\top` is applied term by term. Coordinates that are not such a
+  raster **raise** :class:`ValueError` with a specific message; they never silently degrade to a
+  wrong answer.
+- **The prior is no longer the binding constraint -- the observation side is.** ``C @ G.T`` is a real
+  dense ``(n, n_obs)`` array (2.4 GB at ``n_obs = 100``, full domain), and the analysis needs an
+  ``(n_obs, n_obs)`` solve. A whole-domain 0.2 km satellite product (~6e5 rows) or a per-riparian-cell
+  :func:`channel_footprints` set (1e4-1e5 rows) is therefore still infeasible **regardless of the
+  prior representation**. Nothing here changes that.
+- **Sparsifying ``G`` would not rescue the dv/v rows.** A coda-sensitivity row is genuinely dense: the
+  diffusion footprint width is :math:`\sqrt{4Dt} \approx 17.9` km and the kernel is normalised over
+  the whole grid with no truncation, so those rows have support everywhere.
+- ``K`` regions multiply the FFT cost by up to ``K`` (each region is a separate transform pair). A
+  per-region bounding-box restriction would recover most of that and is deliberately **not** in scope:
+  no production caller sets ``region_id`` today.
+- Only :math:`\mathrm{diag}(C_\text{post})` is available through this path -- **no posterior samples
+  and no cross-cell posterior covariance**. (Sampling would additionally need the circulant embedding
+  to be PSD, which it need not be; see :class:`StationaryGridPrior`.)
+- A resolution map at 90 m is **oversampled** relative to a 3-12 km prior correlation length. It
+  should be read as a smooth field, not as 90 m information -- the fine grid buys geometry, not
+  independent degrees of freedom.
 """
 
 from __future__ import annotations
@@ -97,6 +162,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+from scipy.fft import irfft2, next_fast_len, rfft2
 
 
 _SQRT3 = 3.0 ** 0.5
@@ -107,6 +173,12 @@ _SQRT5 = 5.0 ** 0.5
 #: :math:`\sqrt{2\nu}\,r/L`. Other conventions in wide use (notably Lindgren et al. 2011's
 #: :math:`\sqrt{8\nu}` "practical range") give a DIFFERENT distance for the same number.
 RANGE_CONVENTION = "sqrt(2*nu)*r/L"
+
+# Largest ``n_cell`` for which :meth:`GaussianPrior.cov` will build a dense ``(n, n)`` covariance.
+# 20_000 cells is ~3.2 GB for the final array and ~19 GB peak (``cov`` transiently holds the
+# ``(n, n, 2)`` coordinate difference, its square, the distance, the Matern temporaries and the region
+# mask at once). Above it, use :meth:`GaussianPrior.operator` -- see the module docstring.
+DENSE_MAX_CELLS = 20_000
 
 
 def matern_correlation(dist_km: ArrayLike, length_km: float, nu: float = 1.5) -> NDArray[np.float64]:
@@ -245,6 +317,15 @@ class GaussianPrior:
     90 m domain scale, which the twin avoids by solving on a coarsened assimilation grid
     (`notebooks/make_twin_gif.py`); an operator-form representation is issue #154/#163 work, and the
     statistical model must be chosen independently of which backend carries it.
+
+    :meth:`cov` builds the **dense** ``(n, n)`` covariance and is capped at :data:`DENSE_MAX_CELLS`
+    cells; above that it raises rather than attempt a 70 TB allocation. The scalable path is
+    :meth:`operator`, which returns a matrix-free :class:`StationaryGridPrior` carrying the same
+    ``sigma``/``length_km``/``nu``/``region_id`` **exactly** (issue #154). No sparse GMRF/SPDE
+    precision approximation is needed for the full-resolution solve: on the uniform analysis raster
+    the covariance operator is exactly diagonalised by an FFT. What remains infeasible at full
+    resolution is the *observation* side (a dense ``(n, n_obs)`` cross-covariance and an
+    ``(n_obs, n_obs)`` solve), not the prior -- see the module docstring.
     """
 
     sigma: float
@@ -270,8 +351,22 @@ class GaussianPrior:
         return (np.asarray(region_a)[:, None] == np.asarray(region_b)[None, :]).astype("float64")
 
     def cov(self, coords_km: NDArray[np.float64]) -> NDArray[np.float64]:
-        """Dense prior covariance ``C`` for cell centres ``coords_km`` (``(n, 2)`` array, km)."""
+        """Dense prior covariance ``C`` for cell centres ``coords_km`` (``(n, 2)`` array, km).
+
+        Raises :class:`ValueError` above :data:`DENSE_MAX_CELLS` cells -- see :meth:`operator` for the
+        matrix-free path that has no such limit.
+        """
         c = np.asarray(coords_km, dtype="float64")
+        n = c.shape[0]
+        if n > DENSE_MAX_CELLS:
+            raise ValueError(
+                f"dense prior covariance refused: {n} cells would need "
+                f"{n * n * 8 / 1e9:.1f} GB for C alone (and several times that at peak), over the "
+                f"DENSE_MAX_CELLS={DENSE_MAX_CELLS} limit (a module-level constant in "
+                f"{__name__}, raise it deliberately if you really mean it). Use "
+                "GaussianPrior.operator(coords_km) instead: it returns a matrix-free "
+                "StationaryGridPrior that resolution()/blue_update() accept directly and that is "
+                "EXACT, not an approximation (issue #154).")
         d = np.sqrt(np.sum((c[:, None, :] - c[None, :, :]) ** 2, axis=-1))
         corr = matern_correlation(d, self.length_km, self.nu) * self._mask(self.region_id, self.region_id)
         return (self.sigma ** 2) * corr
@@ -288,6 +383,263 @@ class GaussianPrior:
         d = np.sqrt(np.sum((c[:, None, :] - p[None, :, :]) ** 2, axis=-1))
         corr = matern_correlation(d, self.length_km, self.nu) * self._mask(self.region_id, region_id_pts)
         return (self.sigma ** 2) * corr
+
+    def operator(self, coords_km: NDArray[np.float64],
+                 scale: ArrayLike | None = None) -> "StationaryGridPrior":
+        r"""Matrix-free prior operator for ``coords_km``, which MUST be a complete uniform raster.
+
+        Returns a :class:`StationaryGridPrior` carrying this prior's ``sigma``, ``length_km``, ``nu``
+        and ``region_id`` exactly, usable anywhere a dense ``C`` is (``resolution``, ``blue_update``,
+        ``marginal_resolution``) at :math:`O(n \log n)` per column instead of :math:`O(n^2)`.
+
+        ``coords_km`` must be ``(n, 2)`` ``[x, y]`` cell centres laid out **row-major with ``y``
+        outer and ``x`` inner** -- i.e. exactly ``np.column_stack([gx.ravel(), gy.ravel()])`` for
+        ``gx, gy = np.meshgrid(x_km, y_km)``. A DESCENDING ``y`` (the north-up raster convention every
+        caller in this repo uses) is fine and handled deliberately: the kernel is isotropic, so only
+        ``|dy|`` enters. ``scale``, if given, is an ``(n,)`` per-cell multiplier on the prior standard
+        deviation (:math:`C = D C_0 D`, ``D = diag(scale)``), carried exactly.
+
+        Anything that is not such a raster -- ragged rows, a masked/subset domain, non-uniform
+        spacing, a column-major (``x`` outer) layout -- raises :class:`ValueError`. It is NOT inferred,
+        tapered or silently fixed up: an irregular coordinate array quietly getting a
+        stationary-grid answer is the worst failure mode this module could have.
+        """
+        c = np.asarray(coords_km, dtype="float64")
+        if c.ndim != 2 or c.shape[1] != 2:
+            raise ValueError(f"coords_km must be (n, 2) [x, y] in km, got shape {c.shape}")
+        n = c.shape[0]
+        if n == 0:
+            raise ValueError("coords_km is empty; there is no raster to infer")
+        x, y = c[:, 0], c[:, 1]
+
+        # nx = length of the first row, i.e. the run of leading cells sharing y[0]
+        differs = np.flatnonzero(y != y[0])
+        nx = int(differs[0]) if differs.size else n
+        if nx <= 0 or n % nx != 0:
+            raise ValueError(
+                f"coords_km is not a complete raster: inferred nx={nx} from the leading run of "
+                f"constant y, which does not divide n={n}. GaussianPrior.operator() requires the "
+                "FULL uniform grid in row-major (y outer, x inner) order, as produced by "
+                "np.column_stack([gx.ravel(), gy.ravel()]) with gx, gy = np.meshgrid(x_km, y_km); "
+                "it cannot represent a masked or ragged subset. Use .cov() for irregular coordinates "
+                f"(dense, capped at DENSE_MAX_CELLS={DENSE_MAX_CELLS} cells).")
+        ny = n // nx
+        X, Y = x.reshape(ny, nx), y.reshape(ny, nx)
+
+        dx = _uniform_step(X[0], "x", "within a row")
+        dy = _uniform_step(
+            Y[:, 0], "y", "down the first column",
+            hint=(" (this is also what a COLUMN-major layout looks like: meshgrid(..., indexing='ij')"
+                  " or a transposed ravel puts y on the inner axis, which reads back as a jumping y"
+                  " spacing.)")) if ny > 1 else 0.0
+        tol = 1e-9 * max(abs(dx), abs(dy), 1.0)
+        if not np.allclose(Y, Y[:, :1], rtol=0.0, atol=tol):
+            raise ValueError(
+                "coords_km is not in row-major (y outer, x inner) order: y is not constant along "
+                "each row. Did you build it with meshgrid(..., indexing='ij') or transpose it? "
+                "Expected np.column_stack([gx.ravel(), gy.ravel()]) from np.meshgrid(x_km, y_km).")
+        if not np.allclose(X, X[:1, :], rtol=0.0, atol=tol):
+            raise ValueError(
+                "coords_km is not a uniform raster: the x coordinates are not identical from row to "
+                "row (x must be nx-periodic). GaussianPrior.operator() needs the full rectangular "
+                "grid; use .cov() for irregular coordinates.")
+
+        return StationaryGridPrior(
+            ny=ny, nx=nx, dy_km=abs(dy), dx_km=abs(dx), sigma=float(self.sigma),
+            length_km=float(self.length_km), nu=float(self.nu),
+            scale=None if scale is None else np.asarray(scale, dtype="float64").ravel(),
+            region_id=self.region_id)
+
+
+def _uniform_step(v: NDArray[np.float64], axis: str, where: str, hint: str = "") -> float:
+    """Single uniform spacing of ``v``, or :class:`ValueError` naming what was wrong.
+
+    The step is the **span average** ``(v[-1] - v[0]) / (len(v) - 1)``, NOT the first difference.
+    That matters on real projected coordinates: EPSG:5070 x is ~2e3 km, so a single differenced
+    90 m step carries ~1e-12 RELATIVE error from catastrophic cancellation (float64 spacing at
+    2005 is 4.5e-13 km), and because every lag in :class:`StationaryGridPrior` is that one step
+    times an integer, the error propagates coherently into every kernel entry. Dividing the whole
+    span by ``len(v) - 1`` spreads the same absolute cancellation over ``len(v) - 1`` steps, so the
+    relative error falls by that factor (100x on a 100-cell axis, ~1900x on the full domain's
+    1889-cell axis) and the operator matches an exact-lag extended-precision reference as closely
+    as it does on origin-centred coordinates. The uniformity check below still compares every
+    individual difference, so a genuinely irregular axis is still refused.
+    """
+    a = np.asarray(v, dtype="float64")
+    dv = np.diff(a)
+    if dv.size == 0:
+        return 0.0
+    step = float((a[-1] - a[0]) / dv.size)
+    if not np.isfinite(step) or step == 0.0:
+        raise ValueError(
+            f"coords_km has a zero or non-finite {axis} spacing ({step!r}) {where}; "
+            "GaussianPrior.operator() requires a uniform raster.")
+    if not np.allclose(dv, step, rtol=1e-9, atol=0.0):
+        worst = float(np.max(np.abs(dv - step)))
+        raise ValueError(
+            f"coords_km has non-uniform {axis} spacing {where}: mean step {step:.9g} km, worst "
+            f"deviation {worst:.3g} km (tolerance rtol=1e-9). GaussianPrior.operator() is a "
+            "stationary-grid (FFT) representation and is only exact on a uniform raster; it will "
+            "NOT approximate an irregular one. Use .cov() (dense, capped at "
+            f"DENSE_MAX_CELLS={DENSE_MAX_CELLS} cells) for irregular coordinates.{hint}")
+    return step
+
+
+@dataclass(frozen=True, eq=False)
+class StationaryGridPrior:
+    r"""Matrix-free prior covariance on a uniform raster: ``C @ V`` by FFT, never an ``(n, n)`` array.
+
+    Built by :meth:`GaussianPrior.operator` (use that; the fields here are the raster geometry it
+    infers). Satisfies the operator protocol :func:`resolution` and :func:`blue_update` need --
+    ``.shape``, ``.diagonal()``, ``__matmul__`` -- so it is a drop-in for a dense ``C``.
+
+    ## Why this is EXACT, not an approximation
+
+    Cells are laid out row-major (``y`` outer, ``x`` inner) on a complete uniform ``ny x nx`` raster,
+    so a stationary isotropic kernel entry depends only on the index lag ``(i - i', j - j')``: the
+    matrix is block-Toeplitz-with-Toeplitz-blocks. Embedding it in a circulant of size
+    ``py x px`` with ``py >= 2*ny - 1``, ``px >= 2*nx - 1`` and applying it by FFT reproduces the
+    Toeplitz product on the leading block exactly, because the zero-padded input cannot alias.
+    Measured against the dense :meth:`GaussianPrior.cov` on a non-square 23 x 17 raster with
+    ``dy != dx`` and a descending ``y``, the relative matvec error is <= 3.1e-15 across every
+    supported ``nu`` and every combination of ``scale`` and ``region_id``, and <= 1.1e-14 end to end
+    through :func:`resolution` / :func:`blue_update` / :func:`marginal_resolution`. ``diagonal()``
+    matches ``np.diag(cov(...))`` to <= 8.9e-16.
+
+    On the *real* domain the operator is in fact the more accurate of the two: EPSG:5070 coordinates
+    are ~2e3 km in magnitude, and ``cov()`` differences them to get a ~0.09 km lag, losing ~1e-13
+    relative to cancellation. The operator never forms a coordinate difference -- it works from the
+    integer lag and the spacing -- so it does not pay that. (The 1.4e-13 seen when comparing the two
+    on domain coordinates is the dense path's error, not the FFT's.)
+
+    ``region_id`` is honoured through the partition identity :math:`C = K \circ \sum_k u_k u_k^\top`
+    with ``u_k`` the region indicator vectors, so
+
+    .. math::  CV = \sum_k (s \odot u_k) \odot K\big[(s \odot u_k) \odot V\big],
+
+    ``s`` the per-cell ``scale`` (1 if unset). Each term is an independent FFT apply -- ``K`` regions
+    therefore cost up to ``K`` transforms per column. Dropping ``region_id`` here would silently
+    reintroduce the cross-divide constraint leakage issue #163 exists to prevent, so it is carried
+    through, not optimised away.
+
+    ## Two things that look like bugs and are not
+
+    - **The embedded circulant need not be positive semi-definite, and that is harmless.** Its minimum
+      eigenvalue is measurably negative for these Matern kernels on this padding (-42.03 for a
+      40 x 31 raster at 90 m with ``L = 3`` km, ``nu = 1.5``, padded to 80 x 63). The identity
+      :math:`Cv = P^\top(\hat C (Pv))` restricted to the leading block holds regardless of the sign of
+      :math:`\hat C`'s eigenvalues -- it is an algebraic statement about the embedding, not a spectral
+      one. (PSD of the embedding is required only to *draw samples* by FFT, which this class does not
+      do and which is out of scope.) With that negative eigenvalue present the matvec still agrees
+      with the dense product to 2.3e-15 relative.
+    - **``next_fast_len`` is not cosmetic.** ``1889`` -- one of the full-domain axis lengths -- is
+      prime, so a literal ``2*n`` transform length would be ``2 x 1889``, which drops ``scipy.fft``
+      into a Bluestein/Rader path and is pathologically slow. ``next_fast_len(2*1889 - 1) = 3780 =
+      2^2 x 3^3 x 5 x 7``.
+
+    ## Cost
+
+    ``block`` columns of ``V`` are transformed per batch, so the transform working set is roughly
+    ``2 * block * py * px * 8`` bytes and does NOT grow with ``n_obs`` -- ~1.5 GB at the default
+    ``block=8`` on the full 3780 x 3136 padded domain (measured: 5.9 GB process peak for a
+    100-column full-domain product, of which 4.7 GB is ``G`` and the result). ``workers=-1`` hands the
+    transforms to every available core. The **returned** ``C @ G.T`` is a real dense ``(n, n_obs)``
+    array (2.4 GB at ``n = 2.96e6``, ``n_obs = 100``); that intermediate is deliberately kept -- see
+    the module docstring for why the observation side, not the prior, is now the binding constraint.
+    """
+
+    ny: int
+    nx: int
+    dy_km: float
+    dx_km: float
+    sigma: float
+    length_km: float
+    nu: float = 1.5
+    scale: NDArray[np.float64] | None = None      # (n,) per-cell sigma multiplier -> C = D C0 D
+    region_id: NDArray[np.int64] | None = None    # (n,) integer labels; correlation 0 across labels
+    block: int = 8                                # columns of V transformed per FFT batch
+    workers: int = -1                             # scipy.fft thread count (-1 = all cores)
+
+    def __post_init__(self) -> None:
+        ny, nx = int(self.ny), int(self.nx)
+        if ny < 1 or nx < 1:
+            raise ValueError(f"ny and nx must both be >= 1, got ({self.ny}, {self.nx})")
+        n = ny * nx
+        for name, v in (("scale", self.scale), ("region_id", self.region_id)):
+            if v is not None and np.asarray(v).size != n:
+                raise ValueError(
+                    f"{name} has {np.asarray(v).size} entries but the raster has {n} cells")
+        py, px = next_fast_len(2 * ny - 1), next_fast_len(2 * nx - 1)
+        # wrap-around lag: the circulant's (a, b) entry is the kernel at lag min(a, p - a)
+        ly = np.minimum(np.arange(py), py - np.arange(py)) * abs(float(self.dy_km))
+        lx = np.minimum(np.arange(px), px - np.arange(px)) * abs(float(self.dx_km))
+        k = (self.sigma ** 2) * matern_correlation(
+            np.hypot(ly[:, None], lx[None, :]), self.length_km, self.nu)
+        object.__setattr__(self, "_pad", (py, px))
+        object.__setattr__(self, "_khat", rfft2(k, workers=self.workers))
+        # the (scale * region-indicator) weight vectors of the partition identity; None = all-ones
+        s = None if self.scale is None else np.asarray(self.scale, dtype="float64").ravel()
+        if self.region_id is None:
+            w = None if s is None else (s,)
+        else:
+            lab = np.asarray(self.region_id).ravel()
+            ones = np.ones(n, dtype="float64") if s is None else s
+            w = tuple(ones * (lab == u) for u in np.unique(lab))
+        object.__setattr__(self, "_weights", w)
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        n = int(self.ny) * int(self.nx)
+        return (n, n)
+
+    def diagonal(self) -> NDArray[np.float64]:
+        """``diag(C)`` = ``sigma**2 * scale**2``, exactly.
+
+        The Matern correlation is bitwise ``1.0`` at zero lag for all three closed forms and the
+        region mask is 1 on the diagonal, so this is exact rather than an FFT evaluation. It is NOT
+        ``sigma**2`` in general -- ``scale`` makes the prior variance heterogeneous, and callers that
+        read the prior variance off the diagonal must see that.
+        """
+        d = np.full(int(self.ny) * int(self.nx), float(self.sigma) ** 2, dtype="float64")
+        if self.scale is not None:
+            d *= np.asarray(self.scale, dtype="float64").ravel() ** 2
+        return d
+
+    def _apply_kernel(self, V: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Unweighted stationary apply ``K @ V`` (``V`` is ``(n, m)``), by circulant embedding."""
+        ny, nx = int(self.ny), int(self.nx)
+        py, px = self._pad
+        out = np.empty_like(V)
+        blk = max(1, int(self.block))
+        for a in range(0, V.shape[1], blk):
+            cols = V[:, a:a + blk]
+            m = cols.shape[1]
+            buf = np.zeros((m, py, px), dtype="float64")
+            buf[:, :ny, :nx] = cols.T.reshape(m, ny, nx)
+            f = rfft2(buf, workers=self.workers)
+            f *= self._khat
+            z = irfft2(f, s=(py, px), workers=self.workers)
+            out[:, a:a + blk] = z[:, :ny, :nx].reshape(m, ny * nx).T
+        return out
+
+    def __matmul__(self, V: ArrayLike) -> NDArray[np.float64]:
+        """``C @ V`` for ``V`` of shape ``(n,)`` or ``(n, m)``; returns the same rank."""
+        v = np.asarray(V, dtype="float64")
+        flat = v.ndim == 1
+        if flat:
+            v = v[:, None]
+        if v.ndim != 2 or v.shape[0] != self.shape[0]:
+            raise ValueError(
+                f"cannot apply a {self.shape} prior operator to an array of shape "
+                f"{np.shape(V)}; expected leading dimension {self.shape[0]}")
+        w = self._weights
+        if w is None:                                    # no scale, one region: a plain apply
+            out = self._apply_kernel(v)
+        else:
+            out = np.zeros_like(v)
+            for wk in w:
+                out += wk[:, None] * self._apply_kernel(wk[:, None] * v)
+        return out[:, 0] if flat else out
 
 
 # --- per-state prior hyperparameters ---------------------------------------------------------------
@@ -705,6 +1057,22 @@ def channel_footprints(coords_km: NDArray[np.float64], hand_m: ArrayLike,
         if chan.any() else np.empty((0, c.shape[0]))
 
 
+def _as_prior(P):
+    """The prior as either a dense ``float64`` array (unchanged legacy path) or an operator backend.
+
+    A prior is consumed by :func:`resolution` / :func:`blue_update` through only ``.shape``,
+    ``.diagonal()`` and ``__matmul__``. ``np.ndarray`` already satisfies all three, so the dense path
+    below is exactly what it always was. Anything else that satisfies the protocol (notably
+    :class:`StationaryGridPrior`) is passed through **untouched**: calling ``np.asarray`` on it would
+    either densify a 70 TB matrix or raise, which is the whole point of having it.
+    """
+    if isinstance(P, np.ndarray):
+        return np.asarray(P, dtype="float64")            # existing behaviour, unchanged
+    if hasattr(P, "diagonal") and hasattr(P, "__matmul__") and hasattr(P, "shape"):
+        return P                                          # matrix-free operator backend
+    return np.asarray(P, dtype="float64")                 # lists, nested sequences, etc.
+
+
 def variance_reduction_ratio(prior_cov: NDArray[np.float64], G: NDArray[np.float64],
                              noise_var: ArrayLike) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     r"""Per-cell **fractional posterior variance reduction** and posterior variance.
@@ -728,9 +1096,16 @@ def variance_reduction_ratio(prior_cov: NDArray[np.float64], G: NDArray[np.float
 
        :func:`resolution` is a backward-compatible alias of this function and returns the same
        quantity.
+
+    ``prior_cov`` may be a dense ``(n_cell, n_cell)`` array **or** any operator satisfying the prior
+    protocol (``.shape``, ``.diagonal()``, ``__matmul__``) -- e.g. a :class:`StationaryGridPrior` from
+    :meth:`GaussianPrior.operator`, which never materialises ``C`` (issue #154). Memory note: the
+    ``C @ G.T`` cross-covariance below is a real dense ``(n_cell, n_obs)`` array either way (2.4 GB at
+    the full 2.96e6-cell domain with ``n_obs = 100``); the operator removes the ``(n, n)`` prior, not
+    that intermediate.
     """
-    C = np.asarray(prior_cov, dtype="float64")
-    var_prior = np.diag(C).copy()
+    C = _as_prior(prior_cov)
+    var_prior = C.diagonal().copy()
     G = np.atleast_2d(np.asarray(G, dtype="float64"))
     if G.size == 0 or G.shape[0] == 0:
         return np.zeros_like(var_prior), var_prior.copy()
@@ -860,12 +1235,16 @@ def blue_update(prior_cov: NDArray[np.float64], G: NDArray[np.float64], d: Array
 
     ``prior_cov`` is ``B`` (n_cell x n_cell); ``G`` is ``(n_obs, n_cell)``; ``d`` and ``noise_var`` are
     length ``n_obs``; ``prior_mean`` is ``m_b`` (scalar or n_cell). Returns ``(m_a, var_post)``.
+
+    ``prior_cov`` may equally be a matrix-free prior operator (``.shape``, ``.diagonal()``,
+    ``__matmul__``), e.g. :meth:`GaussianPrior.operator` -- see :func:`resolution` for the memory
+    caveat on the ``(n_cell, n_obs)`` cross-covariance, which is dense on both paths.
     """
-    B = np.asarray(prior_cov, dtype="float64")
+    B = _as_prior(prior_cov)
     G = np.atleast_2d(np.asarray(G, dtype="float64"))
     mb = np.broadcast_to(np.asarray(prior_mean, dtype="float64"), (B.shape[0],)).astype("float64")
     if G.size == 0 or G.shape[0] == 0:
-        return mb.copy(), np.diag(B).copy()
+        return mb.copy(), B.diagonal().copy()
     d = np.asarray(d, dtype="float64").ravel()
     if d.size != G.shape[0]:                          # guard against silent broadcasting of a bad d
         raise ValueError(f"d has length {d.size}, expected n_obs={G.shape[0]}")
@@ -877,7 +1256,7 @@ def blue_update(prior_cov: NDArray[np.float64], G: NDArray[np.float64], d: Array
     M = G @ BG + np.diag(nv)                          # (n_obs, n_obs)
     innov = d - G @ mb                               # data minus model-predicted data
     m_a = mb + BG @ np.linalg.solve(M, innov)
-    var_prior = np.diag(B)
+    var_prior = B.diagonal().copy()               # .copy(): ndarray.diagonal() is a read-only view
     reduction = np.einsum("ij,ji->i", BG, np.linalg.solve(M, BG.T))   # diag(BG M^-1 BG^T)
     reduction = np.clip(reduction, 0.0, var_prior)   # numerical guard: 0 <= reduction <= prior
     var_post = var_prior - reduction
