@@ -83,6 +83,19 @@ def nehrp_class_probabilities(vs30_mean, vs30_std, lognormal=False):
     error model, and requires ``vs30_mean > 0``); otherwise ``vs30_std`` is a linear m/s sigma
     (matching the dv/v-propagated 1-sigma). A zero sigma collapses to a one-hot class assignment
     (the deterministic bin of the mean). ``vs30_std`` must be non-negative.
+
+    .. note:: This is a **per-cell marginal** only -- there is no spatial correlation model here, and
+       deliberately so. Static near-surface seismic properties need their OWN geostatistics: they are
+       positive-valued (hence the lognormal option, which is the field-standard transform), geological
+       rather than hydrologic, multiscale, and plausibly nonstationary. Published correlation
+       structures for shallow Vs run from geotechnical tens-of-metres to kilometre-scale basin
+       structure -- @thompson2007vscorrelation for San Francisco Bay sediments,
+       @thomson2020canterbury for Canterbury -- so the range is a property of the geology being
+       mapped, not a transferable constant. Nothing here may inherit the groundwater or soil-moisture
+       Matern parameters of :data:`src.models.observability.PRIOR_HYPERPARAMETERS`, which is why that
+       registry has no Vs entry and ``prior_for_state('vs30')`` raises. Marginal transform, spatial
+       correlation and geological conditioning are three separate decisions and must be audited
+       separately (issues #54, #84, #86, #144).
     """
     from scipy.stats import norm
 

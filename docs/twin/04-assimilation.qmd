@@ -8,6 +8,102 @@ shrinks only where informative sensors constrain it. The difficulty here is not 
 combining **heterogeneous** streams that sample the state at wildly different resolutions in *both*
 space and time, and doing so honestly.
 
+## What the state actually is: storage, head, depth to water, aquifer head, pore pressure
+
+Before any operator or prior can be written down, the state has to be named. Five quantities were
+being carried under three interchangeable labels — `GWL`, "head", `WTD`/`DTW` — and they are not
+interchangeable. `src/models/hydro_state.py` now defines them, and everything downstream refers to
+that vocabulary.
+
+| symbol | quantity | role |
+|---|---|---|
+| $z_s(x)$ | land-surface elevation | static, known |
+| $S(x,t)$ | groundwater **storage** per unit area (m of water) | the **canonical evolving state** in the target architecture (#187) |
+| $h_{wt}(x,t)$ | **water-table head** — elevation of the phreatic surface in an *unconfined* aquifer | diagnosed from storage |
+| $D(x,t)$ | **depth to water table** (DTW/WTD), $D = z_s - h_{wt}$, positive down | diagnosed from head; a **first-class hazard product** |
+| $H(x,z,t)$ | **hydraulic head at depth**, $H = z + p/(\rho_w g)$ | what a *screened* piezometer measures |
+| $u(x,z,t)$ | **pore-water pressure** | what slope stability consumes, through $\sigma' = \sigma - u$ |
+
+Two consequences follow immediately and both change how the twin is configured.
+
+::: {.callout-important}
+## $\Delta D = -\Delta h_{wt}$ — so WTD and water-table head are one random field, not two
+Land-surface elevation is time-invariant, so differencing $D = z_s - h_{wt}$ gives
+$\Delta D(x,t) = -\Delta h_{wt}(x,t)$ **exactly** — no baseline, no datum, no parameter. Therefore
+
+$$\mathrm{Cov}\big(\Delta D(x), \Delta D(x')\big) = \mathrm{Cov}\big(\Delta h_{wt}(x), \Delta h_{wt}(x')\big).$$
+
+The sign of the update flips; the covariance does not. There is no separate $(\sigma, L, \nu)$ to fit
+for "WTD anomaly" as distinct from "water-table-head anomaly", and configuring two would be a
+modelling error, not a redundancy. `assert_anomaly_covariance_identity` and
+`tests/test_hydro_state.py` enforce this, and `PRIOR_HYPERPARAMETERS` deliberately contains one
+groundwater entry rather than two.
+
+This says nothing about the *absolute* fields, which differ by the strongly structured $z_s$ — see
+[the residual prior](#the-prior-lives-on-the-residual-not-on-the-absolute-water-table-landscape) below.
+:::
+
+::: {.callout-warning}
+## $H \ne h_{wt}$ at depth, and a well measures $H$
+At the phreatic surface gauge pressure is zero, so $H = h_{wt}$. In a confined, semiconfined,
+perched or artesian interval it is not: a screened well reports the hydraulic head *of its own
+screened interval*, a potentiometric surface set by recharge-area elevation and confining geometry.
+That is often a valuable observation — it is simply an observation of a different state. Section
+[Which wells observe the water table](#which-wells-actually-observe-the-water-table) makes this an
+enforced observation semantic rather than a caveat.
+:::
+
+### Storage is the target state; the head anomaly is what the current BLUE carries
+
+The intended architecture (#187) is storage-first, with everything else diagnosed from it:
+
+$$
+S_\text{groundwater} \;\longrightarrow\; h_{wt} \;\longrightarrow\; D \;\longrightarrow\; u(z_\text{failure})
+\;\longrightarrow\; \text{hazard}
+$$
+
+with the storage-to-head step $\Delta h_{wt} = \Delta S / S_y$ carrying a physically defensible
+specific yield and propagating its uncertainty into the diagnosed head
+(`water_table_head_from_storage`; #137/#171/#172 own the parameter itself). The relative uncertainty
+in the diagnosed head equals the relative uncertainty in $S_y$, so a poorly known specific yield is
+not a second-order detail — it scales the whole head anomaly. The same function refuses a *confined*
+storativity, which is three to five orders of magnitude smaller and for which a head change is not a
+water-table movement at all.
+
+That is the target. It is **not** what runs today:
+
+- **current reduced assimilation variable:** the **water-table-head anomaly** $\Delta h_{wt}$ (a
+  snapshot BLUE over a single anomaly field; equivalently, up to sign, the DTW anomaly that
+  `src/models/gwl_dynamic.py` actually kriges);
+- **target cycling state:** **storage**, with head and DTW diagnosed from it inside a cycling
+  ensemble filter.
+
+Nothing in this chapter should be read as claiming the target is implemented. The gap is tracked in
+`docs/reviews/hydrology-geostatistics-prior-audit-2026-08.md`.
+
+### Which wells actually observe the water table
+
+A well's water level is an exact linear point observation **of the state it samples**. The exactness
+claim earlier in this chapter is therefore conditional, and the condition is the well's screened
+interval, not its existence. `src/features/well_hydrostratigraphy.py` now assigns every site an
+explicit observation semantic:
+
+| `measurement_target` | evidence | how it may enter the assimilation |
+|---|---|---|
+| `water_table` | screen top in the shallow zone, or shallow total depth with no contrary evidence, and not flowing | the shallow $h_{wt}$/DTW point operator |
+| `aquifer_head` | confined/multiple/mixed `aqfr_type_cd`, screen or depth below the shallow zone, artesian with corroborating depth or confinement | needs a depth/aquifer operator or its own hydraulic-head diagnostic — **must not** pin $h_{wt}$ |
+| `unknown` | no screen, no aquifer code, depth missing or in the grey band; or flowing with nothing to corroborate why | **flagged**, never silently promoted to a water-table observation |
+
+Evidence is applied most-direct-first: a flowing/artesian status, then the NWIS aquifer type code,
+then the screened interval, then total depth as the fallback proxy. A *shallow* well in a
+confined-coded unit is `aquifer_head`, because depth is a proxy and the aquifer code is not.
+`water_table_point_footprint()` refuses to build the shallow point operator for anything but
+`water_table`, so the category error is a raised exception rather than a quiet bias, and
+`src/data/qc_nwis.py` now carries screen top/bottom, `aqfr_type_cd`, the national aquifer code and a
+flowing flag through to the site table so the classification has something to work with. This is
+issue #189's substance; issue #46's depth-only screen remains as the coarser, older filter it always
+was.
+
 ## One state, many observation geometries
 
 Every stream is written as the same object: a **linear functional of the state field**,
@@ -17,7 +113,7 @@ streams is the *shape* of $g_i$ and the *nature* of $\varepsilon_i$:
 
 | stream | geometry of $g_i$ | $\varepsilon_i$ is |
 |---|---|---|
-| NWIS well | a point (narrow blob) | instrument error |
+| NWIS well ($h_{wt}$ only if `measurement_target == water_table`) | a point (narrow blob) | instrument error |
 | SNOTEL / SCAN / USCRN θ | a point | instrument error |
 | seismic dv/v | a **volume** — the coda sensitivity kernel | processing-ensemble covariance (`codameter`) |
 | SMAP / NISAR | a **satellite pixel** (9 km / ~0.2 km footprint) | **retrieval / model error**, not instrument error |
@@ -91,9 +187,12 @@ C_a \;=\; B - B G^\top \big(G B G^\top + R\big)^{-1} G B .
 $$
 
 Here $d - G m_b$ is the **innovation** — the data minus the model-predicted data — and $C_a$ is the
-posterior covariance whose diagonal is the resolution/information-gain map of
+posterior covariance whose diagonal gives the *variance-reduction* / information-gain map of
 [the evaluation chapter](05-state-evaluation.qmd). The estimate reverts to $m_b$ where no observation
-reaches, and $C_a$ drops below $B$ only where one does.
+reaches, and $C_a$ drops below $B$ only where one does. Note the diagonal of $C_a$ answers "how much
+uncertainty fell here", not "over what footprint is the estimate here an average" — those are
+different questions, and the second one needs a row of the resolution operator
+$A = BG^\top(GBG^\top+R)^{-1}G$, not a variance ratio.
 
 ### Where heterogeneous resolution enters: $G$ (space) and $R$ (time), never regridding
 
@@ -127,14 +226,49 @@ $1/\sigma_{\text{prior}}^2$. That is where "~94% wells for groundwater, ~95% dv/
 comes from — a *near-station refinement* fraction, not a claim about the field as a whole. The full
 $C_a$ above is what the design maps in [the evaluation chapter](05-state-evaluation.qmd).
 
-## The prior smoothness $\nu$: theoretical, statistical, and physical basis
+## The spatial prior: what it is on, and what its parameters are worth
 
 The prior correlation used by `GaussianPrior`/`matern_correlation` is Whittle–Matérn. Beyond the
 marginal variance $\sigma^2$ and the range $L$, it carries a third parameter, the smoothness $\nu$,
-which fixes the local regularity of the field. This section states what $\nu$ controls, what can and
-cannot be learned about it from data, and what the hydrologic literature implies for the two states the
-twin estimates. It is the justification for the value in use and a statement of where that value is
-still an assumption rather than a result.
+which fixes the local regularity of the field. This section states what the prior is placed *on*,
+what $\nu$ controls, what can and cannot be learned about the three parameters from data, and what
+the hydrologic literature does — and does not — imply for the two states the twin estimates. Its
+conclusion is a set of **status labels**, not a set of values.
+
+### The prior lives on the residual, not on the absolute water-table landscape
+
+The Matérn prior describes the *uncertainty structure of the model error*, after the deterministic
+hydrologic baseline. Writing
+
+$$h_{wt}(x,t) = h_\text{baseline}(x,t) + \delta h(x,t),$$
+
+the GP is on $\delta h$ — the residual about the observation-anchored RF/HAND baseline
+([Structural model](00-structural-model.qmd)) — and never on $h_{wt}$ or $D$ themselves.
+
+This is not a technicality. Absolute DTW is $D = z_s - h_{wt}$, so it inherits the entire
+deterministic topographic and hydrogeologic structure of the land surface: a domain-wide histogram of
+DTW over Puget Sound is strongly skewed, and its empirical variogram measures the landscape, not the
+model's error. **Absolute WTD over this domain is not a stationary Gaussian Matérn random field, and
+this chapter does not claim it is.** The conditional error field about a fitted baseline can be
+approximately Gaussian while the marginal distribution of the raw field is nothing of the kind, and
+those are different statements about different objects. Decomposing groundwater elevation into a
+deterministic physical drift plus a stochastic residual, and fitting the covariance to the
+*residual*, is the standard construction in the modern groundwater-geostatistics literature
+[@varouchakis2019spatiotemporal; @varouchakis2022complex]; the reason the drift cannot be waved away
+is that whether the water table is even a subdued replica of topography is itself conditional on
+recharge and transmissivity [@haitjema2005subdued]. `src/models/prior_calibration.py` therefore takes
+out-of-fold residuals as its only input, and its self-test includes the negative control: adding a
+deterministic drift to a known residual field inflates the fitted range and variance by factors of
+three.
+
+The same applies to soil moisture, with one extra wrinkle: raw volumetric water content is *bounded*
+between residual and saturated water content and can be skewed or multimodal, and
+@ryu2005footprint show that its footprint-scale marginal changes shape with wetness state — Gaussian,
+beta and mixture representations each have their own validity regime. A Gaussian **anomaly**
+approximation is acceptable only while the posterior keeps its mass comfortably inside the physical
+bounds. A transformed state (a logit of effective saturation) is the documented future option; it is
+deliberately *not* adopted now, because replacing the linear-Gaussian machinery before a calibration
+has shown the Gaussian anomaly failing would trade a checkable assumption for an unchecked one.
 
 ### The family and the parameter
 
@@ -149,22 +283,30 @@ the compound name. It entered statistical practice through @handcock1993bayesian
 precisely because $\nu$ is adjustable rather than assumed.
 
 Two limits bracket what the choice means. At $\nu = 1/2$ the correlation collapses to the exponential
-$e^{-r\sqrt{2}/L}$ — the Ornstein–Uhlenbeck / first-order Markov form, continuous but nowhere
-mean-square differentiable. As $\nu \to \infty$ it converges to the squared-exponential (Gaussian)
-form, which is $C^\infty$ — analytic sample paths. Intermediate values interpolate: a Matérn field is
-$\lceil \nu \rceil - 1$ times mean-square differentiable, so $\nu = 3/2$ gives a field that is once
-differentiable and no more.
+
+$$\rho_{1/2}(r) = e^{-r/L},$$
+
+**not** $e^{-\sqrt{2}\,r/L}$: under the $\sqrt{2\nu}$ convention above, $\sqrt{2\nu} = 1$ exactly at
+$\nu=1/2$. (An earlier version of this chapter stated the $\sqrt 2$ form; the implementation in
+`matern_correlation` was always correct, and a test now pins the identity.) That is the
+Ornstein–Uhlenbeck / first-order Markov form, continuous but **nowhere** mean-square differentiable.
+As $\nu \to \infty$ it converges to the squared-exponential (Gaussian) form, which is $C^\infty$ —
+analytic sample paths. Intermediate values interpolate: a Matérn field is $\lceil \nu \rceil - 1$
+times mean-square differentiable, so $\nu = 3/2$ gives a field that is once differentiable and no
+more.
 
 ::: {.callout-important}
 ## The range convention is not universal — $L$ means one specific thing here
-This implementation uses the $\sqrt{2\nu}$ scaling shown above, so at $\nu = 3/2$ the correlation at
-$r = L$ is $(1+\sqrt{3})e^{-\sqrt{3}} = 0.483$. Other conventions are in wide use and are not
-interchangeable: @lindgren2011explicit scale by $\sqrt{8\nu}$ so that $\rho$ is approximately the
-distance at which correlation falls to $0.1$, and a third convention parameterises by $\kappa$ with no
-$\nu$-dependent factor at all. A range quoted under one convention is a different distance under
-another. The values in this twin ($L = 12$ km for the water-table anomaly, $L = 8$ km for soil
-moisture) are stated in the $\sqrt{2\nu}$ convention and must be converted before comparison with
-published ranges.
+This implementation uses the $\sqrt{2\nu}$ scaling shown above (`RANGE_CONVENTION` in
+`src/models/observability.py`), so at $\nu = 3/2$ the correlation at $r = L$ is
+$(1+\sqrt{3})e^{-\sqrt{3}} = 0.483$. Other conventions are in wide use and are not interchangeable:
+@lindgren2011explicit scale by $\sqrt{8\nu}$ so that the range is approximately the distance at which
+correlation falls to $0.1$ — under that convention the same field has range $2L$ — and a third
+convention parameterises by $\kappa$ with no $\nu$-dependent factor at all. **A range quoted under one
+convention is a different distance under another**, so no published range may be compared with a
+value here without conversion (`convert_matern_range`), and every calibration artifact records the
+convention verbatim. The values in use ($L = 12$ km for the water-table-head anomaly, $L = 8$ km for
+soil moisture) are stated in the $\sqrt{2\nu}$ convention.
 :::
 
 ### Why $\nu$ is the parameter that matters, and the one hardest to pin down
@@ -177,9 +319,17 @@ two can compensate for one another while $\nu$ cannot be compensated at all.
 
 That importance is in tension with identifiability. Under fixed-domain (infill) asymptotics —
 observations accumulating within a bounded region, which is the regime of a fixed monitoring network —
-@zhang2004inconsistent proves that $\sigma^2$ and $L$ are **not** separately consistently estimable at
-any sampling density. What is consistently estimable, for known $\nu$, is the microergodic combination
-$\sigma^2/L^{2\nu}$. Two consequences follow directly and both apply here:
+@zhang2004inconsistent proves that $\sigma^2$ and the range are **not** separately consistently
+estimable at any sampling density. What is consistently estimable, for known $\nu$, is a
+*microergodic* combination. Written in this chapter's convention that combination is
+
+$$\sigma^2\,\kappa^{2\nu}, \qquad \kappa = \frac{\sqrt{2\nu}}{L},$$
+
+which is `microergodic_parameter()` in the code. Writing it as a bare $\sigma^2/L^{2\nu}$ — as an
+earlier version of this section did — drops the $(2\nu)^{\nu}$ factor and is convention-dependent:
+harmless when comparing two fits at the *same* $\nu$, wrong as soon as $\nu$ varies, which is exactly
+what a profile over $\nu$ does. Note also that the quantity's units depend on $\nu$, so its value is
+not comparable across rows of a $\nu$ profile at all. Two consequences follow:
 
 1. Reporting $\sigma$ and $L$ as independently calibrated quantities overstates what the data
    determine. Only their combination is identified, and that combination is indexed by $\nu$.
@@ -196,9 +346,9 @@ the correlation at short lags, which a regular grid samples sparsely. In practic
 fixed rather than estimated [@diggle2007modelbased]. The well network available to this twin is
 irregular, which is the favourable case; the estimation has not yet been performed.
 
-### The physical argument, and why the two states should not share a value
+### The physical argument, and why the two states must not share a value
 
-**Water-table anomaly.** Hydraulic head is not an independent random field. Under steady flow it
+**Water-table-head anomaly.** Hydraulic head is not an independent random field. Under steady flow it
 satisfies $\nabla\!\cdot\!(K\nabla h) = 0$, so head is a *filtered* functional of the log-conductivity
 field. Spectral perturbation analysis of this relation
 [@mizell1982spectral; @gelhar1993stochastic; @dagan1989flow; @rubin2003applied] shows the transfer
@@ -207,65 +357,156 @@ spectrum, and the head field is correspondingly smoother. Since log-conductivity
 modelled as exponential ($\nu = 1/2$), the filtering argument places head **above** $\nu = 1/2$. It
 does not place it at the $C^\infty$ limit: where the water table intersects topography at gaining
 streams and at lithologic contacts, the surface has genuine breaks in slope that an analytic field
-cannot represent. A once-differentiable field, $\nu = 3/2$, is consistent with both constraints.
+cannot represent.
 
-**Soil moisture.** The empirical literature points the other way. Field-scale studies summarised by
-@western2002scaling and @vereecken2014soilmoisture find soil-moisture fields organised by rainfall
-forcing, vegetation, microtopography and lateral redistribution, with wetting fronts and
-vegetation/soil-unit boundaries producing sharp transitions; exponential and near-exponential
-variograms are the common fitted forms, and correlation structure varies with wetness state.
-@minasny2005matern likewise recover low smoothness for several soil properties. The evidence
-therefore supports a **rougher** field for $\theta$ than for the water table, closer to
-$\nu \approx 1/2$.
+Read carefully, that argument is **directional**. It brackets $\nu$ away from both ends. It does not
+select $3/2$ over $1$ or $2$, and no post-2000 study establishes a universal hydrogeologic value.
+Note also that the argument is about *steady head in a heterogeneous medium*, whereas the quantity
+the prior is on is the *residual of a fitted regional baseline* — a related but not identical object.
+So:
+
+> **$\nu_h = 3/2$ is a physically plausible central working hypothesis for the water-table-head
+> anomaly, requiring residual-based calibration and sensitivity analysis. It is not a published
+> hydrogeologic constant, and it has not been estimated for Puget Sound.**
+
+The candidate set for calibration is therefore $\nu_h \in \{1.0,\, 1.5,\, 2.0\}$, with $0.5$ retained
+as a rough end-member for comparison (`NU_CANDIDATES`).
+
+**Soil moisture.** The empirical literature points the other way, and more weakly than a single
+number would suggest. @vereecken2014soilmoisture review field-scale soil-moisture spatial structure
+and find it strongly dependent on wetness state, scale, measurement support, depth and season —
+organised by rainfall forcing, vegetation, microtopography and lateral redistribution, with wetting
+fronts and soil-unit boundaries producing sharp transitions; near-exponential variograms are a common
+fitted form. @minasny2005matern recover low Matérn smoothness (roughly $0.25$–$0.50$) for several
+**measured soil properties** — which is evidence that soil variables are Matérn-rough, *not* a
+determination of $\nu$ for monthly Puget Sound soil moisture, and it must not be cited as if it were.
+@western2002scaling is a pre-2001-rooted review retained for scaling context only, not for a value.
+
+The defensible statement is that soil moisture is expected to be **rougher** than the water-table
+residual, with $0.5$–$1$ the literature-motivated candidate region — and that **no single value,
+including $0.5$, is established**. Candidate set: $\nu_\theta \in \{0.5,\, 1.0,\, 1.5\}$.
 
 ::: {.callout-warning}
-## The twin currently uses one $\nu$ for both states, and only one of them is argued for
-`GaussianPrior` defaults to $\nu = 3/2$ and both the groundwater and soil-moisture priors are
-constructed with that default. The filtering argument above supports $\nu = 3/2$ for the water-table
-anomaly. It does **not** support the same value for soil moisture, for which the cited field
-literature indicates lower smoothness. Using a single value is a convenience of implementation, not a
-result. Treat the soil-moisture $\nu$ as an open parameter, and note that the state-dependent
-correlation *times* already encoded in `TEMPORAL_TAU_DAYS` (5 days for soil moisture, 120 days for
-groundwater) are the temporal analogue of exactly this distinction — the spatial axis has not yet been
-given the same treatment.
+## What is in the code today, and what changed in this audit
+`GaussianPrior` still defaults to $\nu = 3/2$, and both states are still *evaluated* at that value,
+so no production number has moved. What changed is that the two states can no longer silently share
+it. `PRIOR_HYPERPARAMETERS` in `src/models/observability.py` now holds a separate, explicitly
+labelled entry per state:
+
+- **water-table-head anomaly**, $\nu = 1.5$ — status `working_hypothesis`;
+- **soil-moisture anomaly**, $\nu = 1.5$ — status `inherited_default`, i.e. in use because a shared
+  default put it there and **not supported** by the cited literature.
+
+`prior_for_state()` is the constructor that reads them, and a test asserts the two can carry
+different $\nu$. Changing the soil-moisture default would move production products, so it is a
+separately reported scientific change to be made *after* the calibration, with before/after numbers —
+not a side effect of a terminology audit. The state-dependent correlation *times* in
+`TEMPORAL_TAU_DAYS` (5 days, 120 days) are the temporal analogue of the same distinction, and they
+too are now labelled provisional rather than measured (#205).
 :::
+
+### $\sigma$ and $L$ are hyperparameters, not measured constants
+
+An earlier version of [the evaluation chapter](05-state-evaluation.qmd) described the correlation
+lengths and prior variances as "physical inputs, not fits". That is too strong in both directions.
+They are **prior hyperparameters**: informed by physics and by literature, but ultimately to be
+calibrated and diagnosed from the twin's own residuals and held-out observations. $L_\text{GWL} = 12$
+km and $L_\text{SM} = 8$ km are provisional current values, not measured physical constants, and per
+@zhang2004inconsistent they are not even separately identifiable from an infill network — only the
+microergodic combination is. They are preserved as-is pending the calibration below.
 
 ### Sensitivity: how much does the choice change
 
-Comparing $\nu = 3/2$ against $\nu = 1$ at fixed $\sigma$ and $L$, the maximum absolute difference in
-correlation is $0.054$, attained near $r \approx 0.57L$. The distance at which correlation falls to
-$0.5$ contracts by $8.2\%$; at $0.2$ it contracts by $1.7\%$; at $0.05$ it expands by $3.1\%$. These
-differences are scale-invariant — identical at $L = 12$, $8$ and $2$ km. The choice between adjacent
-smoothness values is therefore a second-order effect on the correlation itself, and matters mainly
-through the identifiability route above, where $\nu$ enters as an exponent, and through the
-differentiability of the resulting analysis field.
+Comparing $\nu = 3/2$ against $\nu = 1$ **at fixed $\sigma$ and $L$**, the maximum absolute difference
+in correlation is $0.054$, attained near $r \approx 0.58L$. Moving from $\nu=3/2$ to $\nu=1$, the
+distance at which correlation falls to $0.5$ contracts by $8.3\%$; at $0.2$ it contracts by $1.6\%$; at
+$0.05$ it expands by $3.2\%$. These differences are scale-invariant — identical at $L = 12$, $8$ and
+$2$ km.
 
-### Constraint imposed by the numerical representation
+That comparison is the *wrong* one for model selection, and is quoted here only to show how small the
+kernel-shape effect is in isolation. Holding $\sigma$ and $L$ fixed while $\nu$ varies compares two
+arbitrary points, not two models: $\nu$ trades directly against range and variance. In the
+calibration harness's own synthetic recovery run, refitting at each candidate moves the fitted range
+from 29 km at $\nu=0.5$ to 12 km at $\nu=2$ for one and the same field — a factor of 2.3, far larger
+than the fixed-parameter kernel difference above. Every candidate $\nu$ must therefore carry its own
+re-estimated $(\sigma, L, \tau^2)$.
 
-The smoothness that can be represented is not independent of how the prior is carried.
+### Constraint imposed by the numerical representation — stated precisely
+
 @lindgren2011explicit show that a Matérn field is the stationary solution of
 
 $$\tau\,(\kappa^2 - \Delta)^{\alpha/2} x(u) = \mathcal{W}(u), \qquad \nu = \alpha - d/2,$$
 
 and that the corresponding Gaussian Markov random field has a **sparse** precision matrix. In two
-dimensions $\nu = \alpha - 1$, and a local (sparse) precision exists only for integer $\alpha$ — hence
-only for $\nu \in \{1, 2, \dots\}$. **There is no sparse GMRF precision at $\nu = 3/2$.** Adopting a
-GMRF/SPDE representation for scalability therefore forces a change of statistical model, whereas a
-representation that applies the covariance directly carries any $\nu$ unchanged. The methodological
-position taken here is that the statistical model is chosen on physical and statistical grounds and
-the numerical representation is then made to serve it, not the reverse.
+dimensions $\nu = \alpha - 1$, and the classical *local* Markov construction — the straightforward
+sparse formulation, obtained by repeatedly applying a local operator — exists only for integer
+$\alpha$, hence only for $\nu \in \{1, 2, \dots\}$. The `SparseMaternPrior` prototype benchmarked in
+`docs/reviews/prior-operator-benchmark.md` indeed changes $\nu = 1.5 \to 1$ to obtain it, and that is
+a change of statistical model, not an implementation detail.
+
+The blanket claim that SPDE/GMRF methods therefore *cannot* represent $\nu = 3/2$ is **false** and has
+been removed. @bolin2020rational construct rational approximations of the fractional operator
+$(\kappa^2-\Delta)^{\alpha/2}$ for general, non-integer smoothness, with computable error bounds,
+retaining sparse structure at the cost of a few extra factors. So the honest statement separates two
+things:
+
+- **the specific sparse local implementation** currently prototyped changes the model (integer $\nu$
+  only), and any benchmark against it must report that as a confound, not a rounding;
+- **the SPDE literature as a whole** does not imply that arbitrary smoothness is unavailable at scale.
+
+This is a correction to a scientific claim and an architectural option — not an instruction to
+implement a rational SPDE now. The methodological position stands unchanged and is now better
+supported: the statistical model is chosen on physical and statistical grounds, and the numerical
+representation is then made to serve it. The production estimator never needs a dense $n\times n$
+covariance in any case; it needs $\mathrm{diag}(B)$, $BG^\top$ and $GBG^\top$, and the operator-form
+work for those is #154/#163. **The solver must not choose the science** — whether $B$ is carried by
+direct kernel evaluation, an FFT, an SPDE precision, or an ensemble covariance is independent of
+which $(\sigma, L, \nu, \text{barriers})$ is right.
+
+### The calibration experiment that is supposed to settle this
+
+`src/models/prior_calibration.py` and `scripts/calibrate_spatial_prior.py` implement the smallest
+reproducible analysis that would replace the labels above with estimates (#192):
+
+1. take **spatially held-out** residuals from the baseline — never the raw field;
+2. screen wells by observation semantic first, so only `water_table` sites enter a water-table prior;
+3. profile over $\nu \in \{0.5, 1, 1.5, 2\}$ (groundwater) and $\{0.5, 1, 1.5\}$ (soil moisture);
+4. **re-estimate $\sigma$, $L$ and the nugget at every fixed $\nu$** by REML, multi-start;
+5. report the whole profile objective, not a winning point estimate;
+6. score each candidate by spatial-block holdout: predictive log score, CRPS, RMSE, 90%/50% interval
+   coverage, and the mean and sd of the standardized residuals;
+7. stratify by hydrogeologic domain — and, for soil moisture, by wet/dry season — where $n$ permits.
+
+Output is a version-controlled JSON artifact carrying state, transform, candidate $\nu$, fitted
+$\sigma$, fitted $L$, nugget, REML objective, CV metrics, sample count, support/depth definition,
+season/domain and the exact range convention. This chapter is meant to *cite that artifact* rather
+than hardcode values.
+
+**It has not been run on real data, because the residuals do not exist in this repository yet.** The
+committed well fixture is synthetic and four sites deep; the real NWIS pull is not version-controlled.
+What has been verified is the harness: against a Matérn field with known $(\sigma, L, \nu, \tau^2)$ it
+recovers $\sigma$ and $L$ to within 9% and the microergodic combination to within 6%, its holdout
+intervals are calibrated (90% coverage 0.90, standardized-residual sd 0.97), and — the result that
+matters most for this chapter — the profile over $\nu$ is **flat**: the four candidates span 0.025
+nats of holdout log score, with the winner leading the runner-up by 0.004 nats, on 220 points. On a
+network this size, $\nu$ is not going to be determined; the deliverable is an honest profile and a
+sensitivity statement, not a number.
 
 ### Status
 
-- $\nu = 3/2$ for the water-table anomaly: **argued** from the log-$K$-to-head filtering result, and
-  bounded away from the $C^\infty$ limit by stream and contact discontinuities. Not yet estimated.
-- $\nu = 3/2$ for soil moisture: **inherited from the default, and not supported** by the cited field
-  literature, which indicates a rougher field.
-- $\sigma$ and $L$: only the combination $\sigma^2/L^{2\nu}$ is identifiable from an infill network
-  [@zhang2004inconsistent]; the separate values in use are prior specifications, not measurements.
-- Outstanding: REML estimation of $(\sigma, L, \nu)$ per state from the irregular well and SNOTEL
-  records, following @minasny2005matern, reported as a profile likelihood in $\nu$ so that the
-  identifiability limits are visible rather than hidden inside a point estimate.
+- $\nu = 3/2$ for the water-table-head anomaly: **physically plausible central working hypothesis**,
+  argued directionally from the log-$K$-to-head filtering result and bounded away from the $C^\infty$
+  limit by stream and contact discontinuities. Not established by literature; not estimated here.
+- $\nu = 3/2$ for soil moisture: **inherited from the shared default and not supported** by the cited
+  field literature, which indicates a rougher, strongly state- and scale-dependent field. Now
+  separately configurable; the value is left in place so no product moves silently.
+- $\sigma$ and $L$: **prior hyperparameters**, provisional. Only the microergodic combination
+  $\sigma^2\kappa^{2\nu}$ is identifiable from an infill network [@zhang2004inconsistent].
+- The nugget: not currently carried at all in `GaussianPrior`; the calibration harness estimates one,
+  and reconciling that is open work.
+- Outstanding: run the residual-based profile on real out-of-fold residuals, per state, stratified by
+  hydrogeologic domain and (for $\theta$) by season, and let the artifact — not this prose — carry the
+  numbers.
 
 ## Worked inversion: a checkerboard resolution test, network by network
 
@@ -327,6 +568,33 @@ part converts to a **soil-moisture** change via the vadose sensitivity $S_\theta
 weighted fusion above, with its posterior $\sigma$ propagated from the inversion covariance. dv/v is
 the only stream that constrains *both* states and the only *volume* measurement, so it is what ties the
 point networks together between stations.
+
+::: {.callout-important}
+## dv/v is an observation operator, not a state with its own Matérn prior
+Ambient-noise $\delta v/v$ is genuinely sensitive to hydrologic change
+[@clements2018tracking; @zhang2023oklahoma; @zhang2025oklahomamapping; @lu2025deepsoilmoisture], and a
+decadal survey shows the near-surface velocity response tracking hydrological variation over years
+[@feng2026utah]. But the same measurement mixes soil moisture, groundwater/pore pressure, surface
+loading, temperature and the depth-dependent elastic response of the medium, and it does so through a
+band-dependent depth kernel.
+
+That is a statement about an **operator**, not about a state. Assigning $\delta v/v$ its own
+independent spatial Matérn prior would double-count structure that the hydrologic states already
+carry, and would let the seismic field drift away from the water it is supposed to be measuring. Its
+predicted covariance must instead *follow* from the hydrologic/mechanical ensemble pushed through the
+forward operator, plus observation and model error:
+$\mathrm{Cov}(\hat d) = H B H^\top + R$. This is the same requirement as #198's "one operator for
+forward prediction and inversion", read from the covariance side.
+
+Two honesty notes. First, the operator in production is the pair of scalars
+$\delta v/v = k_{sat}\Delta h$ and $S_\theta\Delta\theta$ — a **local linearization** of the
+Hertz–Mindlin, hysteresis-bearing chain of
+[Hydromechanics](03b-physics-hydromechanics.qmd), and a temporary fidelity mode, not first-principles
+physics; [the nonlinear-operator section](#linear-versus-nonlinear-observation-operators-and-where-a-particle-filter-belongs)
+below is where that is unpacked. Second, the split at the water table means the *same* datum's two
+bands inform two states whose errors are correlated through the split depth itself — a coupling the
+current diagonal $R$ does not represent (#164/#168).
+:::
 
 ## The uncertainty budget — static / dynamic / downscaling / observability
 
@@ -425,12 +693,21 @@ linearization.
 
 ### Wells and soil-moisture probes: linear in the state, linear in the noise
 
-NWIS wells and SNOTEL/SCAN/USCRN probes observe the state variable the twin actually carries — head
-(→ water-table depth) and volumetric soil moisture $\theta$ — through a footprint operator $g_i$ that is
-a fixed weighted average (`point_footprint`). $g_i^\top m$ is linear in $m$ by construction, and the
-instrument noise enters additively. No physical model stands between the sensor and the state it
-measures, so `blue_update`'s closed-form Gaussian solution is exact for these two families, not merely
-convenient.
+NWIS wells and SNOTEL/SCAN/USCRN probes observe the state variable the twin actually carries —
+water-table head $h_{wt}$ (equivalently, up to sign, depth to water) and volumetric soil moisture
+$\theta$ — through a footprint operator $g_i$ that is a fixed weighted average (`point_footprint`).
+$g_i^\top m$ is linear in $m$ by construction, and the instrument noise enters additively. No physical
+model stands between the sensor and the state it measures, so `blue_update`'s closed-form Gaussian
+solution is exact for these two families, not merely convenient.
+
+The exactness is **conditional on the well sampling the state being estimated**. A well screened in a
+confined, semiconfined, perched or artesian interval reports the hydraulic head of that interval, and
+using it in the shallow $h_{wt}$ point operator does not add noise — it pins the wrong field. Only
+sites classified `measurement_target == water_table`
+([above](#which-wells-actually-observe-the-water-table)) may take this route;
+`water_table_point_footprint()` raises for the others, and `unknown` sites are flagged rather than
+assumed. A deep or confined well remains a valuable observation and needs a depth/aquifer operator or
+its own hydraulic-head state — that is #189/#198 work, not a reason to discard the datum.
 
 ### dv/v: linear *today*, because the operational relation is a linearization of a nonlinear chain
 
@@ -541,10 +818,10 @@ planned): first, the textbook construction is exact only when $x_{\rm lin}$'s *f
 itself linear-Gaussian (true for Rung-2, an ensemble approximation for Rung-3) — so the linear sub-filter
 here is, honestly, a **conditional EnKF**, not a conditional Kalman filter, once Rung-3 is in the loop;
 that is a controlled approximation, not the exact marginalization the name promises. Second, $x_{\rm nl}$
-must be **localized**, not sampled jointly over the whole domain: reuse the terrain-aware `region_id`
-blocking already built for $B$ (`GaussianPrior`, issue #163) to run independent (or weakly
-prior-coupled) particle sets per hydrologic region rather than one joint particle over millions of
-cells — the same dimensionality argument that rules out a domain-wide particle filter applies to
+must be **localized**, not sampled jointly over the whole domain: reuse the `region_id`/`barrier_id`
+localization blocking already built for $B$ (`GaussianPrior`, issue #163) to run independent (or
+weakly prior-coupled) particle sets per hydrogeologic region rather than one joint particle over
+millions of cells — the same dimensionality argument that rules out a domain-wide particle filter applies to
 $x_{\rm nl}$ alone unless it is blocked this way, even though $x_{\rm nl}$ is far lower-dimensional than
 the full state.
 
