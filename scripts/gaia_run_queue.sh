@@ -51,6 +51,7 @@ set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-$HOME/gwl-space-time-smooth}"
 LOG_DIR="$REPO_DIR/.gaia-runs"
+GAIA_RUN_TS="$(date -u +%Y%m%dT%H%M%SZ)"   # identifies THIS invocation, across all its batches
 COPILOT_REVIEWER="copilot-pull-request-reviewer[bot]"   # verify this login on your org once by hand
 REVIEW_WAIT_TRIES=40      # 40 * 30s = 20 min max wait for each Copilot pass
 REVIEW_WAIT_INTERVAL=30
@@ -87,6 +88,20 @@ GAIA_RUN_COST=0                                   # accumulated across the whole
 # is never the sole judge) made mechanical instead of aspirational.
 GAIA_SCIENCE_GATE="${GAIA_SCIENCE_GATE:-1}"       # 0 disables plan + panel (not recommended)
 GAIA_PLAN_REVISIONS="${GAIA_PLAN_REVISIONS:-1}"   # plan revisions allowed after a panel block
+# WHAT a block means, and WHO it wakes. The first supervised run of this gate (#186) had all
+# three personas return `revise`, nobody vote `block`, and the batch stop anyway on twelve
+# `critical` concerns -- eleven of which were real science that belonged inside the milestone.
+# A gate that fires on every deep review is a pager, not a gate. So a concern now declares a
+# SCOPE as well as a severity, and only a critical concern that reaches PAST this issue stops
+# the work; the rest are deferred into the implementation prompt. gaia_panel.py owns the
+# semantics. An unrecognised value here falls back to the default rather than opening the gate.
+export GAIA_PANEL_BLOCK_ON="${GAIA_PANEL_BLOCK_ON:-breaking,wrong-physics}"
+# And a block parks ONE ISSUE, not the batch: its siblings are unrelated work that happens to
+# share a milestone, and stopping all of them multiplies one contested plan into an idle run
+# and a human called mid-batch. Parked issues are collected and reported once, at the end.
+GAIA_PANEL_CHAIR="${GAIA_PANEL_CHAIR:-1}"         # 0 skips the panel summary (verdicts still render)
+GAIA_REVISIT_PARKED="${GAIA_REVISIT_PARKED:-1}"   # re-plan parked issues once, after the batch's
+                                                  # own work has landed and can inform them
 # Planning gets its OWN budget. It first ran on GAIA_AUX_TIMEOUT, which was sized for a
 # short auditor verdict, and the first supervised run died at exactly 1205s against that
 # 1200s cap having produced nothing. Planning reads the issue AND the code it would touch;
@@ -165,6 +180,8 @@ blast radius ${GAIA_MAX_FILES} files / ${GAIA_MAX_DIFF_LINES} lines; \
 cost ceiling $([ "$GAIA_MAX_COST_USD" = 0 ] && echo 'NONE (set GAIA_MAX_COST_USD)' || echo "\$${GAIA_MAX_COST_USD}"); \
 git+gh denied to every agent"
 echo "science gate: $([ "$GAIA_SCIENCE_GATE" = 1 ] && echo 'ON (plan pre-registered, routed read-only panel gates implementation)' || echo 'OFF'); \
+blocks on critical + {${GAIA_PANEL_BLOCK_ON}}, everything else is deferred to the implementer; \
+a block parks THAT ISSUE and the batch continues$([ "$GAIA_REVISIT_PARKED" = 1 ] && echo ', re-planned once after its siblings land' || echo ''); \
 gate-integrity: $([ "$GAIA_GATE_INTEGRITY" = 1 ] && echo ON || echo OFF); \
 stop after ${GAIA_FAIL_STRIKES} identical failures"
 
@@ -449,8 +466,23 @@ record_gate_block() {
 science_gate() {
   local number="$1" title="$2" labels="$3" milestone="$4" logfile="$5"
   local dir errs panel decision rev=0 plan_rc gate_outcome
+  # Every round writes into its OWN directory and the previous one is handed back to the
+  # panel. A review round that cannot see the round before it is not an iteration: each panel
+  # call is a fresh `claude -p` with no memory, so it re-derives from whatever plan is in
+  # front of it, free to drop what it said last time and object to something else instead.
+  # Rounds then differ without converging, and the revision budget buys noise.
+  #
+  # `prev_round` starts at the PREVIOUS PASS's directory on a revisit, so an issue parked in
+  # pass 1 and re-planned after its siblings landed is still answering the same panel rather
+  # than meeting a new one.
+  local round=1 round_dir prev_round="${GAIA_PREV_PANEL_DIR:-}"
+  : > "$DEFERRED_FILE"
   [ "$GAIA_SCIENCE_GATE" = "1" ] || { : > "$PLAN_FILE"; : > "$BRIEF_FILE"; return 0; }
-  dir="$LOG_DIR/plan-${number}-${ts}"; mkdir -p "$dir"
+  # The revisit pass re-plans the same issue in the same batch, so it must not write over the
+  # first pass's plan, verdicts and transcripts. Those are the record of WHY it was parked --
+  # and comparing the two passes is the only way to see whether landed sibling work actually
+  # answered the panel or the planner just got a second roll of the dice.
+  dir="$LOG_DIR/plan-${number}-${ts}${GAIA_PASS_SUFFIX:-}"; mkdir -p "$dir"
 
   # 1. Prior work. No model call: GitHub graph + our own ledger and corpus. This is the fix
   #    for an orchestrator that used to be told three lines and knew nothing about the four
@@ -460,6 +492,7 @@ science_gate() {
   echo "  brief: $(wc -l < "$BRIEF_FILE") lines of prior-work context" | tee -a "$logfile"
 
   while : ; do
+    round_dir="$dir/r${round}"; mkdir -p "$round_dir"
     # 2. Pre-registration, from a READ-ONLY session -- it cannot touch the tree even if it
     #    decides to, because Edit/Write/NotebookEdit and every vcs mutation are denied.
     echo "  pre-registering a plan for #${number} (read-only)..." | tee -a "$logfile"
@@ -475,6 +508,7 @@ step; a planner that reviews itself first only spends the budget twice.
 
 Prior work already on the record -- do not redo any of it:
 $(cat "$BRIEF_FILE")
+${GAIA_LANDED_CONTEXT:-}
 ${PANEL_FEEDBACK:-}
 
 Read the issue and the code you would touch, then emit the plan. Closure does NOT require a
@@ -495,7 +529,7 @@ Finish your reply with EXACTLY one fenced json block and nothing after it:
         --max-turns "$GAIA_PLAN_MAX_TURNS" \
         --disallowed-tools "${GAIA_READONLY_DENY[@]}" \
         --output-format stream-json --verbose 2>>"$logfile" \
-        > "$dir/plan.raw.jsonl" || plan_rc=$?
+        > "$round_dir/plan.raw.jsonl" || plan_rc=$?
     # A timeout is not a malformed plan, and reporting them identically cost a whole
     # diagnosis cycle on the first supervised run. 124 is timeout's TERM, 137 its KILL.
     if [ "$plan_rc" -eq 124 ] || [ "$plan_rc" -eq 137 ]; then
@@ -508,47 +542,105 @@ Raise GAIA_PLAN_TIMEOUT, or narrow the issue." | tee -a "$logfile"
     # mode, so partial work was unrecoverable. Fails CLOSED either way -- an unparseable plan
     # is not a plan -- but now it says WHICH failure this was.
     if ! errs="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_plan.py" \
-          --from-stream "$dir/plan.raw.jsonl" --out "$PLAN_FILE" \
+          --from-stream "$round_dir/plan.raw.jsonl" --out "$PLAN_FILE" \
           --expect "$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --expect-for gaia-study-designer)" 2>&1)"; then
       { echo "  !!! #${number}: no usable pre-registered plan:"; echo "$errs" | sed 's/^/  | /'; } | tee -a "$logfile"
       gate_outcome="plan-timeout"
       [ "$plan_rc" -eq 0 ] && gate_outcome="plan-invalid"
-      record_gate_block "$number" "$title" "$dir/plan.raw.jsonl" "$gate_outcome" "$logfile"
+      record_gate_block "$number" "$title" "$round_dir/plan.raw.jsonl" "$gate_outcome" "$logfile"
       return 1
     fi
     python3 "$REPO_DIR/scripts/gaia-launch/gaia_plan.py" --render "$PLAN_FILE" --issue "$number" \
-      > "$dir/plan.md" 2>>"$logfile"
+      > "$round_dir/plan.md" 2>>"$logfile"
 
     # 3. The panel: routed from the issue's own labels and milestone, auditor always seated.
     panel="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --route \
       --labels "$labels" --milestone "$milestone" --plan "$PLAN_FILE" 2>>"$logfile")"
     echo "  science panel for #${number}: ${panel}" | tee -a "$logfile"
 
-    local vfiles=()
+    local vfiles=() prior_block
     for persona in $panel; do
+      # THE ITERATION, handed back. A persona reviewing round 2 gets its OWN round-1 verdict
+      # and the diff of what the planner changed in response -- so it adjudicates rather than
+      # re-reviews. Only its own: it judges its own discipline, and another persona's concerns
+      # are not its to resolve or to inherit.
+      prior_block=""
+      if [ -n "$prev_round" ] && [ -s "$prev_round/${persona}.json" ]; then
+        prior_block="
+YOU HAVE REVIEWED THIS PLAN BEFORE. This is not a fresh review -- it is an adjudication, and
+you must rule on your own previous concerns before raising anything new.
+
+Your previous verdict, verbatim:
+$(jq -r '"verdict: " + .verdict, ((.concerns // [])[] | "- [\(.severity)/\(.scope)] \(.claim)")' \
+     "$prev_round/${persona}.json" 2>/dev/null || true)
+
+What the planner CHANGED in response (unified diff of the plan, old -> new):
+$(diff -u "$prev_round/plan.md" "$round_dir/plan.md" 2>/dev/null | sed -n '1,200p' || true)
+
+Rules for this round, which exist because a panel that starts fresh each time never converges:
+  - Every concern you raised above must appear in \"prior_concerns\" with a status.
+    \"resolved\" if the revision answers it; \"unresolved\" if it still stands (and say what is
+    STILL wrong, not what was wrong); \"withdrawn\" if you no longer believe it -- withdrawing
+    is a legitimate and useful move, not a loss.
+  - Raise a NEW concern in \"concerns\" only if the CHANGES introduced it, or if it is a
+    critical, breaking or wrong-physics problem you genuinely missed. Do not go looking for
+    fresh objections in parts of the plan that did not change: moving the goalposts costs the
+    project another full planning cycle and settles nothing.
+  - If your prior concerns are all resolved or withdrawn and the changes introduced nothing
+    new, say approve. That is the outcome this process is FOR."
+      fi
       timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" \
         claude -p "Use the ${persona} agent to review this PRE-REGISTERED PLAN for GitHub issue
 #${number} (\"${title}\") in ${REPO_DIR}. No code has been written yet -- this is the cheapest
 moment to redirect a wrong approach, which is why you are being asked now.
 
-$(cat "$dir/plan.md")
+$(cat "$round_dir/plan.md")
+${prior_block}
+
+WHERE THIS ISSUE SITS. It is one milestone of a long project, not a paper. Judge the plan as
+a step, against what the project has already settled and already admits it has not:
+$(cat "$BRIEF_FILE" 2>/dev/null)
+${GAIA_LANDED_CONTEXT:-}
+
+Already on the record as known and accepted -- restating one of these is not a finding:
+$(sed -n '1,60p' "$REPO_DIR/docs/limitations.md" 2>/dev/null | sed 's/^/  /')
 
 Judge it on the merits of YOUR discipline only; another persona covers the rest. Ground the
 science over the implementation: if the plan would produce a green test suite while answering
 the wrong physical question, say so. Every concern must name the concrete test that would
 settle it -- a concern with no decisive test is an opinion, and opinions do not block work.
 
-Finish your reply with EXACTLY one fenced json block and nothing after it:
+SEVERITY and SCOPE are different axes and you must set both. Severity is how wrong the
+concern is. Scope is how far its consequences reach:
+  \"breaking\"      - this plan fixes an interface, artifact name, unit convention or
+                    assumption that OTHER issues will build on; wrong here forces rework
+                    elsewhere later.
+  \"wrong-physics\" - the result would be physically or mathematically incorrect as stated,
+                    not merely under-validated, imprecise, or short of the ideal method.
+  \"in-milestone\"  - real, but its correction lives inside this issue's own deliverable or
+                    in a follow-up that can be filed and scheduled.
+Only a critical concern scoped breaking or wrong-physics stops the work. Everything else is
+DEFERRED, not dropped: it is published on the issue and handed to the implementer as a
+must-address item. So do not inflate a scope to be heard -- an in-milestone concern is read
+and acted on, and inflating it costs the project a stopped batch for nothing. Equally, do not
+soften one: if this plan really would poison the rest of the project, say breaking and mean it.
+
+Finish your reply with EXACTLY one fenced json block and nothing after it. Omit
+\"prior_concerns\" only if you were not shown a previous verdict of your own above:
 \`\`\`json
 {\"verdict\": \"approve\" | \"revise\" | \"block\",
+ \"prior_concerns\": [{\"claim\": \"<short restatement of YOUR earlier concern>\",
+                     \"status\": \"resolved\"|\"unresolved\"|\"withdrawn\",
+                     \"why\": \"<what in the revision settled it, or what still stands>\"}],
  \"concerns\": [{\"severity\": \"critical\"|\"major\"|\"minor\",
+               \"scope\": \"breaking\"|\"wrong-physics\"|\"in-milestone\",
                \"claim\": \"<what is wrong, concretely>\",
                \"decisive_test\": \"<the check that would settle it>\"}]}
 \`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions \
           --max-turns "$GAIA_AUX_MAX_TURNS" \
           --disallowed-tools "${GAIA_READONLY_DENY[@]}" \
           --output-format stream-json --verbose 2>>"$logfile" \
-        > "$dir/${persona}.raw.jsonl" || : > "$dir/${persona}.raw.jsonl"
+        > "$round_dir/${persona}.raw.jsonl" || : > "$round_dir/${persona}.raw.jsonl"
       # VERIFY the persona was actually dispatched. "Use the gaia-auditor agent" is prose;
       # whether the session delegated -- and therefore whether that persona's system prompt,
       # tool grant and model tier were ever loaded -- is a fact in the transcript. A verdict
@@ -558,36 +650,145 @@ Finish your reply with EXACTLY one fenced json block and nothing after it:
       # as gaia:<name>. gaia_panel.py owns that mapping so it lives in exactly one place.
       expect_type="$(python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --expect-for "$persona")"
       python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" \
-        --from-stream "$dir/${persona}.raw.jsonl" --expect "$expect_type" \
-        --out "$dir/${persona}.json" >> "$logfile" 2>&1 \
+        --from-stream "$round_dir/${persona}.raw.jsonl" --expect "$expect_type" \
+        --out "$round_dir/${persona}.json" >> "$logfile" 2>&1 \
         || echo "  !!! ${persona} was NOT dispatched as a subagent for #${number}; its verdict is void" | tee -a "$logfile"
-      vfiles+=("$dir/${persona}.json")
+      vfiles+=("$round_dir/${persona}.json")
     done
 
     python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --aggregate "${vfiles[@]}" \
-      --json "$dir/panel.json" --render > "$dir/panel.md" 2>>"$logfile" || true
+      --json "$round_dir/panel.json" --render > "$round_dir/panel.md" 2>>"$logfile" || true
+    # $dir/panel.json is always the LATEST round -- what record_parked reports and what the
+    # corpus records. The per-round copies under r*/ are the trail of how it got there.
+    cp "$round_dir/panel.json" "$dir/panel.json" 2>/dev/null || true
+
+    # 3b. THE CHAIR. Individual verdicts are what the gate acts on; they are not what a
+    # scientist reads. Three reviewers filing forty-one separately-scoped concerns is a
+    # database, and the questions a person actually arrives with -- do they agree, where do
+    # they conflict, what has to happen next -- are answerable only by reading all of it.
+    #
+    # So the panel summarises: agreements, disagreements, critical issues, proposed resolution.
+    # The chair is the lab-notebook persona because it is the DOCUMENTER: it has no scientific
+    # stake to add, and its job is to report the scientists faithfully rather than to join
+    # them. It is dispatched only AFTER aggregate() has already fixed the decision, so it
+    # cannot influence the gate -- and this stage never fails closed, because it is a report
+    # about a decision that has already been made. A chair that dies costs prose, nothing more.
+    if [ "$GAIA_PANEL_CHAIR" = "1" ]; then
+      python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --brief "$dir/panel.json" \
+        > "$round_dir/chair-brief.md" 2>>"$logfile" || : > "$round_dir/chair-brief.md"
+      timeout --signal=TERM --kill-after=60 "$GAIA_AUX_TIMEOUT" \
+        claude -p "Use the gaia-lab-notebook agent to write the PANEL SUMMARY for GitHub issue
+#${number} (\"${title}\") in ${REPO_DIR}. A panel of read-only science personas has reviewed a
+pre-registered plan. Their verdicts are final and the gate has already acted on them; you are
+writing the summary a scientist reads INSTEAD OF reading all of it.
+
+You are the chair, which means you REPORT the panel -- you do not join it. Do not introduce a
+scientific concern no reviewer raised, do not re-rank the critical issues, and do not argue
+with a verdict. Where reviewers conflict, say so plainly and attribute it; do not adjudicate.
+
+$(cat "$round_dir/chair-brief.md")
+
+Write for a scientist who will read this and nothing else. Be specific and name names --
+\"the geostatistician and the auditor both object to X, for different reasons\" is useful;
+\"there were several concerns\" is not. Prose and short lists, no headings (they are added
+around you). Finish with EXACTLY one fenced json block and nothing after it:
+\`\`\`json
+{\"agreements\": \"<where reviewers independently converged, and on what; markdown>\",
+ \"disagreements\": \"<where they actually conflict -- differing verdicts, or one reviewer's
+   remedy that another's concern rules out. Attribute each side. Say 'none' if there are none>\",
+ \"proposed_resolution\": \"<what the panel's own concerns imply should happen next, drawn from
+   their decisive tests. If the decision was block, say what a human has to decide>\"}
+\`\`\`" --permission-mode acceptEdits --dangerously-skip-permissions \
+          --max-turns "$GAIA_AUX_MAX_TURNS" \
+          --disallowed-tools "${GAIA_READONLY_DENY[@]}" \
+          --output-format stream-json --verbose 2>>"$logfile" \
+        > "$round_dir/chair.raw.jsonl" || : > "$round_dir/chair.raw.jsonl"
+      python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --synthesis "$dir/panel.json" \
+        --from-chair "$round_dir/chair.raw.jsonl" >> "$logfile" 2>&1 || true
+    fi
+
+    # Re-render AFTER the chair, so panel.md carries the summary and the reviewers' own words.
+    # On any failure the pre-chair render stands: the verdicts must reach the issue even if
+    # the summary of them did not.
+    python3 - "$REPO_DIR/scripts/gaia-launch" "$dir/panel.json" "$dir/panel.md" <<'RENDER' 2>>"$logfile" \
+      || cp "$round_dir/panel.md" "$dir/panel.md" 2>/dev/null || true
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from gaia_panel import render
+open(sys.argv[3], "w", encoding="utf-8").write(render(json.load(open(sys.argv[2], encoding="utf-8"))))
+RENDER
+    cp "$dir/panel.md" "$round_dir/panel.md" 2>/dev/null || true
     decision="$(jq -r '.decision // "block"' "$dir/panel.json" 2>/dev/null)" || decision="block"
-    echo "  panel decision for #${number}: ${decision}" | tee -a "$logfile"
+    echo "  panel decision for #${number} (round ${round}): ${decision}$(jq -r \
+      'if ((.prior_adjudicated // {}) | to_entries | map(.value) | add // 0) > 0
+       then "  [prior: \(.prior_adjudicated.resolved) resolved, \(.prior_adjudicated.unresolved) standing, \(.prior_adjudicated.withdrawn) withdrawn]"
+       else "" end' "$dir/panel.json" 2>/dev/null)" | tee -a "$logfile"
 
     # Publish plan and verdicts to the issue BEFORE implementation. The scientific reasoning
     # is then on the record at the moment it could still have changed the approach, rather
     # than reconstructed afterwards from a diff.
-    gh issue comment "$number" --body "$(cat "$dir/plan.md")
+    gh issue comment "$number" --body "$(cat "$round_dir/plan.md")
 
 $(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan to #${number})" | tee -a "$logfile"
 
+    # Is this the last round for this issue? Two rounds is the whole review budget, so the
+    # answer is yes unless the panel blocked on something a revision is still allowed to
+    # address. Only the last round is recorded: appending every round would file round 1's
+    # concerns and then round 2's ruling on the same concerns as two separate entries, and a
+    # ledger that double-counts its own iterations is worse than no ledger.
+    if [ "$decision" != "block" ] || [ "$rev" -ge "$GAIA_PLAN_REVISIONS" ] \
+       || [ "$(jq -r '.stalemate // false' "$dir/panel.json" 2>/dev/null)" = "true" ]; then
+      # THE STANDING LEDGER. What survives two rounds is not a thing to keep re-litigating per
+      # issue -- it is the project's open scientific disagreement, and it is read later, all at
+      # once, across issues. Without this a deferred concern was posted, handed to the
+      # implementer, and then gone at the end of the run, so the next issue over the same
+      # ground rediscovered it from scratch. Never a gate: a ledger that cannot be written must
+      # not stop a batch the panel already passed.
+      python3 "$REPO_DIR/scripts/gaia-launch/gaia_concerns.py" --append "$dir/panel.json" \
+        --issue "$number" --title "$title" --milestone "${milestone:-}" \
+        --run-ts "$ts" --rounds "$round" >> "$logfile" 2>&1 || true
+    fi
+
+    # Deferred concerns are the panel's real science that did not reach past this issue. They
+    # travel with the plan into the implementation prompt: that is what makes "deferred, not
+    # dropped" true rather than a thing the panel prompt merely claims.
+    jq -r '(.deferred_concerns // [])[] | "- [\(.severity)/\(.scope)] \(.claim)  -> decisive test: \(.decisive_test)  (\(.persona))"' \
+      "$dir/panel.json" > "$DEFERRED_FILE" 2>/dev/null || : > "$DEFERRED_FILE"
+
     [ "$decision" != "block" ] && return 0
+    # A STALEMATE is not a revision cycle. If the panel ruled on its own prior concerns and
+    # resolved or withdrew none of them, the plan and the panel are talking past each other,
+    # and the next round is the same conversation at the same price. Stop and hand it over --
+    # the same reasoning as the three-strikes rule on identical failure signatures.
+    if [ "$(jq -r '.stalemate // false' "$dir/panel.json" 2>/dev/null)" = "true" ]; then
+      echo "  !!! #${number}: STALEMATE -- the panel resolved none of its own prior concerns. \
+Not spending another planning cycle on it." | tee -a "$logfile"
+      add_label "$number" needs-human-decision "$logfile"
+      record_gate_block "$number" "$title" "$round_dir/plan.raw.jsonl" "panel-stalemate" "$logfile"
+      return 1
+    fi
     if [ "$rev" -ge "$GAIA_PLAN_REVISIONS" ]; then
       echo "  !!! science panel blocked #${number} after ${rev} revision(s); not implementing" | tee -a "$logfile"
       add_label "$number" needs-human-decision "$logfile"
-      record_gate_block "$number" "$title" "$dir/plan.raw.jsonl" "panel-block" "$logfile"
+      record_gate_block "$number" "$title" "$round_dir/plan.raw.jsonl" "panel-block" "$logfile"
       return 1
     fi
     rev=$((rev + 1))
+    prev_round="$round_dir"        # the next round adjudicates THIS one
+    round=$((round + 1))
+    # ONLY the blocking concerns come back. Feeding the whole list back is how the first
+    # supervised run turned one contested plan into a bigger one: forty demands answered in a
+    # re-plan is not a redirection, it is scope creep with a review as its excuse. The deferred
+    # concerns are already recorded and already reach the implementer; the planner's job here
+    # is to fix what actually stopped it.
     PANEL_FEEDBACK="
-The science panel BLOCKED your previous plan. Address these before re-planning; do not
-re-submit the same approach with different wording:
-$(jq -r '.verdicts[].concerns[] | "- [\(.severity)] \(.claim)  -> decisive test: \(.decisive_test)"' "$dir/panel.json" 2>/dev/null)"
+The science panel BLOCKED your previous plan on the concerns below -- and ONLY these. Each one
+either breaks something the rest of the project builds on, or is physically wrong. Address
+them; do not re-submit the same approach with different wording:
+$(jq -r '(.blocking_concerns // [])[] | "- [\(.scope)] \(.claim)  -> decisive test: \(.decisive_test)  (\(.persona))"' "$dir/panel.json" 2>/dev/null)
+
+The panel also recorded $(jq -r '(.deferred_concerns // []) | length' "$dir/panel.json" 2>/dev/null) further concerns that do NOT block. They are on the issue and
+they reach the implementer. Do not widen this plan to answer them."
     echo "  revising the plan for #${number} (revision ${rev}/${GAIA_PLAN_REVISIONS})" | tee -a "$logfile"
   done
 }
@@ -770,6 +971,54 @@ report_failure() {
   } | tee -a "$logfile"
 }
 
+# ── The parked ledger ────────────────────────────────────────────────────────
+# A science-gate block used to stop the batch and, in practice, call a human then and there.
+# Now it parks one issue. That only works if the parked ones are impossible to lose, so every
+# park is appended here AND printed once, together, at the end of the run: one review sitting
+# per run instead of one interruption per contested plan.
+#
+# This is an index, not a report. The plan, every persona's verdict, the blocking concerns and
+# their decisive tests are already comments on the issue itself, posted before implementation
+# was ever attempted -- which is where a human should read them.
+GAIA_PARKED_LEDGER="$LOG_DIR/parked-${GAIA_RUN_TS:-run}.md"
+GAIA_RUN_PARKED=()
+
+record_parked() {
+  local logfile="$1"; shift
+  local n pj decision blocking
+  echo "  ── science gate parked $# issue(s) this batch ──" | tee -a "$logfile"
+  for n in "$@"; do
+    GAIA_RUN_PARKED+=("$n")
+    # The newest panel.json for this issue -- which after a revisit is the SECOND pass's, the
+    # one that actually decided. Globbed on the file, not on `plan-${n}-*`: that pattern also
+    # matches the sibling `plan-${n}-<ts>.json` plan file, and `ls -t` would happily hand back
+    # a path with no panel.json under it.
+    pj="$(ls -1t "$LOG_DIR"/plan-"${n}"-*/panel.json 2>/dev/null | head -1)" || pj=""
+    decision="$(jq -r '.decision // "?"' "$pj" 2>/dev/null)" || decision="?"
+    blocking="$(jq -r '(.blocking_concerns // [])[] | "      [\(.scope)] \(.claim)\n        decisive test: \(.decisive_test)"' \
+                  "$pj" 2>/dev/null)" || blocking=""
+    { echo "  #${n} — panel: ${decision}"
+      if [ -n "$blocking" ]; then echo "$blocking"; else
+        echo "      (no blocking concerns recorded — the plan itself never validated; see the log)"
+      fi
+      echo "      gh issue view ${n} --comments   # the plan and the full panel are there"
+    } | tee -a "$logfile"
+    {
+      echo "## #${n} — panel: ${decision}"
+      echo ""
+      if [ -n "$blocking" ]; then
+        sed 's/^      //' <<<"$blocking"
+      else
+        echo "_No blocking concerns recorded — the plan itself never validated (timeout, or it"
+        echo "never met the output contract). This one is a pipeline failure, not a science one._"
+      fi
+      echo ""
+      echo "\`gh issue view ${n} --comments\` · log: \`${logfile}\`"
+      echo ""
+    } >> "$GAIA_PARKED_LEDGER" 2>/dev/null || true
+  done
+}
+
 # Park, never destroy. The predecessor of this function ran `git reset --hard`,
 # `git clean -fd`, `git branch -D` AND `git push origin --delete` on ANY non-zero
 # exit -- including a typo in a gh flag. On 2026-08-17/18 that destroyed 730
@@ -824,6 +1073,23 @@ open_draft_pr() {
   n="$(pr_number_for_branch "$branch")" || n=""
   [ -n "$n" ] && [ "$n" != "null" ] || return 1
   printf '%s' "$n"
+}
+
+# The draft PR's body, rebuilt from the issues that have ACTUALLY committed so far.
+#
+# It used to be written once, from the whole batch, on the theory that a Closes list present
+# from the first commit survives a failed body swap at ready-for-review. That reasoning still
+# holds; what changed is that the batch is no longer all-or-nothing. The science gate now
+# parks a single issue and lets its siblings proceed, so a batch-wide Closes list would close
+# issues nobody worked on the moment the PR merged -- silently, and with a green gate.
+draft_pr_body() {
+  local n
+  printf 'Draft -- the gaia orchestrator is resolving %s (%s), one commit per issue. Marked ready for review once the batch is committed and the local gate (test + check-dois + quarto render) passes.\n\n' \
+    "$numbers_csv" "$readable_key"
+  printf 'Only issues whose work is already on this branch are closed here; anything the science gate parked stays open and is labelled needs-human-decision.\n\n'
+  for n in "${resolved[@]:-}"; do
+    if [ -n "$n" ]; then printf 'Closes #%s\n' "$n"; fi
+  done
 }
 
 # Files this branch changes relative to its merge-base with main.
@@ -1197,6 +1463,19 @@ while IFS= read -r batch_json; do
   any_committed=0
   batch_failed=0
   pr_number=""
+  resolved=()               # issues actually committed onto ${branch}, in landing order
+  parked=()                 # issues whose plan the panel would not pass, after the revisit
+  GAIA_LANDED_CONTEXT=""
+  pass=1
+  work="$numbers"
+
+  # TWO PASSES over the batch. A science-gate block now parks ONE issue and moves on, so the
+  # batch keeps producing; the parked ones come back for a second, better-informed plan once
+  # their siblings have landed on this same branch. That ordering is the point -- issues in a
+  # batch share a milestone, so what #187 just fixed is usually exactly the context #186's
+  # plan was missing, and on the first pass it does not exist yet at any price.
+  while [ -n "${work//[[:space:]]/}" ]; do
+  pending=()                # parked during THIS pass; candidates for the revisit
   while IFS= read -r number; do
     [ -z "$number" ] && continue
     if [ "$GAIA_STOP" -ne 0 ]; then
@@ -1221,14 +1500,32 @@ while IFS= read -r batch_json; do
 
     # THE SCIENCE GATE, before any editing agent runs. Blocks land here, where redirecting
     # costs one read-only planning pass rather than a discarded implementation.
-    PLAN_FILE="$LOG_DIR/plan-${number}-${ts}.json"
-    BRIEF_FILE="$LOG_DIR/brief-${number}-${ts}.md"
+    GAIA_PASS_SUFFIX=""
+    GAIA_PREV_PANEL_DIR=""
+    if [ "$pass" -gt 1 ]; then
+      GAIA_PASS_SUFFIX="-r${pass}"
+      # The revisit is round N+1 of the SAME review, not a second opinion. Point it at the
+      # last round the previous pass actually completed, so each persona is handed its own
+      # standing objection and has to say whether the landed sibling work answered it. Without
+      # this the revisit meets a fresh panel, and a fresh panel has nothing to converge on.
+      GAIA_PREV_PANEL_DIR="$(ls -1dt "$LOG_DIR/plan-${number}-${ts}"/r*/ 2>/dev/null | head -1)" \
+        || GAIA_PREV_PANEL_DIR=""
+      GAIA_PREV_PANEL_DIR="${GAIA_PREV_PANEL_DIR%/}"
+    fi
+    PLAN_FILE="$LOG_DIR/plan-${number}-${ts}${GAIA_PASS_SUFFIX}.json"
+    BRIEF_FILE="$LOG_DIR/brief-${number}-${ts}${GAIA_PASS_SUFFIX}.md"
+    DEFERRED_FILE="$LOG_DIR/deferred-${number}-${ts}${GAIA_PASS_SUFFIX}.md"
     PANEL_FEEDBACK=""
     labels_csv="$(jq -r --arg n "$number" '.issues[] | select((.number|tostring)==$n) | (.labels // []) | join(",")' <<<"$batch_json" 2>/dev/null)" || labels_csv=""
     if ! science_gate "$number" "$title" "$labels_csv" "${milestone:-}" "$logfile"; then
-      report_failure "science gate blocked #${number}; not implementing it (plan and panel verdicts are on the issue)" "$logfile" 1
-      batch_failed=1
-      break
+      # PARK THE ISSUE, NOT THE BATCH. Its siblings are separate work that happens to share a
+      # milestone; stopping them too turns one contested plan into an idle run and a human
+      # called mid-batch. #${number} keeps its plan, its panel verdicts and its
+      # needs-human-decision label (science_gate wrote all three); the batch keeps going, and
+      # every parked issue is reported once, together, at the end of the run.
+      echo "  science gate blocked #${number}: parking it, continuing with the rest of ${numbers_csv}" | tee -a "$logfile"
+      pending+=("$number")
+      continue
     fi
 
     vcs_before="$(vcs_state)"
@@ -1252,6 +1549,12 @@ Its out_of_scope list is binding, and its declared budget is compared against wh
 actually produce. If the work turns out to need something outside the plan, stop and report
 rather than widening it silently:
 $(cat "$PLAN_FILE" 2>/dev/null)
+
+The science panel did not consider these concerns serious enough to stop the work, but it did
+raise them and they are on the issue. Address what falls inside the plan; for anything that
+would widen it, say so in your final report and name the follow-up issue it needs. Do not
+silently drop one, and do not silently expand the plan to chase one:
+$(cat "$DEFERRED_FILE" 2>/dev/null)
 
 Do not weaken the gate to pass it. Loosening a numeric tolerance, disabling a test, or
 editing what \`pixi run test\` runs is detected mechanically and blocks the commit. If the
@@ -1348,12 +1651,18 @@ Co-Authored-By: Claude <noreply@anthropic.com>" >> "$logfile" 2>&1 && commit_rc=
       break
     fi
     any_committed=1
+    resolved+=("$number")
 
     # Push this commit; on the FIRST commit of the batch open the PR as a DRAFT so the per-issue
     # commits stream onto it as they land. It is NOT marked ready-for-review (and Copilot is NOT
-    # requested) until every issue is committed AND the batch gate passes, further below. The draft
-    # body carries the ${closes_lines} up front so issue closure is guaranteed even if the
-    # ready-for-review body swap below fails and the placeholder body has to stand.
+    # requested) until every issue is committed AND the batch gate passes, further below.
+    #
+    # The draft body carries the Closes lines up front so issue closure survives a failed body
+    # swap later -- but only for issues that have ACTUALLY COMMITTED, which is why the body is
+    # rebuilt here on every landing rather than written once from the whole batch. Now that the
+    # science gate parks a single issue instead of the batch, a batch-wide Closes list would
+    # close issues nobody worked on the moment the PR merged. Fail in the safe direction: an
+    # issue we cannot prove was resolved stays open.
     git push -u origin "$branch" >> "$logfile" 2>&1 && push_rc=0 || push_rc=$?
     if [ "$push_rc" -ne 0 ]; then
       report_failure "git push failed for #${number}; abandoning batch ${numbers_csv}" "$logfile" "$push_rc"
@@ -1367,9 +1676,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>" >> "$logfile" 2>&1 && commit_rc=
       # open_draft_pr creates, then reads the number back via `gh pr view`.
       pr_number="$(open_draft_pr "$branch" \
         "gaia: ${readable_key} (${numbers_csv})" \
-        "Draft -- the gaia orchestrator is resolving ${numbers_csv} (${readable_key}), one commit per issue. Marked ready for review once every issue in the batch is committed and the local gate (test + check-dois + quarto render) passes.
-
-${closes_lines}" \
+        "$(draft_pr_body)" \
         "$logfile")" && draft_rc=0 || draft_rc=$?
       if [ "$draft_rc" -ne 0 ] || [ -z "$pr_number" ]; then
         report_failure "could not open draft PR for ${numbers_csv}; parking batch" "$logfile" "$draft_rc"
@@ -1377,8 +1684,60 @@ ${closes_lines}" \
         break
       fi
       echo "  opened DRAFT PR #${pr_number} for ${numbers_csv}" | tee -a "$logfile"
+    else
+      gh pr edit "$pr_number" --body "$(draft_pr_body)" >> "$logfile" 2>&1 \
+        || echo "  could not refresh the draft body of PR #${pr_number} after #${number}; it will be rewritten at ready-for-review" | tee -a "$logfile"
     fi
-  done <<< "$numbers"
+  done <<< "$work"
+
+  # ── The revisit pass ───────────────────────────────────────────────────────
+  # Parked issues get exactly one more plan, with what this batch just landed in front of
+  # them. Not a retry of the same prompt: the panel blocked on something, its siblings have
+  # since changed the code and the record, and that is genuinely new information. One extra
+  # pass only -- a second block is a real disagreement and belongs with a human.
+  work=""
+  if [ "$batch_failed" -eq 0 ] && [ "$GAIA_STOP" -eq 0 ] && [ "$pass" -eq 1 ] \
+     && [ "$GAIA_REVISIT_PARKED" = "1" ] && [ "${#pending[@]}" -gt 0 ] && [ "${#resolved[@]}" -gt 0 ]; then
+    GAIA_LANDED_CONTEXT="
+ALREADY LANDED ON THIS BRANCH, in this batch, since your issue was last planned. This is
+settled work in the tree you are reading -- build on it, do not redo it, and do not raise a
+concern it has already answered:
+$(for n in "${resolved[@]}"; do
+    printf -- '- #%s: %s\n' "$n" "$(jq -r --arg n "$n" '.issues[] | select((.number|tostring)==$n) | .title' <<<"$batch_json" 2>/dev/null || true)"
+    git log --format='' --name-only "main..${branch}" -1 --grep="Closes #${n}" 2>/dev/null | sed '/^$/d' | head -8 | sed 's/^/    /' || true
+  done)"
+    echo "  revisit pass: re-planning ${#pending[@]} parked issue(s) with ${#resolved[@]} landed sibling(s) as context" | tee -a "$logfile"
+    work="$(printf '%s\n' "${pending[@]}")"
+    pending=()
+  fi
+  [ "${#pending[@]}" -gt 0 ] && parked+=("${pending[@]}")
+  pass=$((pass + 1))
+  [ "$batch_failed" -ne 0 ] && break
+  done
+
+  # One report per batch, not one interruption per issue. Everything a human needs in order
+  # to adjudicate a parked issue is already ON the issue -- the plan, the panel's verdicts,
+  # the blocking concerns and their decisive tests. This is the index into that, collected so
+  # the whole run can be reviewed in one sitting instead of mid-batch, twice an hour.
+  if [ "${#parked[@]}" -gt 0 ]; then
+    record_parked "$logfile" "${parked[@]}"
+  fi
+
+  # From here on, two different sets matter and conflating them is how a parked issue gets
+  # closed. `numbers` / `numbers_csv` remain the batch's IDENTITY, for log and park messages.
+  # `resolved_*` is what actually LANDED, and it alone may drive the PR title, the Closes
+  # list, the description handed to the lab-notebook, and the closing comments -- each of
+  # which would otherwise claim work that was never done.
+  resolved_numbers="$(printf '%s\n' "${resolved[@]:-}" | sed '/^$/d')"
+  resolved_csv=""
+  if [ -n "$resolved_numbers" ]; then
+    resolved_csv="$(sed 's/^/#/' <<<"$resolved_numbers" | paste -sd, - | sed 's/,/, /g')"
+  fi
+  resolved_bullets="$(while IFS= read -r n; do
+      [ -z "$n" ] && continue
+      printf -- '- #%s: %s\n' "$n" "$(jq -r --arg n "$n" '.issues[] | select((.number|tostring)==$n) | .title' <<<"$batch_json" 2>/dev/null)"
+    done <<< "$resolved_numbers")"
+  closes_lines="$(while IFS= read -r n; do if [ -n "$n" ]; then printf 'Closes #%s\n' "$n"; fi; done <<< "$resolved_numbers")"
 
   if [ "$batch_failed" -ne 0 ]; then
     flush_measurements "fail" "$logfile"
@@ -1441,7 +1800,7 @@ ${closes_lines}" \
 request description for the change on branch ${branch} in ${REPO_DIR}, which together
 resolves this batch of related issues (grouped under '${readable_key}'):
 
-${issue_bullets}
+${resolved_bullets}
 
 Read the actual diff (git diff main...${branch}) -- don't guess. Explain in plain
 language: what was wrong across these issues, what changed, and what it means
@@ -1459,7 +1818,7 @@ ${closes_lines}"
   fi
 
   # Never trust the agent's prose to have transcribed every "Closes #N" line correctly -- append
-  # any issue from this batch whose closing line the drafted body doesn't already contain. A
+  # any RESOLVED issue whose closing line the drafted body doesn't already contain. A
   # duplicate "Closes #N" is harmless to GitHub; a MISSING one silently breaks the whole point of
   # this pipeline (the issue stays open after merge), so the script guarantees it, not the LLM.
   missing_closes=""
@@ -1469,7 +1828,7 @@ ${closes_lines}"
       missing_closes="${missing_closes}Closes #${number}
 "
     fi
-  done <<< "$numbers"
+  done <<< "$resolved_numbers"
   if [ -n "$missing_closes" ]; then
     echo "  pr body was missing closing keywords for some issues; appending them" | tee -a "$logfile"
     pr_body="${pr_body}
@@ -1477,9 +1836,26 @@ ${closes_lines}"
 ${missing_closes}"
   fi
 
+  # And the mirror of that guarantee, which only became necessary once a single issue could be
+  # parked while its siblings shipped: strip any closing keyword the agent wrote for an issue
+  # that did NOT land. The lab-notebook reads the batch, not the branch, so it will cheerfully
+  # write "Closes #186" for an issue the science gate parked -- and merging that closes an
+  # unresolved issue with a green gate and no human in the loop.
+  if [ "${#parked[@]}" -gt 0 ]; then
+    for number in "${parked[@]}"; do
+      if grep -qiE "(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)[[:space:]]+#${number}([^0-9]|$)" <<<"$pr_body"; then
+        echo "  stripping a closing keyword for PARKED #${number} from the PR body" | tee -a "$logfile"
+        pr_body="$(grep -viE "(close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved)[[:space:]]+#${number}([^0-9]|$)" <<<"$pr_body" || true)"
+        pr_body="${pr_body}
+
+(#${number} was planned but parked by the science panel; it stays open.)"
+      fi
+    done
+  fi
+
   # The draft PR already exists (opened on the first commit above). Now that the whole batch is
   # committed and gated, swap the placeholder body for the real one and mark it ready for review.
-  gh pr edit "$pr_number" --title "gaia: ${readable_key} (${numbers_csv})" --body "$pr_body" >> "$logfile" 2>&1 \
+  gh pr edit "$pr_number" --title "gaia: ${readable_key} (${resolved_csv})" --body "$pr_body" >> "$logfile" 2>&1 \
     || echo "  could not update PR #${pr_number} body; the draft placeholder stands" | tee -a "$logfile"
   # Mark ready, then VERIFY it took. A PR left in draft gets no Copilot review at
   # all, so the whole review stage would silently no-op -- a failure that looks
@@ -1653,7 +2029,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 research scientist explaining that this batch of related issues has just been resolved
 and merged via PR #${pr_number} in ${REPO_DIR} (grouped under '${readable_key}'):
 
-${issue_bullets}
+${resolved_bullets}
 
 Read the actual diff on that branch -- don't guess. Plain language: what was wrong,
 what changed, what it means for the science/results. This will be posted as the
@@ -1677,8 +2053,8 @@ closing comment on each issue in the batch." \
     [ -z "$number" ] && continue
     gh issue comment "$number" --body "$close_message" >> "$logfile" 2>&1 \
       || echo "  could not comment on issue #$number (already merged/closed via 'Closes #N', so this is cosmetic)" | tee -a "$logfile"
-  done <<< "$numbers"
-  echo "  merged PR #$pr_number, closed ${numbers_csv}" | tee -a "$logfile"
+  done <<< "$resolved_numbers"
+  echo "  merged PR #$pr_number, closed ${resolved_csv}" | tee -a "$logfile"
 
   # A batch that MERGED has, by definition, shipped everything it produced. `gh pr merge
   # --delete-branch` switches back to the base branch, so anything still dirty at this
@@ -1706,8 +2082,44 @@ closing comment on each issue in the batch." \
   if [ -n "$milestone" ]; then
     epic_number="$(epic_for_milestone "$milestone")" || epic_number=""
     if [ -n "$epic_number" ]; then
-      gh issue comment "$epic_number" --body "Sub-issues ${numbers_csv} resolved via PR #${pr_number} (squash-merged, Copilot-reviewed, checks green). Epic left open for your own review." \
+      gh issue comment "$epic_number" --body "Sub-issues ${resolved_csv} resolved via PR #${pr_number} (squash-merged, Copilot-reviewed, checks green). Epic left open for your own review." \
         || echo "  could not comment on epic #$epic_number" | tee -a "$logfile"
     fi
   fi
 done < <(python3 "$REPO_DIR/scripts/gaia_group_issues.py")
+
+# ── The one interruption per run ─────────────────────────────────────────────
+# Everything the queue could decide, it decided. What is left is the set of plans a panel of
+# domain personas would not pass on a scope that reaches past its own issue -- which is the
+# only class of question this pipeline was ever supposed to bring to a human. Presented once,
+# at the end, with the issue numbers to read rather than a wall of concerns to re-litigate.
+if [ "${#GAIA_RUN_PARKED[@]}" -gt 0 ]; then
+  echo ""
+  echo "════ ${#GAIA_RUN_PARKED[@]} issue(s) parked by the science gate this run ════"
+  printf '  #%s\n' "${GAIA_RUN_PARKED[@]}"
+  echo ""
+  echo "  Each keeps its pre-registered plan and the full panel on the issue itself, and is"
+  echo "  labelled needs-human-decision. Nothing else in the run was held up waiting for them."
+  echo "  Digest: ${GAIA_PARKED_LEDGER}"
+else
+  echo ""
+  echo "No issues parked by the science gate this run."
+fi
+
+# ── The holistic review, which is a separate sitting ─────────────────────────
+# Parked issues are a decision to make now. This is the other pile: disagreements the panel
+# raised, two rounds did not settle, and which did NOT reach past their own issue -- so the
+# work went ahead and the objection stayed open. Nothing here blocks anything. It is rendered
+# grouped by claim similarity rather than by issue, because that is the whole point: read one
+# at a time these are separate objections, read together they are usually a handful of
+# problems, and the grouping is what makes a single decision settle several issues at once.
+GAIA_CONCERNS_MD="$LOG_DIR/standing-concerns-${GAIA_RUN_TS}.md"
+if python3 "$REPO_DIR/scripts/gaia-launch/gaia_concerns.py" --render --out "$GAIA_CONCERNS_MD" \
+     >/dev/null 2>&1 && [ -s "$GAIA_CONCERNS_MD" ]; then
+  echo ""
+  echo "Standing science concerns (open across the project, none of them blocking):"
+  echo "  $(python3 "$REPO_DIR/scripts/gaia-launch/gaia_concerns.py" --render 2>/dev/null \
+        | sed -n 's/^\*\*\([0-9]*\)\*\* concerns across \*\*\([0-9]*\)\*\* issues.*/\1 concerns across \2 issues/p' | head -1)"
+  echo "  Not a queue to work through — a document to read in one sitting: ${GAIA_CONCERNS_MD}"
+  echo "  Ledger: ${LOG_DIR}/science-concerns.jsonl"
+fi

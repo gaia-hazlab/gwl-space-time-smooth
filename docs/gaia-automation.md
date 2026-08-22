@@ -14,6 +14,7 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 | `scripts/gaia-launch/gaia_brief.py` | Prior-work brief for an issue (GitHub + our ledger) |
 | `scripts/gaia-launch/gaia_plan.py` | The pre-registered plan: schema, validation, declared-vs-actual |
 | `scripts/gaia-launch/gaia_panel.py` | Routes the science panel, verifies dispatch, aggregates verdicts |
+| `scripts/gaia-launch/gaia_concerns.py` | The standing ledger of disagreements two rounds did not settle, grouped for holistic review |
 | `scripts/gaia-launch/gaia_gate_integrity.py` | Detects an agent weakening the gate it is judged by |
 | `scripts/gaia-launch/gaia_failsig.py` | Stable failure signatures, for the three-strikes rule |
 | `scripts/gaia-launch/gaia_pr_dashboard.sh` | Renders and stages the dashboard for one PR |
@@ -40,8 +41,9 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 >    these protect the tree, the clock and the bill.
 > 8. **The science is judged before the code exists.** Every issue is pre-registered as a
 >    plan from a read-only session, and a routed panel of read-only science personas — with
->    the auditor always seated — must pass it before any editing agent runs. A block stops
->    implementation.
+>    the auditor always seated — must pass it before any editing agent runs. Only a concern
+>    that reaches past its own issue stops the work, and it parks that issue rather than the
+>    batch: a gate that fires on every deep review is a pager, not a gate.
 > 9. **An agent may not weaken the thing that judges it.** Loosened tolerances, disabled
 >    tests and edited gate definitions are detected mechanically in the staged diff and
 >    block the commit. Passing by softening the gate is not passing.
@@ -71,7 +73,7 @@ flowchart TD
         PLAN["<b>pre-register a plan</b><br/><i>read-only session, schema-validated</i><br/><i>fails closed</i>"]
         PANEL{"<b>science panel</b><br/><i>routed from labels + milestone</i><br/><i>auditor always seated</i><br/><i>dispatch verified in the transcript</i>"}
         BRIEF --> PLAN --> PANEL
-        PANEL -- "block (1 revision, then human)" --> PARKR
+        PANEL -- "critical + breaking/wrong-physics<br/>(1 revision, 1 revisit, then human)" --> PARKI["park THIS ISSUE<br/><i>batch continues</i>"]
         PANEL -- approve --> ORCH
         ORCH["<b>claude -p</b> → gaia-orchestrator<br/><i>implements THE PLAN</i><br/><i>git+gh denied at the tool level</i><br/><code>--max-turns</code> · <code>timeout</code>"]
         BOUND{"turns / wall clock<br/>within caps?<br/><i>and no ref moved?</i>"}
@@ -123,7 +125,7 @@ flowchart TD
 
     classDef human fill:#fde2e2,stroke:#b60205,color:#000
     classDef good fill:#e2f5e9,stroke:#1a7f37,color:#000
-    class HOLD,PARK,PARKR human
+    class HOLD,PARK,PARKR,PARKI human
     class MERGE,CLOSE,EPIC good
 ```
 
@@ -511,6 +513,8 @@ a batch has already done its work.
 | `GAIA_MAX_COST_USD` | `0` | `0` = uncapped; otherwise halt the queue between issues past this |
 | `GAIA_SCIENCE_GATE` | `1` | `0` skips plan pre-registration and the science panel (not recommended) |
 | `GAIA_PLAN_REVISIONS` | `1` | Plan revisions allowed after a panel block, before parking |
+| `GAIA_PANEL_BLOCK_ON` | `breaking,wrong-physics` | Which concern **scopes** stop implementation at `critical`. An unrecognised value falls back to the default; the gate cannot be closed to nothing |
+| `GAIA_REVISIT_PARKED` | `1` | `0` skips the end-of-batch revisit pass over parked issues |
 | `GAIA_PLAN_TIMEOUT` | `2700` | Wall clock for the planning session. Separate from `GAIA_AUX_TIMEOUT` on purpose — see below |
 | `GAIA_PLAN_MAX_TURNS` | `40` | Turns for the planning session |
 | `GAIA_ONLY_ISSUES` | *(unset)* | Supervised runs: restrict the queue to these issues, e.g. `186` or `153,152`. Filters the input to grouping, so ordering and blocker hold-back are unchanged |
@@ -560,14 +564,153 @@ So before any editing agent runs:
    Genuinely-software or documentation issues still route to the general `gaia-debugger` and
    `gaia-lab-notebook`: not every issue in this repo is a question about the twin's science.
 4. **Concerns must name a decisive test.** A concern with no test that would settle it is an
-   opinion, and opinions do not block work. A `block`, or any `critical` concern, stops
-   implementation; one revision is allowed, then the issue is labelled for a human.
-5. **The plan and every verdict are posted to the issue** before implementation — so the
+   opinion, and opinions do not block work.
+5. **Each concern declares a scope as well as a severity** — see below. Only a `critical`
+   concern whose consequences reach *past this issue* stops implementation; one revision is
+   allowed, then that issue is parked for a human and **the batch continues**.
+6. **The plan and every verdict are posted to the issue** before implementation — so the
    scientific reasoning is on the record at the moment it could still have changed the
    approach, rather than reconstructed afterwards from a diff.
 
 This is our own **ground rule 3** ("design-review first — audit a plan once before resources
 are spent") made mechanical. The queue had never once done it.
+
+#### Severity is how wrong; scope is how far — and only scope stops the work
+
+The gate's first *completed* run (issue #186, 2026-08-20) produced a panel that was right and
+a decision that was useless. All three personas returned `revise`. **Nobody voted `block`.**
+The aggregator stopped the batch anyway, because the rule was "any `block`, or any `critical`
+concern" and the panel had raised twelve criticals across forty-one concerns — on a plan for
+*one issue in a multi-year twin*.
+
+Reading them afterwards, that verdict was neither wrong nor actionable. A sign error violating
+the project's own `ΔD = −Δh_wt` invariant, and an NST transform producing `Var(z) ≈ 2.7`
+instead of 1, would genuinely have propagated into everything built on top. Clopper–Pearson
+being anticonservative under spatially clustered wells is real science that belongs *inside*
+the milestone. The gate could not tell those apart, so it escalated all of them and called a
+human mid-batch to re-derive a distinction the reviewers had already made implicitly.
+
+The lever is not to ask the panel to find less. Review depth is the asset — the
+geostatistician's "kriging weights are invariant to a variogram scale factor, so `ẑ` must not
+be rescaled" is a bug that would otherwise have shipped. What was miscalibrated is what a
+finding *triggers*. So every concern now carries a **scope** alongside its severity:
+
+| Scope | Meaning | Blocks? |
+|---|---|---|
+| `breaking` | Fixes an interface, artifact name, unit convention or assumption that **other** issues will build on; wrong here forces rework elsewhere later | yes, at `critical` |
+| `wrong-physics` | The result would be physically or mathematically **incorrect as stated** — not merely under-validated or short of the ideal method | yes, at `critical` |
+| `in-milestone` | Real, but its correction lives inside this issue's deliverable or a follow-up that can be filed and scheduled | no |
+
+Configured by `GAIA_PANEL_BLOCK_ON` (default `breaking,wrong-physics`). An unrecognised value
+falls back to the default rather than opening the gate, and there is deliberately **no way to
+block on nothing** — running without a science gate is `GAIA_SCIENCE_GATE=0`, which is visible
+in the run banner. An **undeclared or unrecognised scope blocks**, so a persona whose prompt
+has not been updated behaves exactly like the old gate rather than slipping past it.
+
+Non-blocking is not discarded, and the panel prompt says so — a reviewer who believes their
+finding will be dropped learns to inflate its scope until it is heard. A deferred concern is
+posted on the issue, recorded in `panel.json`, and **carried into the implementation prompt**
+as a must-address item, with the instruction to name a follow-up issue for anything that would
+widen the plan. Symmetrically, only the **blocking** concerns are fed back for a re-plan:
+handing a planner all forty-one is not a redirection, it is scope creep with a review as its
+excuse.
+
+`scripts/gaia-launch/tests/test_panel_scope.py` pins the rule in both directions, including
+every fail-closed path.
+
+#### Round 2 is an adjudication, not a second review
+
+The revision loop could not converge, for a structural reason. Every panel call is a fresh
+`claude -p` session with no memory of the last one — and every round overwrote the previous
+round's verdicts on disk, so there was nothing to remember it *with*. A persona reviewing the
+revised plan therefore re-derived from whatever was in front of it: free to resolve nothing,
+drop what it said last time, and object to something else instead. Rounds differed without
+ever getting closer, and the revision budget bought noise.
+
+So each round now writes into its own `r<N>/` directory, and from round 2 every persona is
+handed **its own previous verdict** — not the panel's, its own; another persona's concerns are
+not its to resolve or inherit — together with the **unified diff of what the planner changed**.
+It must rule on each prior concern before raising anything new:
+
+| Status | Meaning |
+|---|---|
+| `resolved` | The revision answers it |
+| `unresolved` | It still stands — and the claim says what is *still* wrong, not what was |
+| `withdrawn` | The reviewer no longer believes it. Allowed on purpose: a panel that can never back down converges by attrition, which is not convergence |
+
+New concerns are admissible only if the *changes* introduced them, or if they are a critical
+breaking / wrong-physics problem genuinely missed. Hunting for fresh objections in parts of the
+plan that did not change costs another full planning cycle and settles nothing.
+
+That turns "is this converging?" into a number. A round that resolves and withdraws **nothing**
+while still blocking is a **stalemate**: the plan and the panel are talking past each other and
+the next round is the same conversation at the same price. The queue stops there and hands it
+over — the same reasoning as the three-strikes rule on identical failure signatures. An
+unrecognised status counts as `unresolved`, so malformed output cannot claim a concern was
+answered.
+
+**The revisit pass inherits this.** An issue parked in pass 1 and re-planned after its siblings
+landed points at the last completed round of that first pass, so it answers the same standing
+objections rather than meeting a new panel. A fresh panel has nothing to converge on.
+
+#### Two rounds, then it stops being an argument
+
+Two review rounds are the whole budget, and what survives them splits in two.
+
+A concern that **reaches past its own issue** — breaking, or physically wrong — parks that
+issue for a human now. That is a decision someone has to make before the work can proceed.
+
+Everything else **proceeds, and the objection stays open**. This is the case that had nowhere
+to go: a deferred concern was posted on its issue, handed to the implementer, and then gone at
+the end of the run. The panel's real science evaporated every time, and the next issue over the
+same ground rediscovered it from scratch. That is the expensive failure — not the concerns that
+stop work, but the ones that don't and are then forgotten.
+
+So they accumulate in `.gaia-runs/science-concerns.jsonl`, and are read **holistically**, which
+is the point. `gaia_concerns.py --render` groups them by the **code, symbols and named methods
+they point at** rather than by wording, because reviewers from different disciplines describe
+one problem in completely different words. On the real #186 panel that turns 31 objections into
+seven groups — the largest being six concerns from two personas that are all one problem: the
+out-of-fold coverage validation is broken (overlapping CV folds, a Clopper–Pearson interval
+that assumes independence, and a quadrature that assumes independent error terms).
+
+Prose similarity was tried first and rejected on measurement: the best true pair (two personas
+independently on Clopper–Pearson) scored *below* a false one, and boilerplate like "stopping
+condition" manufactured matches between unrelated concerns. Two concerns are related when they
+are about the same thing, not when they use the same words.
+
+The grouping weight is `1/(df-1)` per shared referent, not textbook IDF, so a pair's score does
+not drift as unrelated issues are added later — a record whose grouping changes because the
+ledger grew is not one anyone can trust. It is a reading aid: nothing gates on it, and each
+group states what its members have in common so a wrong grouping costs a glance, not a decision.
+
+The digest prints once at the end of a run, next to the parked list and explicitly separate
+from it: parked issues are decisions to make now, standing concerns are a document to read in
+one sitting.
+
+#### A block parks one issue, not the batch
+
+A science-gate block used to set `batch_failed` and `break`, so one contested plan discarded
+its siblings' work and stopped the run. Issues share a batch because they share a *milestone*,
+not because they depend on each other — so that multiplied one disagreement into an idle run
+and a human called mid-batch.
+
+Now the blocked issue is parked (it keeps its plan, its panel verdicts and its
+`needs-human-decision` label, all already on the issue) and the batch carries on. Two
+consequences follow:
+
+- **Closure is driven by what landed, not by the batch.** `Closes #N` lines are rebuilt from
+  the issues that actually committed, on every landing, and any closing keyword the
+  lab-notebook writes for a parked issue is stripped from the PR body before merge. An issue
+  we cannot prove was resolved stays open.
+- **Parked issues get one revisit pass**, at the end of the batch, with everything their
+  siblings just landed on the same branch as context (`GAIA_REVISIT_PARKED=1`). This is not a
+  retry of the same prompt: the code and the record have changed since the panel blocked, and
+  on the first pass that context did not exist at any price. A second block is a real
+  disagreement and belongs with a human.
+
+Every park is collected into `.gaia-runs/parked-<run>.md` and printed **once, at the end of
+the run** — one review sitting instead of one interruption per contested plan.
 
 #### What the first supervised run cost us
 
@@ -601,7 +744,7 @@ sized for a short auditor verdict; planning reads the issue *and* the code it wo
 And a fourth, quieter one: a batch that died at the gate recorded **nothing**, because
 `write_measurement` is only reached at commit time. The corpus meant to answer "does
 reviewing plans change outcomes?" could not see the runs where the gate acted. Gate exits now
-write a record keyed by cause — `plan-timeout`, `plan-invalid`, `panel-block`.
+write a record keyed by cause — `plan-timeout`, `plan-invalid`, `panel-block`, `panel-stalemate`.
 
 #### The personas are verified, not assumed
 
