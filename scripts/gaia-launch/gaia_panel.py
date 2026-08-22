@@ -34,7 +34,7 @@ import json
 import os
 import re
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 
 # Two families sit on these panels and the distinction matters.
@@ -53,6 +53,12 @@ from pathlib import Path
 # Dispatch names differ: project agents resolve as a BARE name, plugin agents as `gaia:<name>`.
 # expected_subagent_type() below is the single place that knows this.
 PROJECT_PREFIX = "twin-"
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# The scope series (follow-up 3): one row per panel, appended at aggregate time. Lives beside
+# the standing-concerns ledger because it answers the same kind of question -- what is this
+# process actually doing, across runs -- rather than anything about a single issue.
+SCOPE_LOG = REPO_ROOT / ".gaia-runs" / "panel-scope.jsonl"
 
 # The auditor sits on EVERY panel: ground rule 1, the maker is never the sole judge.
 ALWAYS = ["gaia-auditor"]
@@ -179,6 +185,30 @@ DEFAULT_BLOCK_ON = ("breaking", "wrong-physics")
 VALID_PRIOR_STATUS = ("resolved", "unresolved", "withdrawn")
 
 
+def referent_tools():
+    """`referents()` and `affinity()` from the ledger module, or (None, None).
+
+    Three things here now group concerns by what they POINT AT rather than by wording -- the
+    panel's own convergence, the standing ledger, and the adjudication grading below. They
+    must use one rule and one threshold, so there is one implementation and every caller
+    degrades to silence rather than to a second, subtly different notion of "the same thing".
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from gaia_concerns import affinity, referents
+        return affinity, referents
+    except Exception:
+        return None, None
+
+
+def same_thing(claim: str, others: list[str], df: Counter) -> bool:
+    """Does `claim` point at the same referent as any of `others`, at the shared threshold?"""
+    affinity, _ = referent_tools()
+    if affinity is None:
+        return False
+    return any(affinity(claim, o, df) >= 1.0 for o in others)
+
+
 def block_on(env: dict | None = None) -> tuple[str, ...]:
     """Which scopes a critical concern must carry to stop implementation.
 
@@ -237,7 +267,213 @@ def normalise_verdict(raw: dict, persona: str) -> dict:
                 report=str(raw.get("report", ""))[:20000])
 
 
-def aggregate(verdicts: list[dict], scopes: tuple[str, ...] | None = None) -> dict:
+def scope_mix(verdicts: list[dict], scopes: tuple[str, ...] | None = None) -> dict:
+    """The panel's own declared scope split -- the measurement, not a decision.
+
+    Scope is self-declared, and it is the field that decides whether work stops. That is an
+    incentive: a reviewer who learns that `in-milestone` never blocks can be heard louder by
+    calling the next one `breaking`, and nothing in the gate would notice the drift because
+    every individual panel would look reasonable. The design claim ("reviewers declare scope
+    honestly") is therefore not something to assert -- it is something to log per panel and
+    read as a series.
+
+    `stops_share` is the number that matters: the fraction of a panel's concerns that carry
+    the combination which actually halts implementation, critical AND a blocking scope. It is
+    reported here and gated on nowhere; a metric that feeds a gate stops measuring and starts
+    being optimised.
+    """
+    scopes = tuple(scopes) if scopes else block_on()
+    z = lambda: {s: 0 for s in VALID_SCOPE}                                     # noqa: E731
+    out = dict(n_concerns=0, undeclared=0, by_scope=z(), critical_by_scope=z(),
+               by_severity={s: 0 for s in VALID_SEVERITY}, per_persona={},
+               block_on=list(scopes), stops=0, stops_share=0.0)
+    for v in verdicts:
+        pp = out["per_persona"].setdefault(v["persona"],
+                                           dict(n_concerns=0, by_scope=z(),
+                                                critical_by_scope=z(), stops=0))
+        for c in v["concerns"]:
+            sc, sev = c.get("scope", "breaking"), c.get("severity", "minor")
+            if sc not in VALID_SCOPE:
+                sc = "breaking"
+            out["n_concerns"] += 1
+            out["by_scope"][sc] += 1
+            out["by_severity"][sev if sev in VALID_SEVERITY else "minor"] += 1
+            out["undeclared"] += 0 if c.get("scope_declared", True) else 1
+            pp["n_concerns"] += 1
+            pp["by_scope"][sc] += 1
+            if sev == "critical":
+                out["critical_by_scope"][sc] += 1
+                pp["critical_by_scope"][sc] += 1
+                if sc in scopes:
+                    out["stops"] += 1
+                    pp["stops"] += 1
+    if out["n_concerns"]:
+        out["stops_share"] = round(out["stops"] / out["n_concerns"], 3)
+    return out
+
+
+def scope_log_row(agg: dict, issue: int | None = None, run_ts: str = "",
+                  rounds: int = 1) -> dict:
+    """One panel's scope split, flattened for the series."""
+    mix = agg.get("scope_mix") or scope_mix(agg.get("verdicts", []))
+    return dict(run_ts=run_ts, issue=issue, round=rounds, decision=agg.get("decision", "?"),
+                n_personas=agg.get("n_personas", 0), **mix)
+
+
+def append_scope_log(row: dict, path: Path = SCOPE_LOG) -> int:
+    """Never a gate: a measurement that cannot be written must not stop a batch."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        return 1
+    except Exception:
+        return 0
+
+
+def read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if line:
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return out
+
+
+def scope_report(rows: list[dict]) -> str:
+    """The series, and an honest statement of what it can and cannot yet show.
+
+    The question is drift: does the share of concerns carrying the scope that stops work rise
+    as personas learn what stops work? That is a question about a TREND, and a trend is not
+    readable from one or two panels. So the report states the sample size first and refuses to
+    call a direction until there is one -- a dashboard that reports a slope from n=2 is how a
+    project convinces itself of something it has not measured.
+    """
+    if not rows:
+        return ("# Declared scope, panel by panel\n\nNo panels logged yet. Each panel "
+                "appends one row when it aggregates.\n")
+    def share(r):
+        return r.get("stops_share", 0.0)
+    out = ["# Declared scope, panel by panel", "",
+           "Scope is **self-declared**, and it is the field that decides whether work stops. "
+           "A reviewer who learns that `in-milestone` never blocks can be heard louder by "
+           "calling the next concern `breaking`. Every individual panel would still look "
+           "reasonable, so the drift is only visible as a series — which is what this is. "
+           "Nothing here gates anything: a measurement that feeds a gate stops measuring.", "",
+           "| panel | issue | round | decision | concerns | breaking | wrong-physics | "
+           "in-milestone | undeclared | stops | share |",
+           "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for i, r in enumerate(rows, 1):
+        by = r.get("by_scope") or {}
+        out.append(f"| {i} | #{r.get('issue', '?')} | {r.get('round', '?')} | "
+                   f"{r.get('decision', '?')} | {r.get('n_concerns', 0)} | "
+                   f"{by.get('breaking', 0)} | {by.get('wrong-physics', 0)} | "
+                   f"{by.get('in-milestone', 0)} | {r.get('undeclared', 0)} | "
+                   f"{r.get('stops', 0)} | {share(r):.0%} |")
+    out.append("")
+
+    n = len(rows)
+    if n < 6:
+        out += [f"**{n} panel(s) — too few to read a trend.** This is a baseline. The question "
+                f"is whether `stops` share rises over successive panels; answering it needs a "
+                f"series, and saying anything directional from {n} is the same overreach the "
+                f"panel exists to catch.", ""]
+    else:
+        h = n // 2
+        a = sum(share(r) for r in rows[:h]) / h
+        b = sum(share(r) for r in rows[h:]) / (n - h)
+        d = b - a
+        verdict = ("no detectable drift" if abs(d) < 0.05 else
+                   "**rising** — the share of concerns scoped to stop work is going up"
+                   if d > 0 else "falling")
+        out += [f"**{n} panels.** First half {a:.0%} of concerns scoped to stop work, second "
+                f"half {b:.0%} — {verdict}. This is a description of the series, not a test: "
+                f"the panels differ in issue, milestone and reviewer, and none of that is "
+                f"controlled for.", ""]
+
+    per: dict[str, dict] = defaultdict(lambda: dict(panels=0, n=0, stops=0))
+    for r in rows:
+        for who, pp in (r.get("per_persona") or {}).items():
+            per[who]["panels"] += 1
+            per[who]["n"] += pp.get("n_concerns", 0)
+            per[who]["stops"] += pp.get("stops", 0)
+    if per:
+        out += ["## By reviewer", "",
+                "*Where inflation would show first. Read the panel count before the share: one "
+                "panel is an anecdote about one issue, not a disposition.*", "",
+                "| reviewer | panels | concerns | stops | share |", "|---|---|---|---|---|"]
+        for who, d in sorted(per.items(), key=lambda kv: -kv[1]["stops"]):
+            sh = d["stops"] / d["n"] if d["n"] else 0.0
+            out.append(f"| {who} | {d['panels']} | {d['n']} | {d['stops']} | {sh:.0%} |")
+        out.append("")
+    return "\n".join(out)
+
+
+def grade_priors(verdicts: list[dict], prev: dict | None,
+                 scopes: tuple[str, ...] | None = None) -> dict:
+    """Did this round move what was actually BLOCKING, or only what was cheap to give up?
+
+    `moved = resolved + withdrawn` treats every ruling as progress, and that is gameable in
+    the cheapest possible way: a persona with one blocking concern it will not drop can
+    withdraw a minor one it never cared about, `moved` becomes 1, the stalemate rule goes
+    quiet, and the queue buys another planning round that settles nothing. Nothing noticed,
+    because nothing checked WHICH concern moved.
+
+    So each prior ruling is matched back to the previous round's blocking concerns -- by
+    referent, the same rule convergence and the ledger use -- and only a ruling on one of
+    those counts as movement. Rulings that match nothing that blocked are reported as
+    `hollow`: not an accusation (a reviewer may legitimately withdraw a deferred concern),
+    but the difference between "we are converging" and "we are moving the deck chairs".
+
+    Grading needs the previous round's aggregate. Without it -- round 1, or a missing file --
+    this returns graded=False and the caller keeps the old count-everything rule, so the
+    absence of the previous panel can never be what opens the gate.
+    """
+    scopes = tuple(scopes) if scopes else block_on()
+    prev_block = list((prev or {}).get("blocking_concerns") or []) if isinstance(prev, dict) else []
+    out = dict(graded=False, prev_blocking=len(prev_block), moved_blocking=0,
+               still_blocking=0, hollow=[])
+    affinity, referents = referent_tools()
+    if not prev_block or affinity is None:
+        return out
+    out["graded"] = True
+
+    by_persona: dict[str, list[str]] = defaultdict(list)
+    for c in prev_block:
+        by_persona[c.get("persona", "?")].append(c.get("claim", "") or "")
+
+    for v in verdicts:
+        mine = by_persona.get(v["persona"], [])
+        # A persona that blocked nothing last round cannot unblock anything this round. Its
+        # rulings are real work and are counted in prior_adjudicated; they are just not the
+        # thing standing between this issue and implementation.
+        if not mine:
+            continue
+        df: Counter = Counter()
+        for claim in mine:
+            df.update(referents(claim))
+        for pc in v.get("prior_concerns", []):
+            local = df + Counter(referents(pc.get("claim", "")))
+            hit = same_thing(pc.get("claim", ""), mine, local)
+            pc["on_blocking"] = bool(hit)          # travels into panel.json, and is rendered
+            if pc["status"] in ("resolved", "withdrawn"):
+                if hit:
+                    out["moved_blocking"] += 1
+                else:
+                    out["hollow"].append(dict(persona=v["persona"], status=pc["status"],
+                                              claim=pc.get("claim", "")[:200]))
+            elif hit:
+                out["still_blocking"] += 1
+    return out
+
+
+def aggregate(verdicts: list[dict], scopes: tuple[str, ...] | None = None,
+              prev: dict | None = None) -> dict:
     """Panel decision.
 
     Stops implementation for exactly two reasons: a persona voted `block` outright (which
@@ -272,11 +508,19 @@ def aggregate(verdicts: list[dict], scopes: tuple[str, ...] | None = None) -> di
     priors = [p for v in verdicts for p in v.get("prior_concerns", [])]
     adjudicated = {s: sum(1 for p in priors if p["status"] == s) for s in VALID_PRIOR_STATUS}
     moved = adjudicated["resolved"] + adjudicated["withdrawn"]
+    # WHICH concerns moved, when the previous round is available to say. Counting any ruling
+    # as movement lets one throwaway withdrawal buy a whole extra planning round while the
+    # concern that actually stopped the work sits untouched. See grade_priors().
+    grading = grade_priors(verdicts, prev, scopes)
+    stalemate = (decision == "block" and grading["moved_blocking"] == 0) if grading["graded"] \
+        else (bool(priors) and moved == 0 and decision == "block")
     return dict(decision=decision,
                 n_personas=len(verdicts),
                 block_on=list(scopes),
                 prior_adjudicated=adjudicated,
-                stalemate=bool(priors) and moved == 0 and decision == "block",
+                prior_grading=grading,
+                scope_mix=scope_mix(verdicts, scopes),
+                stalemate=stalemate,
                 blocked_by=sorted({v["persona"] for v in blocking_v}
                                   | {c["persona"] for c in blocking_c}),
                 n_critical=sum(1 for v in verdicts for c in v["concerns"]
@@ -330,10 +574,8 @@ def convergence(verdicts: list[dict]) -> list[dict]:
     the same 1/(df-1) criterion the standing ledger uses -- one rule, one threshold, one place
     to change it.
     """
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from gaia_concerns import affinity, referents
-    except Exception:
+    affinity, referents = referent_tools()
+    if affinity is None:
         return []
     items = [dict(persona=v["persona"], **c) for v in verdicts for c in v["concerns"]
              if c["severity"] != "minor"]
@@ -373,6 +615,55 @@ def convergence(verdicts: list[dict]) -> list[dict]:
     return sorted(out, key=lambda g: (-len(g["personas"]), -len(g["claims"])))
 
 
+def standing_prior(agg: dict, rows: list[dict], exclude_issue: int | None = None,
+                   limit: int = 8) -> list[dict]:
+    """Where THIS panel has landed on ground the project already has an open concern about.
+
+    A panel is convened per issue and remembers nothing. The standing ledger is the only part
+    of this pipeline that holds the project rather than the ticket -- and until now it was
+    written at the end of a run and read by a human weeks later, so a panel could spend three
+    personas rediscovering an objection that is already recorded, unsettled, two issues back.
+
+    This is the cheap half of fixing that: an intersection by referent between the ledger and
+    the concerns this panel just filed, handed to the chair as context and printed in the
+    summary. It is a READING AID and it moves no gate -- the decision is already fixed by
+    aggregate() before this is ever called, and a wrong match costs a reader one line.
+
+    Deliberately not fed to the reviewers themselves: handing a persona the project's standing
+    objections before it reviews would tell it what to say, and an independently rediscovered
+    concern is evidence in a way a prompted one is not. The chair reports; the panel judges.
+    """
+    affinity, referents = referent_tools()
+    if affinity is None:
+        return []
+    items = [dict(persona=v["persona"], claim=c["claim"])
+             for v in agg.get("verdicts", []) for c in v.get("concerns", [])
+             if c.get("severity") != "minor"]
+    prior = [r for r in rows if r.get("issue") != exclude_issue and (r.get("claim") or "").strip()]
+    if not items or not prior:
+        return []
+    df: Counter = Counter()
+    for r in items + prior:
+        df.update(referents(r["claim"]))
+    out = []
+    for r in prior:
+        best, who = 0.0, None
+        for it in items:
+            a = affinity(r["claim"], it["claim"], df)
+            if a > best:
+                best, who = a, it
+        if best < 1.0 or who is None:
+            continue
+        shared = sorted(referents(r["claim"]) & referents(who["claim"]))
+        out.append(dict(issue=r.get("issue"), disposition=r.get("disposition", "?"),
+                        scope=r.get("scope", "?"), persona=r.get("persona", "?"),
+                        claim=r.get("claim", ""), decisive_test=r.get("decisive_test", ""),
+                        about=", ".join(shared)[:120], score=round(best, 3),
+                        echoed_by=who["persona"]))
+    out.sort(key=lambda d: (-d["score"], d["issue"] or 0))
+    return out[:limit]
+
+
 def normalise_synthesis(raw: dict) -> dict:
     """Fail SOFT. The decision is already made; a malformed summary loses prose, never a gate."""
     out = {k: "" for k in SYNTH_SECTIONS}
@@ -404,11 +695,28 @@ def render(agg: dict) -> str:
            f"prompt as a must-address item; it does not stop the work.", ""]
     adj = agg.get("prior_adjudicated") or {}
     if sum(adj.values()):
-        out += [f"**Round 2+** — of the previous round's concerns: **{adj.get('resolved', 0)} "
+        grade = agg.get("prior_grading") or {}
+        line = (f"**Round 2+** — of the previous round's concerns: **{adj.get('resolved', 0)} "
                 f"resolved**, {adj.get('unresolved', 0)} still standing, "
-                f"{adj.get('withdrawn', 0)} withdrawn by the reviewer."
-                + (" ⚠️ **Nothing moved and it still blocks — this is a stalemate, not a "
-                   "revision cycle.**" if agg.get("stalemate") else ""), ""]
+                f"{adj.get('withdrawn', 0)} withdrawn by the reviewer.")
+        # Movement is only movement if it moved what was stopping the work. A ruling on a
+        # concern that never blocked is real, but it is not convergence, and reporting the two
+        # as one number is how a stalemate hides behind a withdrawal.
+        if grade.get("graded"):
+            line += (f" Of the **{grade['prev_blocking']} concern(s) that blocked** last round, "
+                     f"**{grade['moved_blocking']} moved** and {grade['still_blocking']} still "
+                     f"stand.")
+        if agg.get("stalemate"):
+            line += (" ⚠️ **Nothing that blocked moved — this is a stalemate, not a revision "
+                     "cycle.**" if grade.get("graded") else
+                     " ⚠️ **Nothing moved and it still blocks — this is a stalemate, not a "
+                     "revision cycle.**")
+        out += [line, ""]
+        for h in (grade.get("hollow") or [])[:6]:
+            out.append(f"- ⚠️ *{h['persona']}* ruled `{h['status']}` on a concern that was not "
+                       f"among last round's blocking ones — {h['claim']}")
+        if grade.get("hollow"):
+            out.append("")
     # ── The four sections a reader actually arrives with questions about ──────────
     syn = agg.get("synthesis") or {}
     spread = agg.get("verdict_spread") or []
@@ -434,6 +742,17 @@ def render(agg: dict) -> str:
     elif not conv:
         out += ["_No two reviewers converged on the same referent. Each raised concerns in its "
                 "own area; read the individual reports below._", ""]
+    sp = agg.get("standing_prior") or []
+    if sp:
+        out += ["**The project has said this before.** *Standing concerns from earlier issues "
+                "that point at the same code, symbols or methods — from the ledger of what two "
+                "review rounds did not settle. Nobody on this panel was shown them; they were "
+                "raised again independently, which is what makes the echo worth reading.*", ""]
+        for e in sp:
+            out.append(f"- **#{e['issue']}** `[{e['disposition']}/{e['scope']}]` — {e['claim']} "
+                       f"— *{e['persona']}*"
+                       + (f" · shares `{e['about']}`" if e["about"] else ""))
+        out.append("")
 
     out += ["### 2. Disagreements", ""]
     out += [syn["disagreements"], ""] if syn.get("disagreements") else \
@@ -477,7 +796,10 @@ def render(agg: dict) -> str:
             out += ["", v["report"], ""]
         for p in v.get("prior_concerns", []):
             icon = {"resolved": "✅", "withdrawn": "↩️", "unresolved": "❌"}[p["status"]]
-            out.append(f"- {icon} *{p['status']}* (prior round) — {p['claim']}")
+            # Only meaningful once the previous round is available to grade against, so an
+            # ungraded panel says nothing rather than implying every ruling was weightless.
+            mark = " · **on a blocking concern**" if p.get("on_blocking") else ""
+            out.append(f"- {icon} *{p['status']}* (prior round){mark} — {p['claim']}")
             if p["why"]:
                 out.append(f"  - {p['why']}")
         if not v["concerns"]:
@@ -583,6 +905,23 @@ def main() -> int:
     p.add_argument("--from-chair", metavar="RAW_JSONL")
     p.add_argument("--brief", metavar="PANEL_JSON",
                    help="print the mechanical skeleton a chair must summarise, as markdown")
+    p.add_argument("--issue", type=int,
+                   help="the issue this panel is about; enables the standing-ledger "
+                        "intersection and labels the scope-log row")
+    p.add_argument("--ledger", metavar="FILE",
+                   help="standing-concerns ledger to intersect with this panel "
+                        "(default .gaia-runs/science-concerns.jsonl)")
+    p.add_argument("--prev", metavar="PANEL_JSON",
+                   help="the PREVIOUS round's panel.json; grades this round's rulings against "
+                        "what actually blocked, so one throwaway withdrawal cannot look like "
+                        "convergence")
+    p.add_argument("--round", type=int, default=1)
+    p.add_argument("--run-ts", default="")
+    p.add_argument("--scope-log", metavar="FILE", nargs="?", const=str(SCOPE_LOG),
+                   help="append this panel's declared-scope split to the series "
+                        f"(default {SCOPE_LOG})")
+    p.add_argument("--scope-report", metavar="FILE", nargs="?", const=str(SCOPE_LOG),
+                   help="render the scope series as markdown and exit")
     p.add_argument("--block-on", metavar="SCOPES",
                    help="comma-separated scopes on which a critical concern blocks "
                         f"(default {','.join(DEFAULT_BLOCK_ON)}; also GAIA_PANEL_BLOCK_ON)")
@@ -592,6 +931,14 @@ def main() -> int:
 
     if a.expect_for:
         print(expected_subagent_type(a.expect_for))
+        return 0
+
+    if a.scope_report:
+        text = scope_report(read_jsonl(Path(a.scope_report)))
+        if a.out:
+            Path(a.out).write_text(text, encoding="utf-8")
+        else:
+            print(text)
         return 0
 
     if a.from_stream:
@@ -646,6 +993,32 @@ def main() -> int:
             for c in crit:
                 lines.append(f"- [{c['scope']}] {c['claim']} ({c['persona']})")
             lines.append("")
+        # THE STANDING LEDGER, which is the difference between a panel for this issue and a
+        # reader who holds the project. The chair is the only stage that sees both: the
+        # reviewers are deliberately not shown the ledger, so an echo here is independent
+        # rediscovery rather than a persona repeating what it was handed.
+        sp = agg.get("standing_prior") or []
+        if sp:
+            lines.append("THE PROJECT'S STANDING CONCERNS THAT THIS PANEL HAS LANDED ON AGAIN "
+                         "(from earlier issues, unsettled after two rounds; NO reviewer on "
+                         "this panel was shown them). Say plainly if this panel is "
+                         "rediscovering an open project-level problem rather than finding a "
+                         "new one -- that is the single most useful thing you can tell a "
+                         "reader, and no individual verdict can say it:")
+            for e in sp:
+                lines.append(f"- #{e['issue']} [{e['disposition']}/{e['scope']}] {e['claim']} "
+                             f"({e['persona']}) -- shares {e['about'] or 'the same code'} with "
+                             f"{e['echoed_by']}'s concern today")
+            lines.append("")
+        grade = agg.get("prior_grading") or {}
+        if grade.get("graded"):
+            lines.append(f"ADJUDICATION (round 2+): of the {grade['prev_blocking']} concern(s) "
+                         f"that BLOCKED last round, {grade['moved_blocking']} were resolved or "
+                         f"withdrawn and {grade['still_blocking']} still stand.")
+            for h in grade.get("hollow") or []:
+                lines.append(f"- NOTE: {h['persona']} ruled {h['status']} on a concern that was "
+                             f"not among the blocking ones: {h['claim']}")
+            lines.append("")
         for v in agg["verdicts"]:
             lines += [f"===== REPORT: {v['persona']} (verdict: {v['verdict']}) =====",
                       v.get("report") or "(no prose report captured)", ""]
@@ -680,7 +1053,28 @@ def main() -> int:
             except Exception:
                 raw = None
             verdicts.append(normalise_verdict(raw, persona))
-        agg = aggregate(verdicts, block_on({"GAIA_PANEL_BLOCK_ON": a.block_on}) if a.block_on else None)
+        prev = None
+        if a.prev and Path(a.prev).exists():
+            try:
+                prev = json.loads(Path(a.prev).read_text(encoding="utf-8"))
+            except Exception:
+                prev = None                 # ungraded, i.e. the old rule. Never fails open.
+        agg = aggregate(verdicts,
+                        block_on({"GAIA_PANEL_BLOCK_ON": a.block_on}) if a.block_on else None,
+                        prev)
+        # Everything below is reporting, and every line of it fails soft: the decision above
+        # is already made and nothing here may change it.
+        if a.issue is not None:
+            try:
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
+                from gaia_concerns import LEDGER, read as read_ledger
+                rows = read_ledger(Path(a.ledger) if a.ledger else LEDGER)
+                agg["standing_prior"] = standing_prior(agg, rows, exclude_issue=a.issue)
+            except Exception:
+                agg["standing_prior"] = []
+        if a.scope_log:
+            append_scope_log(scope_log_row(agg, a.issue, a.run_ts, a.round),
+                             Path(a.scope_log))
         if a.json:
             Path(a.json).write_text(json.dumps(agg, indent=2), encoding="utf-8")
         if a.render:

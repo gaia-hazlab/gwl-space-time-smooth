@@ -108,6 +108,11 @@ GAIA_REVISIT_PARKED="${GAIA_REVISIT_PARKED:-1}"   # re-plan parked issues once, 
 # that is not an aux-sized task.
 GAIA_PLAN_TIMEOUT="${GAIA_PLAN_TIMEOUT:-2700}"    # 45 min wall clock for the planning session
 GAIA_PLAN_MAX_TURNS="${GAIA_PLAN_MAX_TURNS:-40}"
+# GATE-ONLY. The panel is the thing under test here, and testing it should not have to cost an
+# implementation, a PR and a merge. With this set the run stops at the gate: the plan, the
+# panel, every round, the park stamp and the label all happen for real, and nothing ever edits
+# the tree. It is how the review loop gets exercised often enough to be trusted.
+GAIA_GATE_ONLY="${GAIA_GATE_ONLY:-0}"             # 1 = plan and review, never implement
 GAIA_GATE_INTEGRITY="${GAIA_GATE_INTEGRITY:-1}"   # 0 disables gate-weakening detection
 GAIA_FAIL_STRIKES="${GAIA_FAIL_STRIKES:-3}"       # identical failure signatures before stopping
 GAIA_PENDING_META=()                              # per-issue meta awaiting the batch outcome
@@ -461,6 +466,62 @@ record_gate_block() {
   return 0
 }
 
+# THE PARK STAMP, written at the moment of the park and in the two places that can be read
+# later. Locally it goes to .gaia-runs/parked.jsonl for the staleness report; on GitHub it goes
+# into a comment on the issue as an HTML comment, which is invisible to a reader and is the
+# only way CI can measure anything about a parked plan -- the box's .gaia-runs/ is gitignored
+# and no workflow will ever see it, but a checked-out repository plus a commit sha and a list
+# of paths is enough to answer "how far has the tree moved under this plan".
+#
+# Written BEFORE the label. The `needs-human-decision` label is what triggers the human-gate
+# workflow, and a workflow that fires before the stamp exists would find nothing to escalate.
+park_stamp() {
+  local number="$1" panel_json="$2" plan_json="$3" cause="$4" logfile="$5"
+  local stamp
+  stamp="$(python3 - "$panel_json" "$plan_json" "$cause" "$(git rev-parse HEAD 2>/dev/null)" \
+             "$REPO_DIR/scripts/gaia-launch" <<'STAMP' 2>>"$logfile"
+import json, sys, datetime
+panel_p, plan_p, cause, sha, gaia = sys.argv[1:6]
+sys.path.insert(0, gaia)
+def load(p):
+    try:
+        return json.load(open(p, encoding="utf-8"))
+    except Exception:
+        return {}
+panel, plan = load(panel_p), load(plan_p)
+try:
+    from gaia_parked import plan_paths
+    paths = plan_paths(plan)
+except Exception:
+    paths = []
+print(json.dumps(dict(
+    ts=datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    sha=sha, paths=paths, cause=cause,
+    decision=panel.get("decision", "?"),
+    stalemate=bool(panel.get("stalemate")),
+    blocking=[dict(scope=c.get("scope", "?"), claim=(c.get("claim") or "")[:300],
+                   decisive_test=(c.get("decisive_test") or "")[:300],
+                   persona=c.get("persona", "?"))
+              for c in (panel.get("blocking_concerns") or [])][:8]), separators=(",", ":")))
+STAMP
+)" || stamp=""
+  [ -n "$stamp" ] || stamp="{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"cause\":\"${cause}\"}"
+  python3 "$REPO_DIR/scripts/gaia-launch/gaia_parked.py" --record --issue "$number" \
+    --title "${title:-}" --milestone "${milestone:-}" --panel "$panel_json" --plan "$plan_json" \
+    --log "$logfile" >> "$logfile" 2>&1 || true
+  # The comment itself is deliberately short. The plan, every verdict and a decisive test per
+  # concern are already on this issue, posted before implementation was attempted; the full
+  # decision packet is written by the human-gate workflow when the label lands. This is the
+  # machine-readable half plus one line a person can act on if no workflow ever runs.
+  gh issue comment "$number" --body "⛔ **Parked by the science gate** — this one needs a human
+decision (\`${cause}\`). The rest of the batch carried on. The pre-registered plan and every
+persona's verdict are in the comments above; each blocking concern names the test that would
+settle it. Ruling on it and removing the \`needs-human-decision\` label is what unblocks it.
+
+<!-- gaia-park:${stamp} -->" >> "$logfile" 2>&1 \
+    || echo "  (could not post the park stamp to #${number}; it is still in .gaia-runs/parked.jsonl)" | tee -a "$logfile"
+}
+
 # The science gate. Writes $PLAN_FILE and $BRIEF_FILE for the caller to inject into the
 # implementation prompt. Returns 0 to proceed, 1 if the panel blocked (caller parks).
 science_gate() {
@@ -656,7 +717,15 @@ Finish your reply with EXACTLY one fenced json block and nothing after it. Omit
       vfiles+=("$round_dir/${persona}.json")
     done
 
+    # --prev is what makes round 2 an adjudication that can be CHECKED rather than trusted:
+    # the rulings are matched back to the concerns that actually blocked last round, so one
+    # throwaway withdrawal can no longer manufacture "movement" and buy another planning
+    # cycle. --issue pulls in the standing ledger for the chair. --scope-log appends this
+    # panel's declared-scope split to the series that answers whether reviewers inflate scope
+    # once they learn what stops work. All three are reporting; none can open the gate.
     python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --aggregate "${vfiles[@]}" \
+      --issue "$number" --round "$round" --run-ts "$ts" --scope-log \
+      ${prev_round:+--prev "$prev_round/panel.json"} \
       --json "$round_dir/panel.json" --render > "$round_dir/panel.md" 2>>"$logfile" || true
     # $dir/panel.json is always the LATEST round -- what record_parked reports and what the
     # corpus records. The per-round copies under r*/ are the trail of how it got there.
@@ -687,6 +756,11 @@ scientific concern no reviewer raised, do not re-rank the critical issues, and d
 with a verdict. Where reviewers conflict, say so plainly and attribute it; do not adjudicate.
 
 $(cat "$round_dir/chair-brief.md")
+
+Apply the plain-voice skill before you write (Skill(skill=\"plain-voice\")): this summary is
+read by a person deciding something, and the LLM register costs them time. Plain nouns, real
+numbers, no ornament, no hedge preamble in front of a blocking concern. Apply it silently --
+never narrate the filtering, and never let a wording change alter what a verdict claims.
 
 Write for a scientist who will read this and nothing else. Be specific and name names --
 \"the geostatistician and the auditor both object to X, for different reasons\" is useful;
@@ -763,12 +837,14 @@ $(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan t
     if [ "$(jq -r '.stalemate // false' "$dir/panel.json" 2>/dev/null)" = "true" ]; then
       echo "  !!! #${number}: STALEMATE -- the panel resolved none of its own prior concerns. \
 Not spending another planning cycle on it." | tee -a "$logfile"
+      park_stamp "$number" "$dir/panel.json" "$PLAN_FILE" panel-stalemate "$logfile"
       add_label "$number" needs-human-decision "$logfile"
       record_gate_block "$number" "$title" "$round_dir/plan.raw.jsonl" "panel-stalemate" "$logfile"
       return 1
     fi
     if [ "$rev" -ge "$GAIA_PLAN_REVISIONS" ]; then
       echo "  !!! science panel blocked #${number} after ${rev} revision(s); not implementing" | tee -a "$logfile"
+      park_stamp "$number" "$dir/panel.json" "$PLAN_FILE" panel-block "$logfile"
       add_label "$number" needs-human-decision "$logfile"
       record_gate_block "$number" "$title" "$round_dir/plan.raw.jsonl" "panel-block" "$logfile"
       return 1
@@ -1016,6 +1092,9 @@ record_parked() {
       echo "\`gh issue view ${n} --comments\` · log: \`${logfile}\`"
       echo ""
     } >> "$GAIA_PARKED_LEDGER" 2>/dev/null || true
+    # No stamp is written here. park_stamp() already wrote it at the moment of the park --
+    # against the commit the plan was actually judged at, not against whatever HEAD is by the
+    # end of the batch, which is a different number and the wrong one.
   done
 }
 
@@ -1528,6 +1607,18 @@ while IFS= read -r batch_json; do
       continue
     fi
 
+    # The gate passed. Under GAIA_GATE_ONLY that is the whole run for this issue: no editing
+    # agent is dispatched, no branch is touched, no PR is opened. Everything the gate itself
+    # produced -- the plan, the verdicts, the chair's summary, the scope-log row, the issue
+    # comments -- is already written, which is the point. Set GAIA_REVISIT_PARKED=0 alongside
+    # it unless you want the second pass as well: the revisit exists to re-plan a parked issue
+    # once its SIBLINGS have landed, and in a gate-only run nothing lands, so it buys a second
+    # full plan-and-panel against unchanged context.
+    if [ "$GAIA_GATE_ONLY" = "1" ]; then
+      echo "  GAIA_GATE_ONLY=1: the panel passed #${number}; stopping here, not implementing." | tee -a "$logfile"
+      continue
+    fi
+
     vcs_before="$(vcs_state)"
     # --max-turns and the timeout are the two bounds that hold when nothing else does: an
     # agent that has lost the plot burns turns, and one that has deadlocked burns only wall
@@ -1652,6 +1743,11 @@ Co-Authored-By: Claude <noreply@anthropic.com>" >> "$logfile" 2>&1 && commit_rc=
     fi
     any_committed=1
     resolved+=("$number")
+    # An issue that has now landed is not parked work, whatever an earlier run recorded. Said
+    # here rather than inferred from the issue's state so the staleness report is right even
+    # when `gh` is unavailable to it.
+    python3 "$REPO_DIR/scripts/gaia-launch/gaia_parked.py" --unpark --issue "$number" \
+      >> "$logfile" 2>&1 || true
 
     # Push this commit; on the FIRST commit of the batch open the PR as a DRAFT so the per-issue
     # commits stream onto it as they land. It is NOT marked ready-for-review (and Copilot is NOT
@@ -2101,7 +2197,25 @@ if [ "${#GAIA_RUN_PARKED[@]}" -gt 0 ]; then
   echo "  Each keeps its pre-registered plan and the full panel on the issue itself, and is"
   echo "  labelled needs-human-decision. Nothing else in the run was held up waiting for them."
   echo "  Digest: ${GAIA_PARKED_LEDGER}"
-else
+fi
+
+# How far the project has moved without the parked work -- including issues parked by EARLIER
+# runs, which is the pile nobody was watching. Parking is cheap on the day and gets expensive
+# quietly: siblings land on the very files the parked plan names, and at some point resuming
+# costs more than re-planning. This says which side of that line each one is on, and nothing
+# more -- it recommends, it never acts.
+GAIA_PARKED_STATUS_MD="$LOG_DIR/parked-status-${GAIA_RUN_TS}.md"
+if python3 "$REPO_DIR/scripts/gaia-launch/gaia_parked.py" --status \
+     --repo-dir "$REPO_DIR" --out "$GAIA_PARKED_STATUS_MD" >/dev/null 2>&1 \
+   && grep -q '^| ' "$GAIA_PARKED_STATUS_MD" 2>/dev/null; then
+  echo ""
+  echo "Parked work still open, and how stale it has become:"
+  sed -n 's/^\*\*\([0-9]*\) parked\*\* · \([0-9]*\) stale.*/  \1 parked, \2 stale/p' \
+    "$GAIA_PARKED_STATUS_MD" | head -1
+  echo "  A stale plan is one to re-plan, not resume: ${GAIA_PARKED_STATUS_MD}"
+fi
+
+if [ "${#GAIA_RUN_PARKED[@]}" -eq 0 ]; then
   echo ""
   echo "No issues parked by the science gate this run."
 fi
@@ -2122,4 +2236,18 @@ if python3 "$REPO_DIR/scripts/gaia-launch/gaia_concerns.py" --render --out "$GAI
         | sed -n 's/^\*\*\([0-9]*\)\*\* concerns across \*\*\([0-9]*\)\*\* issues.*/\1 concerns across \2 issues/p' | head -1)"
   echo "  Not a queue to work through — a document to read in one sitting: ${GAIA_CONCERNS_MD}"
   echo "  Ledger: ${LOG_DIR}/science-concerns.jsonl"
+fi
+
+# ── What the panels are declaring, as a series ───────────────────────────────
+# Scope is self-declared and it decides whether work stops, which is an incentive. Whether
+# reviewers inflate it once they learn what stops work is not answerable from any one panel --
+# every individual one looks reasonable -- so each panel appends its split and this reads them
+# together. It gates nothing, deliberately: a measurement that feeds a gate stops measuring.
+GAIA_SCOPE_MD="$LOG_DIR/panel-scope-${GAIA_RUN_TS}.md"
+if [ -s "$LOG_DIR/panel-scope.jsonl" ] \
+   && python3 "$REPO_DIR/scripts/gaia-launch/gaia_panel.py" --scope-report \
+        --out "$GAIA_SCOPE_MD" >/dev/null 2>&1; then
+  echo ""
+  echo "Declared scope across panels (the drift check on what reviewers say stops work):"
+  echo "  $(wc -l < "$LOG_DIR/panel-scope.jsonl" | tr -d ' ') panel(s) logged: ${GAIA_SCOPE_MD}"
 fi

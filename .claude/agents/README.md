@@ -37,3 +37,24 @@ Two properties are deliberate:
 Keep the standing concerns tied to something in `docs/reviews/` or a merged PR. A persona
 whose priors are invented rather than earned will generate confident, ungrounded objections —
 which is worse than no reviewer, because it costs a revision cycle to discover.
+
+## `plain-voice` — not a reviewer
+
+One agent in this directory is not a science persona and never sits on a panel:
+`plain-voice.md`, the prose editor. Every human-facing thing this repository publishes goes
+through it before it ships — the review-loop report, the docs pages, README prose, panel
+summaries, issue and PR bodies.
+
+It runs the skill of the same name (`.claude/skills/plain-voice/`), which carries the tiered
+word lists, the phrase patterns, the cadence rules and the list of what an edit may never
+touch. The skill is general to scientific writing; the agent only says how it applies here.
+Two constraints keep it from doing damage:
+
+- **It edits how prose reads, never what it claims.** Numbers and their precision, hedges the
+  evidence requires, negative results, limitations, decisive tests, attributions and method
+  names are content. They survive the edit unchanged.
+- **A clean draft gets no edit.** Reflexively changing something on every pass is how an
+  editor makes writing worse.
+
+Unlike the personas above it has `Edit` and `Write`, because its whole job is to change prose.
+It has no standing in any scientific question and must never be asked one.

@@ -155,6 +155,36 @@ Every Class-B path shares one property: **it leaves the work recoverable and the
 complete.** Nothing is force-merged, retried silently, or discarded. A parked branch is
 pushed before it is renamed, so the work survives loss of the machine.
 
+### How a Class-B escalation actually reaches a person
+
+Classifying an escalation is not delivering one. Until 2026-08-22 every path above ended at
+a label and a line in a console log on whichever box the queue ran on — which means the
+escalation path was *"someone remembers to look"*, and that is not an escalation path.
+
+The delivery is now mechanical, and it has exactly two tempos:
+
+| | Immediate — once per park | Periodic — the sitting |
+|---|---|---|
+| **What** | A decision packet posted on the issue, and the issue **assigned** | The queue page, one rolling digest issue, an email if the queue is not empty |
+| **How you hear** | GitHub's own assignment notification. It already knows how to reach a person | You choose when. Editing the digest body does not notify; the weekly email is the only outbound |
+| **How often** | Once per park, counted rather than guessed: the workflow compares park stamps against packets, so a **re-park** pages again and a **re-label** does not | Weekly, Monday morning |
+| **Why not more** | Re-notifying about a decision you have already seen is exactly how a gate becomes a pager | Parked issues are decisions to make; the digest is what makes them a sitting rather than a stream |
+
+What makes this work in CI, which never sees the box's `.gaia-runs/`, is the **park stamp**:
+`gaia_run_queue.sh` writes `<!-- gaia-park:{…} -->` into its park comment, naming the commit
+the plan was judged against, the files the plan said it would touch, and the blocking concerns
+with their decisive tests. GitHub hands it back verbatim, the workflow has the repository
+checked out, and `git` answers the rest — so the staleness on the page is the same measurement
+the run made locally, computed from the same stamp.
+
+`.github/workflows/gaia-human-gate.yml` · `scripts/gaia-launch/gaia_human_queue.py` ·
+25 tests in `scripts/gaia-launch/tests/test_human_queue.py`.
+
+**What no mechanism here can do is make a person read.** Delivery is guaranteed; the decision
+is not. What the digest adds is that the not-reading is visible — a decision waiting more than
+a week is marked overdue, and a parked plan whose files have been rewritten underneath it is
+marked stale, which is the point at which the honest advice is to re-plan rather than resume.
+
 ### Class C — explicitly *not* a page
 
 This class is the design's actual contribution, and it is defined by exclusion: findings
@@ -185,19 +215,26 @@ flowchart TD
     D1 -- no --> IMPL[Implement<br/>deferred concerns carried in<br/>as must-address items]
     D1 -- yes --> REV[Re-plan<br/>fed ONLY the blocking concerns]
     REV --> R2[Round 2: ADJUDICATION<br/>each persona handed its OWN prior verdict<br/>+ the diff of what changed]
-    R2 --> MOVE{moved = resolved + withdrawn}
-    MOVE -- "moved = 0 and still blocking" --> STALE[STALEMATE<br/>→ human]
-    MOVE -- "still blocking, moved > 0" --> PARK[Park this issue<br/>→ human, at end of run]
+    R2 --> MOVE{Did a ruling land on a concern<br/>that BLOCKED last round?}
+    MOVE -- "no — hollow, or nothing" --> STALE[STALEMATE<br/>→ human]
+    MOVE -- "yes, still blocking" --> PARK[Park this issue<br/>→ human, at end of run]
     MOVE -- "no longer blocking" --> IMPL
     PARK --> REVISIT[Revisit pass after siblings land<br/>same standing objections, new context]
     REVISIT --> D2{Blocks again?}
     D2 -- yes --> HUMAN[Real disagreement → human]
     D2 -- no --> IMPL
     IMPL --> LEDGER[(Standing ledger<br/>science-concerns.jsonl)]
-    STALE --> SIT[One review sitting<br/>at end of run]
-    HUMAN --> SIT
+    STALE --> STAMP[Park stamp on the issue<br/>commit + the plan's files]
+    PARK --> STAMP
+    HUMAN --> STAMP
+    STAMP --> LABEL([needs-human-decision])
+    LABEL --> GATE[Human gate workflow<br/>decision packet + assignment]
+    GATE --> SIT[One review sitting<br/>queue page · rolling digest · weekly email]
     LEDGER --> SIT
 ```
+
+The stamp is written **before** the label, and that ordering is the mechanism: the label is
+what triggers the workflow, so a workflow that fired first would find nothing to escalate.
 
 ---
 
@@ -276,6 +313,39 @@ panel are talking past each other, and the next round is the same conversation a
 same price. The queue stops there and hands over — the same reasoning as three-strikes on
 identical failure signatures. **An unrecognised status counts as `unresolved`**, so
 malformed output cannot claim a concern was answered.
+
+### 6a. Movement has to move what was blocking
+
+The arithmetic above has a hole, and it is one line wide. `moved` counts *any* ruling as
+progress, so a persona that will not drop its blocking concern can withdraw a minor one it
+never cared about: `moved` becomes 1, the stalemate rule goes quiet, and the queue buys
+another planning round that settles nothing. Nothing noticed, because nothing checked
+*which* concern moved.
+
+So each ruling is now matched back to **the previous round's blocking concerns** — by
+referent, the same rule the panel's own convergence and the standing ledger use — and only
+a ruling on one of *those* counts as movement:
+
+```python
+stalemate = decision == "block" and moved_blocking == 0     # when the previous round is on disk
+```
+
+Rulings that match nothing that blocked are reported as `hollow`. That is deliberately not
+an accusation: withdrawing a deferred concern is legitimate, and a reviewer may do it for
+good reasons. It is the difference between *"we are converging"* and *"we are moving the
+deck chairs"*, said out loud in the panel summary and in the chair's brief, where a person
+can weigh it.
+
+Two properties hold this in place. A persona that blocked nothing last round **cannot
+unblock anything this round** — its rulings are real work and are counted, they are just
+not what stands between this issue and implementation. And the grading needs the previous
+round's `panel.json`: without it (round 1, or a missing file) the old count-everything rule
+stands, so **an absent file can never be what opens the gate**, and never what closes one
+either.
+
+This makes the pipeline *more* likely to call a human, not less, and that is the intent.
+The escalations it adds are the ones that were previously papered over by a withdrawal
+nobody read.
 
 The revisit pass inherits this. An issue parked in pass 1 and re-planned after its
 siblings landed points at the last completed round of that first pass, so it answers the
@@ -415,6 +485,14 @@ Two implementation notes carry the epistemics:
 It is a reading aid: nothing gates on it, and each group states what its members have in
 common, so a wrong grouping costs a glance rather than a decision.
 
+One thing does read it automatically, and only one: **the chair**. Before it writes the
+panel summary it is handed the standing concerns from *earlier* issues that share a
+referent with what this panel just filed — so it can say "this panel is rediscovering an
+open project-level problem" instead of "the panel raised X". The reviewers are
+deliberately *not* shown it: handing a persona the project's standing objections before it
+reviews tells it what to say, and an independently rediscovered concern is evidence in a
+way a prompted one is not. The chair reports; the panel judges.
+
 The digest prints **once, at the end of a run**, next to the parked list and explicitly
 separate from it. That separation is the thesis of this document in one line:
 
@@ -444,7 +522,14 @@ what the human can trust when they finally look:
   disagreement and belongs with a human.
 
 Every park is collected into `.gaia-runs/parked-<run>.md` and printed once, at the end of
-the run.
+the run — together with a **staleness report over every issue still parked, including
+those parked by earlier runs**. Parking is cheap on the day and gets expensive quietly:
+the plan stays exactly as readable as it was while the tree it describes moves on, and at
+some point resuming costs more than re-planning. So each park stamps the commit it was
+judged against and the files its plan named, and later runs measure the distance from
+there — commits since, commits rewriting *those* files, days waiting. A hundred commits
+elsewhere do not make a parked plan wrong; three commits rewriting the two files it names
+probably do.
 
 And a quieter fix that exists purely to make this loop measurable: a batch that died at
 the gate used to record **nothing**, because `write_measurement` is only reached at commit
@@ -460,24 +545,34 @@ Stated plainly, because a document about honest escalation that oversells its ow
 mechanism would be self-refuting.
 
 1. **Round 2 has never run on real data.** The adjudication protocol, the `moved` count
-   and the stalemate rule are pinned by 90 tests in
+   and the stalemate rule are pinned by 155 tests in
    `scripts/gaia-launch/tests/`, and are untested against a live panel. #186 blocked in
    round 1 under the old rule. The convergence numbers in §6 are a design, not a result.
-2. **Scope is self-declared, and the anti-inflation measures are unmeasured.** Deferred
-   concerns are published, recorded and carried into the implementation prompt precisely
-   so that scope is not the only route to being heard. Whether that holds — whether the
-   observed `breaking`/`wrong-physics` rate stays near the ~3-of-12 the #186 concerns
-   suggest, or drifts upward as personas learn what stops work — needs a corpus of runs
-   that does not exist yet.
-3. **The stalemate rule is gameable.** One trivial `withdrawn` manufactures `moved > 0`
-   and buys another round. Nothing currently detects a withdrawal that is not a real
-   change of mind.
-4. **Nothing enforces the sitting.** The standing ledger is printed once and can be
-   ignored forever. Its value is entirely contingent on a human habit the pipeline cannot
-   create.
-5. **The human is the slowest component, and parked work ages.** A parked issue whose
-   siblings keep landing gets progressively harder to resume; nothing currently measures
-   or bounds that staleness.
+   Everything §6a adds is pinned the same way and is waiting on the same run.
+2. **Scope is self-declared. It is now measured, which is not the same as validated.**
+   Deferred concerns are published, recorded and carried into the implementation prompt
+   precisely so that scope is not the only route to being heard. Whether that holds is an
+   empirical question, so every panel appends its split to `.gaia-runs/panel-scope.jsonl`
+   and `gaia_panel.py --scope-report` reads them as a series. The report refuses to call a
+   direction from fewer than six panels, and at this writing there are not six panels. A
+   baseline exists; a trend does not.
+3. **A hollow `withdrawn` is now detected, by a heuristic.** Rulings are matched back to
+   the previous round's blocking concerns by shared referent (§6a), so a throwaway
+   withdrawal no longer manufactures movement. The match is the same `1/(df−1)` rule used
+   everywhere else and it can miss: a reviewer who resolves a blocking concern while
+   naming nothing the original claim named will be read as having moved nothing, and the
+   issue goes to a human. That is the safe direction of failure, and it is still a cost.
+4. **Nothing enforces the sitting — delivery is not reading.** An escalation is now
+   assigned, packeted, listed on a page and emailed weekly (§3), and none of that makes a
+   person rule on it. What changed is that the not-reading is visible: overdue in the
+   digest, stale on the page. The chair also reads the standing ledger now (§10), which
+   narrows the failure to the pile nobody opens. No mechanism here removes it.
+5. **Parked work ages, and the bound is a heuristic.** Every park now stamps the commit
+   its plan was written against and the files the plan named, and
+   `gaia_parked.py --status` reports commits-since, commits-touching-those-files, and days
+   waiting, as fresh / aging / stale. The thresholds (21 days, 3 commits in the plan's own
+   files) are judgement calls stated out loud rather than derived from anything, and
+   nothing acts on the verdict — it recommends re-planning, and a person decides.
 6. **The counterfactual is unmeasured.** The corpus of gate-exit records now exists, and
    at this writing contains **one row**. Whether reviewing plans changes outcomes is an
    open empirical question in this project, not a settled one.
@@ -512,6 +607,15 @@ Portable to any pipeline with autonomous reviewers and a scarce human.
    be read.
 10. **Instrument every exit path**, including the ones where the gate acted — otherwise
     the pipeline cannot tell you whether any of this works.
+11. **Classifying an escalation is not delivering one.** A taxonomy that ends at a label
+    and a console line has an escalation path of "someone remembers to look". Deliver on
+    the channel the person already watches, once per event — and make the periodic
+    reminder a document they choose to open, not a notification.
+12. **Count what moved, not how much moved.** Any convergence metric that treats all
+    progress as equal can be satisfied by the cheapest possible concession, and will be.
+13. **Where a field creates an incentive, log the field.** Scope decides what stops work,
+    so scope is a thing reviewers can learn to inflate. That is not detectable in any one
+    review — only as a series — and a measurement that feeds a gate stops measuring.
 
 ---
 

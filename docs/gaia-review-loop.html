@@ -216,10 +216,10 @@ flowchart TD
     AGG -- "no" --> IMPL
     AGG -- "yes" --> REPLAN["Re-plan<br/><i>fed ONLY the blocking concerns</i>"]
     REPLAN --> R2{{"PANEL — ROUND 2 = ADJUDICATION<br/>each persona gets ITS OWN prior verdict + the diff<br/>rules resolved / unresolved / withdrawn"}}
-    R2 --> MOVED{"moved = resolved + withdrawn"}
+    R2 --> MOVED{"did a ruling land on a concern<br/>that BLOCKED last round?"}
     MOVED -- "cleared" --> IMPL["Implement — gaia agents<br/><i>deferred concerns carried in as must-address</i>"]
-    MOVED -- "&gt; 0, still blocking" --> PARK["PARK this issue<br/><i>batch continues</i>"]
-    MOVED -- "= 0, still blocking" --> STALE["STALEMATE"]
+    MOVED -- "yes, still blocking" --> PARK["PARK this issue<br/><i>batch continues</i>"]
+    MOVED -- "no — hollow or nothing" --> STALE["STALEMATE"]
     IMPL -. "deferred" .-> LEDGER[("Standing ledger<br/>science-concerns.jsonl")]
     IMPL --> GI["Gate integrity<br/><i>no skipped test, no raised tolerance</i>"]
     GI --> TESTS["pixi run test · DOI check · quarto render"]
@@ -232,7 +232,12 @@ flowchart TD
     REVISIT --> D2{"blocks again?"}
     D2 -- "no" --> IMPL
     D2 -- "yes" --> SIT
-    STALE --> SIT["ONE review sitting, at end of run<br/><i>parked list + standing-concern digest</i>"]
+    PARK --> STAMP["Park stamp on the issue<br/><i>commit + the plan's files</i>"]
+    STALE --> STAMP
+    STAMP --> LABEL(["needs-human-decision"])
+    LABEL --> GATE["Human gate — GitHub Action<br/><i>decision packet + assignment</i>"]
+    GATE --> SIT["ONE review sitting<br/><i>queue page · rolling digest · weekly email</i>"]
+    STALE --> SIT
     HOPEN --> SIT
     LEDGER --> SIT
 
@@ -243,7 +248,8 @@ flowchart TD
     class IMPL,MERGE,TESTS,GI go
     class LEDGER,R1,R2,CP,AUD rec
     class PARK,STALE,REPLAN blk
-    class SIT,HOPEN hum
+    class SIT,HOPEN,LABEL,GATE hum
+    class STAMP rec
 </pre>
   </div>
   <figcaption>Green continues work · blue records or reviews · vermilion stops this issue ·
@@ -491,7 +497,7 @@ flowchart TD
           <td>A <code>critical</code> concern scoped <code>breaking</code> or <code>wrong-physics</code> survives; a stalemate; a second block after revisit; three strikes; an auditor block; a design collision</td>
           <td>Always. Every panel, every round, including ones that changed nothing</td></tr>
         <tr><td>Where it lands</td>
-          <td><code>needs-human-decision</code> label · the parked ledger <code>.gaia-runs/parked-&lt;run&gt;.md</code> · printed once at end of run</td>
+          <td>A decision packet <b>on the issue</b> · the <code>needs-human-decision</code> label · <b>assignment</b>, which is the notification · the queue page · one rolling digest issue · a weekly email</td>
           <td>The plan and every verdict posted <b>on the issue</b> · <code>panel.md</code> with the chair's summary · the standing digest · the PR dashboard · the raw transcript</td></tr>
         <tr><td>Timing</td>
           <td>Batched to one sitting at the end of the run — never mid-batch</td>
@@ -500,7 +506,7 @@ flowchart TD
           <td>Named as the thing to decide: what a human has to rule on</td>
           <td>Attributed and preserved. The chair states who conflicts with whom and does <b>not</b> adjudicate</td></tr>
         <tr><td>If nobody looks</td>
-          <td>Work stays parked; the branch is pushed before it is renamed, so nothing is lost</td>
+          <td>Work stays parked; the branch is pushed before it is renamed, so nothing is lost — and the weekly digest keeps saying how long it has waited, and how far the tree has moved under it</td>
           <td>Nothing is lost either — but nothing is learned. This is the weakest link in the design</td></tr>
       </tbody>
     </table>
@@ -519,6 +525,118 @@ flowchart TD
       interruption.</b> Deferred is not discarded — it is posted, recorded, and handed to the
       implementer — and the panel prompt says so explicitly, because a reviewer who believes a
       finding will be dropped learns to inflate its scope until it is heard.</p>
+  </div>
+</section>
+
+<section class="wide">
+  <h2>Where a human enters the loop, exactly</h2>
+  <p>Every place the pipeline stops and asks for a person, what it hands over, and how the
+    person finds out. There are <b>six</b> of them and they are the whole list: anything not on
+    it was decided by the machine, on purpose, and is recorded rather than escalated.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Where</th><th>What triggers it</th><th>Cause code</th><th>What it hands you</th><th>What clears it</th></tr></thead>
+      <tbody>
+        <tr><td><b>Science panel — block</b></td>
+          <td>A <code>critical</code> concern scoped <code>breaking</code> or
+              <code>wrong-physics</code> survives two rounds, or a persona votes
+              <code>block</code> outright</td>
+          <td><code>panel-block</code></td>
+          <td>The pre-registered plan, every verdict, a decisive test per blocking concern —
+              all posted <em>before</em> any code was written</td>
+          <td>You rule: the plan is wrong, the concern is wrong, or the scope was overstated.
+              Any of the three</td></tr>
+        <tr><td><b>Science panel — stalemate</b></td>
+          <td>Round 2 rules on its own prior concerns and <b>moves nothing that blocked</b></td>
+          <td><code>panel-stalemate</code></td>
+          <td>Both rounds' verdicts, the diff between the plans, and which rulings were
+              <code>hollow</code></td>
+          <td>You break the tie. The queue will not spend another planning round on it</td></tr>
+        <tr><td><b>The plan never validated</b></td>
+          <td>The planning session timed out, or never met the output contract</td>
+          <td><code>plan-timeout</code> · <code>plan-invalid</code></td>
+          <td>The transcript. This is a pipeline failure, not a science one, and it says so</td>
+          <td>A fix on the box, or a narrower issue</td></tr>
+        <tr><td><b>Three strikes</b></td>
+          <td>The same failure signature three times — same test, same exception, numerics
+              normalised out</td>
+          <td><code>fail-signature</code></td>
+          <td>The signature and the failing output</td>
+          <td>You decide whether the approach is viable at all</td></tr>
+        <tr><td><b>Auditor gate</b></td>
+          <td>The independent auditor blocks the PR, or its verdict is unparseable</td>
+          <td><code>auditor-block</code></td>
+          <td>The PR, left open and ready for review, labelled and never auto-merged</td>
+          <td>You review the PR</td></tr>
+        <tr><td><b>Design collision</b></td>
+          <td>Two open gaia PRs touch the same files and arbitration cannot rule</td>
+          <td><code>arbitration</code></td>
+          <td>Both PRs, with the verdict posted on each — the losing side is never silently
+              dropped</td>
+          <td>You pick</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mer">
+<pre class="mermaid">
+flowchart LR
+    P["Park<br/><i>one issue, batch continues</i>"] --> S["Park stamp on the issue<br/><i>&lt;!-- gaia-park:… --&gt;</i><br/><i>commit + the plan's files</i>"]
+    S --> L(["Label: needs-human-decision"])
+    L --> A["Human gate<br/><i>GitHub Action</i>"]
+    A --> PK["Decision packet<br/><i>comment on the issue</i>"]
+    A --> AS["Assign you<br/><b>this is the notification</b>"]
+    A -. "weekly" .-> W["Queue page<br/>rolling digest issue<br/>email if not empty"]
+    PK --> R{"You rule"}
+    AS --> R
+    W --> R
+    R -- "remove the label" --> DONE(["Off the queue"])
+
+    classDef hum fill:#f7e8f0,stroke:#CC79A7,color:#2a1a24
+    classDef rec fill:#dfecf6,stroke:#0072B2,color:#12202b
+    classDef blk fill:#fbe8dc,stroke:#D55E00,color:#2b1a10
+    classDef go fill:#e2f3ed,stroke:#009E73,color:#12241f
+    class P blk
+    class S,A rec
+    class L,PK,AS,W,R hum
+    class DONE go
+</pre>
+  </div>
+  <figcaption>The label fires the workflow; the packet and the assignment are what reach a
+    person. The stamp is written <em>before</em> the label, because a workflow that ran before
+    the stamp existed would find nothing to escalate.</figcaption>
+
+  <p><b>Assignment is the notification, and it happens once per park.</b> GitHub already knows
+    how to reach a person, and re-notifying someone about a decision they have already seen is
+    how a gate becomes a pager. Once per park is enforced by counting: the workflow compares the
+    park stamps on an issue against the packets that answer them, so a re-park pages again and a
+    re-label does not.</p>
+
+  <p>Everything periodic is a <b>sitting</b> rather than a page: a queue page rebuilt on the
+    docs site, <em>one</em> rolling digest issue edited in place (editing a body does not
+    notify), and an email when the queue is not empty. The digest carries two numbers for each
+    decision — how many days it has waited, and how many commits have rewritten the files its
+    parked plan named.</p>
+
+  <div class="note rule">
+    <span class="lbl">What will never call you</span>
+    <p>A <code>critical</code> concern scoped <code>in-milestone</code>, however right it is.
+      Every deferred concern, all forty-one of them if that is what a panel files. A standing
+      concern that two rounds did not settle. A parked plan going stale. None of these produce
+      a notification, ever — they are written down, and they wait for a sitting you choose.
+      <b>Severity is a property of the finding; scope is a property of the consequence; only
+      consequence justifies an interruption.</b></p>
+  </div>
+
+  <div class="note gap">
+    <span class="lbl">The failure mode this does not fix</span>
+    <p>Nothing here can make a person read. Delivery is now guaranteed: assigned, packeted,
+      listed, emailed. Whether the decision gets <em>taken</em> is not, and no mechanism in this
+      repository can make it so. What changed is that failing to take it leaves a mark. A
+      decision waiting more than a week is flagged overdue in the digest, and a parked plan
+      whose files have been rewritten underneath it is flagged stale — the point at which the
+      honest advice is to re-plan rather than resume.</p>
   </div>
 </section>
 
@@ -544,7 +662,7 @@ flowchart TD
       conflict out of prose.</li>
   </ul>
 
-  <p>The chair is dispatched as the <b>lab-notebook</b> persona — the documenter — precisely
+  <p>The chair is dispatched as the <b>lab-notebook</b> persona, the documenter, precisely
     because it has no scientific stake to add. Its instruction is explicit: <em>you report the
     panel, you do not join it; do not introduce a concern no reviewer raised, do not re-rank the
     critical issues, do not argue with a verdict; where reviewers conflict, say so plainly and
@@ -554,37 +672,40 @@ flowchart TD
 
   <p class="pull">Fail closed on anything that gates. Fail soft on anything that only describes.</p>
 
-  <div class="note gap">
-    <span class="lbl">Open gap — the chair is not yet holistic</span>
-    <p>The chair today is <b>per-issue</b>. It is handed <code>panel.json</code> for this panel
-      and nothing else (<code>gaia_panel.py --brief</code>), so it cannot say <em>"this is the
-      third panel this milestone to raise the out-of-fold coverage cluster"</em> — because it has
-      never been told there were others.</p>
-    <p>The cross-issue memory <em>does</em> exist: the standing ledger accumulates every deferred
-      concern and groups them by shared referent, turning 31 objections from the #186 panel into
-      <b>seven groups</b>. But the ledger prints at the end of the run, to a human. Nothing
-      connects it to the chair.</p>
-    <p><b>The fix is small and safe.</b> <code>convergence()</code> already imports
-      <code>referents()</code> and <code>affinity()</code> from the ledger module, so intersecting
-      this panel's referents against the standing groups is cheap. Passing those matching groups
-      into the chair brief would make the summary say what a returning reader needs: whether this
-      objection is new, or the same standing problem arriving from a fourth direction. It is safe
-      specifically <em>because</em> the chair fails soft and cannot move the gate — the worst case
-      of a wrong match is a misleading sentence in a report, never a wrong decision.</p>
+  <div class="note rule">
+    <span class="lbl">Closed 2026-08-22 — the chair now reads the project, not just the panel</span>
+    <p>The chair was <b>per-issue</b>: handed <code>panel.json</code> for this panel and nothing
+      else, so it could not say <em>"this is the third panel this milestone to raise the
+      out-of-fold coverage cluster"</em> — it had never been told there were others. The
+      cross-issue memory existed (the standing ledger, 31 objections from #186 into
+      <b>seven groups</b>) but printed at the end of a run, to a human, connected to nothing.</p>
+    <p>It is connected now. <code>--aggregate --issue N</code> intersects this panel's referents
+      against the ledger and <code>--brief</code> hands the matches to the chair, which is asked
+      to say plainly whether the panel is rediscovering an open project-level problem rather than
+      finding a new one. The same intersection is printed in the panel summary on the issue.</p>
+    <p><b>The reviewers are deliberately not shown it.</b> Handing a persona the project's
+      standing objections before it reviews tells it what to say, and an independently
+      rediscovered concern is evidence in a way a prompted one is not. The chair reports; the
+      panel judges. And it stays safe for the same reason it always was: the decision is fixed
+      before the intersection is computed, so a wrong match costs a sentence in a report, never
+      a decision.</p>
   </div>
 </section>
 
 <section>
   <h2>Status board</h2>
   <div class="board">
-    <div class="row"><div><h3>Scope-based blocking</h3><p>Severity plus scope; only <code>critical</code> + <code>breaking</code>/<code>wrong-physics</code> stops work. Fail-closed on an undeclared scope; no way to block on nothing.</p></div><span class="pill p-live">Live · 40 tests</span></div>
+    <div class="row"><div><h3>Scope-based blocking</h3><p>Severity plus scope; only <code>critical</code> + <code>breaking</code>/<code>wrong-physics</code> stops work. Fail-closed on an undeclared scope; no way to block on nothing.</p></div><span class="pill p-live">Live · 60 tests</span></div>
     <div class="row"><div><h3>Panel routing and the cap of three</h3><p>Milestone first, then labels; auditor always; novelty markers force the prior-art readers.</p></div><span class="pill p-live">Live</span></div>
     <div class="row"><div><h3>Persona dispatch verification</h3><p>Transcript checked for the expected <code>subagent_type</code>; missing dispatch fails closed.</p></div><span class="pill p-live">Live · verified by real dispatch</span></div>
     <div class="row"><div><h3>Standing concerns ledger</h3><p>Referent-based grouping, <code>1/(df−1)</code> weighting so groups do not drift as the ledger grows. 31 → 7 on the real #186 panel.</p></div><span class="pill p-live">Live · 18 tests</span></div>
     <div class="row"><div><h3>Block parks one issue, not the batch</h3><p>Plus <code>Closes</code> lines rebuilt from what actually committed.</p></div><span class="pill p-live">Live</span></div>
-    <div class="row"><div><h3>Round 2 adjudication and the stalemate rule</h3><p>Per-round <code>r&lt;N&gt;/</code> directories, own-verdict + diff handback, <code>moved = resolved + withdrawn</code>.</p></div><span class="pill p-untested">Tested, never run live</span></div>
-    <div class="row"><div><h3>The chair</h3><p>Mechanical convergence + judged prose, fails soft, cannot move the gate.</p></div><span class="pill p-gap">Live, but per-issue only</span></div>
-    <div class="row"><div><h3>Scope self-declaration</h3><p>Whether reviewers declare scope honestly, or inflate it once they learn what stops work.</p></div><span class="pill p-unmeasured">Unmeasured</span></div>
+    <div class="row"><div><h3>Round 2 adjudication and the stalemate rule</h3><p>Per-round <code>r&lt;N&gt;/</code> directories, own-verdict + diff handback, moved = resolved + withdrawn.</p></div><span class="pill p-untested">Tested, never run live</span></div>
+    <div class="row"><div><h3>A hollow <code>withdrawn</code> no longer buys a round</h3><p>Each ruling is matched back to the previous round's <b>blocking</b> concerns by shared referent; only those count as movement, and rulings that match nothing that blocked are reported as <code>hollow</code>. Falls back to the old count without the previous panel, so a missing file cannot open the gate.</p></div><span class="pill p-untested">Live, never run live</span></div>
+    <div class="row"><div><h3>The chair</h3><p>Mechanical convergence + judged prose, fails soft, cannot move the gate — and now handed the standing concerns from earlier issues that share a referent with this panel.</p></div><span class="pill p-live">Live · holds the project</span></div>
+    <div class="row"><div><h3>Scope self-declaration</h3><p>Every panel appends its declared split to <code>panel-scope.jsonl</code>; <code>--scope-report</code> reads them as a series and refuses to call a direction from fewer than six panels. The instrument exists; the series does not yet.</p></div><span class="pill p-unmeasured">Logged · 0 panels so far</span></div>
+    <div class="row"><div><h3>The escalation channel</h3><p>Park stamp on the issue → label → GitHub Action → decision packet and assignment, once per park; a weekly sitting as a queue page, one rolling digest issue and an email. Delivery is now mechanical; whether a person <em>reads</em> it is not.</p></div><span class="pill p-live">Live · 25 tests</span></div>
+    <div class="row"><div><h3>Staleness of parked work</h3><p>Every park stamps the commit its plan was judged against and the files the plan named; later runs report commits-since, commits rewriting <em>those</em> files, and days waiting, as fresh / aging / stale. It recommends re-planning; it never acts.</p></div><span class="pill p-live">Live · 20 tests</span></div>
     <div class="row"><div><h3>Does reviewing plans change outcomes?</h3><p>Gate exits now write a record keyed by cause — <code>plan-timeout</code>, <code>plan-invalid</code>, <code>panel-block</code>, <code>panel-stalemate</code>. The instrument exists.</p></div><span class="pill p-unmeasured">Corpus holds 1 row</span></div>
   </div>
 </section>
@@ -621,20 +742,35 @@ flowchart TD
 
 <section>
   <h2>Next, in order</h2>
+  <p><a href="gaia-human-queue.html">What needs a person right now →</a> is the live queue this
+    page describes: rebuilt from GitHub state, with what stopped each issue and how far the tree
+    has moved under its parked plan.</p>
+  <p><b>Four of the five items that stood here on 2026-08-21 landed on 2026-08-22</b> — the
+    chair reads the ledger, scope declaration is logged per panel, a hollow
+    <code>withdrawn</code> is detected, and parked work is measured against the tree that moved
+    on without it. All four are pinned by tests and <em>none of them has met a live panel</em>,
+    which is why the first item did not move.</p>
   <ol>
     <li><b>Run round 2 for real.</b> Everything about convergence — the <code>moved</code> count,
-      the stalemate rule, whether <code>withdrawn</code> is used honestly — is pinned by tests
-      and has never met a live panel.</li>
-    <li><b>Give the chair the standing ledger.</b> The intersection is cheap, the call site is
-      one function, and it fails soft. This is the gap between "a panel for this issue" and
-      "a reader who holds the project."</li>
-    <li><b>Measure scope declaration.</b> Log the observed <code>breaking</code> /
-      <code>wrong-physics</code> / <code>in-milestone</code> split per panel and watch whether it
-      drifts upward as personas learn what stops work.</li>
-    <li><b>Detect a hollow <code>withdrawn</code>.</b> One trivial withdrawal manufactures
-      <code>moved &gt; 0</code> and buys another round. Nothing currently notices.</li>
-    <li><b>Bound staleness of parked work.</b> A parked issue whose siblings keep landing gets
-      harder to resume, and nothing measures that.</li>
+      the stalemate rule, whether <code>withdrawn</code> is used honestly, and now whether the
+      referent match between a ruling and the concern it answers actually fires on real prose —
+      is pinned by tests and has never met a live panel. Every item below is downstream of this
+      one run.</li>
+    <li><b>Get to six panels.</b> The scope series exists and refuses to report a direction from
+      fewer than six. Until then there is a baseline and no trend, and the honest statement
+      about scope inflation is still <em>"we have not measured it"</em>.</li>
+    <li><b>Watch the false-stalemate rate.</b> The new rule escalates when nothing that blocked
+      moved, and a resolution phrased without naming what the original concern named will read
+      as no movement. That fails toward a human, which is the safe direction and still a cost —
+      it needs a real number, not an argument.</li>
+    <li><b>Calibrate the staleness bounds.</b> 21 days and 3 commits in the plan's own files are
+      judgement calls stated out loud, not derived from anything. The first parked issue that is
+      actually resumed — or found unresumable — is the evidence.</li>
+    <li><b>Nothing enforces the sitting.</b> A decision is now <em>delivered</em> — assigned,
+      packeted, listed on a page, emailed weekly — and delivery is not reading. What changed is
+      that the not-reading is visible: overdue in the digest, stale on the page. The chair also
+      reads the standing ledger now, which narrows the failure to the pile nobody opens. It
+      does not remove it, and no mechanism here can.</li>
   </ol>
 </section>
 
@@ -642,7 +778,8 @@ flowchart TD
   <p>Full technical treatment of the escalation design: <code>docs/human-in-the-loop.md</code>.
     Pipeline reference: <code>docs/gaia-automation.md</code>. Implementation:
     <code>scripts/gaia-launch/gaia_panel.py</code>, <code>gaia_concerns.py</code>,
-    <code>scripts/gaia_run_queue.sh</code>.</p>
+    <code>gaia_parked.py</code>, <code>gaia_human_queue.py</code>,
+    <code>.github/workflows/gaia-human-gate.yml</code>, <code>scripts/gaia_run_queue.sh</code>.</p>
   <p>Written with AI assistance (Claude), as every record in this repository discloses —
     ground rule 5. Reviewed against the on-disk run artifacts rather than from memory.</p>
 </footer>

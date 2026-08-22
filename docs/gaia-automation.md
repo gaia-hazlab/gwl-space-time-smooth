@@ -15,6 +15,9 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 | `scripts/gaia-launch/gaia_plan.py` | The pre-registered plan: schema, validation, declared-vs-actual |
 | `scripts/gaia-launch/gaia_panel.py` | Routes the science panel, verifies dispatch, aggregates verdicts |
 | `scripts/gaia-launch/gaia_concerns.py` | The standing ledger of disagreements two rounds did not settle, grouped for holistic review |
+| `scripts/gaia-launch/gaia_parked.py` | How stale each parked issue's plan has become, against the tree that moved on |
+| `scripts/gaia-launch/gaia_human_queue.py` | What is waiting on a person — the decision packet, the digest, and the queue page |
+| `.github/workflows/gaia-human-gate.yml` | Delivers an escalation: packet + assignment per park, and a weekly sitting |
 | `scripts/gaia-launch/gaia_gate_integrity.py` | Detects an agent weakening the gate it is judged by |
 | `scripts/gaia-launch/gaia_failsig.py` | Stable failure signatures, for the three-strikes rule |
 | `scripts/gaia-launch/gaia_pr_dashboard.sh` | Renders and stages the dashboard for one PR |
@@ -518,6 +521,7 @@ a batch has already done its work.
 | `GAIA_PLAN_TIMEOUT` | `2700` | Wall clock for the planning session. Separate from `GAIA_AUX_TIMEOUT` on purpose — see below |
 | `GAIA_PLAN_MAX_TURNS` | `40` | Turns for the planning session |
 | `GAIA_ONLY_ISSUES` | *(unset)* | Supervised runs: restrict the queue to these issues, e.g. `186` or `153,152`. Filters the input to grouping, so ordering and blocker hold-back are unchanged |
+| `GAIA_GATE_ONLY` | `0` | `1` stops each issue at the science gate: plan, panel, every round, the park stamp and the label all happen for real, and no editing agent is ever dispatched. Nothing is committed, so no PR is opened. Pair it with `GAIA_REVISIT_PARKED=0` unless you want the second pass too |
 | `GAIA_GATE_INTEGRITY` | `1` | `0` disables gate-weakening detection (not recommended) |
 | `GAIA_FAIL_STRIKES` | `3` | Identical failure signatures tolerated before a line is stopped |
 
@@ -649,6 +653,23 @@ over — the same reasoning as the three-strikes rule on identical failure signa
 unrecognised status counts as `unresolved`, so malformed output cannot claim a concern was
 answered.
 
+**And movement has to move what was blocking.** Counting every ruling as progress is gameable
+in one line: a persona that will not drop its blocking concern withdraws a minor one it never
+cared about, `moved` becomes 1, the stalemate rule goes quiet, and the queue buys another
+planning round that settles nothing. So `--prev` hands the aggregator the previous round's
+`panel.json`, each ruling is matched back to that round's **blocking** concerns by shared
+referent, and only a ruling on one of those counts:
+
+```bash
+gaia_panel.py --aggregate r2/*.json --prev "$dir/r1/panel.json" --issue 186 …
+```
+
+Rulings that match nothing that blocked are reported as `hollow` in the panel summary and in
+the chair's brief — not as an accusation (withdrawing a deferred concern is legitimate) but as
+the difference between converging and moving the deck chairs. A persona that blocked nothing
+last round cannot unblock anything this round. And without `--prev` — round 1, or a missing
+file — the old count-everything rule stands, so an absent file can never be what opens the gate.
+
 **The revisit pass inherits this.** An issue parked in pass 1 and re-planned after its siblings
 landed points at the last completed round of that first pass, so it answers the same standing
 objections rather than meeting a new panel. A fresh panel has nothing to converge on.
@@ -688,6 +709,31 @@ The digest prints once at the end of a run, next to the parked list and explicit
 from it: parked issues are decisions to make now, standing concerns are a document to read in
 one sitting.
 
+One stage reads the ledger automatically, and only one: **the chair**. Before it writes the
+panel summary it is handed the standing concerns from *earlier* issues that share a referent
+with what this panel just filed (`gaia_panel.py --aggregate --issue N` computes the
+intersection; `--brief` prints it), so the summary can say *this panel is rediscovering an
+open project-level problem* rather than *the panel raised X*. The reviewers are deliberately
+not shown it — handing a persona the project's standing objections before it reviews tells it
+what to say, and an independently rediscovered concern is evidence in a way a prompted one is
+not. It moves no gate: the decision is fixed before the intersection is computed.
+
+#### What the panels declare, as a series
+
+Scope is self-declared and it decides whether work stops, which is an incentive to inflate it.
+No single panel can show that — each one looks reasonable — so every panel appends its split to
+`.gaia-runs/panel-scope.jsonl` and the run prints a report over all of them:
+
+```bash
+python3 scripts/gaia-launch/gaia_panel.py --scope-report        # markdown, per panel and per reviewer
+```
+
+The number to watch is `stops` — concerns carrying the combination that actually halts work,
+`critical` **and** a blocking scope — as a share of everything the panel filed. The report
+refuses to call a direction from fewer than six panels, because reporting a slope from n=2 is
+the same overreach the panel exists to catch. Nothing gates on it, deliberately: a measurement
+that feeds a gate stops measuring and starts being optimised.
+
 #### A block parks one issue, not the batch
 
 A science-gate block used to set `batch_failed` and `break`, so one contested plan discarded
@@ -711,6 +757,64 @@ consequences follow:
 
 Every park is collected into `.gaia-runs/parked-<run>.md` and printed **once, at the end of
 the run** — one review sitting instead of one interruption per contested plan.
+
+#### How an escalation actually reaches a person
+
+The label `needs-human-decision` is the *trigger*, not the notification. Every park now writes
+a stamp into its own park comment on the issue —
+
+```
+<!-- gaia-park:{"ts":…,"sha":…,"paths":[…],"cause":"panel-block","blocking":[…]} -->
+```
+
+— **before** the label is added, because the label is what fires
+`.github/workflows/gaia-human-gate.yml` and a workflow that ran before the stamp existed would
+find nothing to escalate. The stamp is what lets CI say anything at all about a parked plan:
+`.gaia-runs/` is gitignored and no workflow will ever see it, but a checked-out repository plus
+a commit sha and a list of paths is enough to measure how far the tree has moved underneath it.
+
+The workflow then runs in two tempos, and the split is the whole design:
+
+- **Once per park** — the decision packet is posted on the issue and the issue is assigned.
+  Assignment is the notification; GitHub already knows how to reach a person. Once per park is
+  enforced by counting, not by guessing: park stamps are compared against packets, so a re-park
+  pages again and a re-label does not.
+- **Weekly** — the queue page (`docs/gaia-human-queue.html`, published like any other doc),
+  **one** rolling digest issue edited in place (editing a body does not notify), and an email
+  when the queue is not empty. Configure with the repository variables `GAIA_HUMAN` /
+  `GAIA_HUMAN_EMAIL`; the email step self-disables with no `SMTP_HOST` secret rather than
+  failing every Monday.
+
+```bash
+# the same queue, locally, without waiting for Monday
+python3 scripts/gaia-launch/gaia_human_queue.py --from-github --repo "$REPO_SLUG" \
+    --repo-dir . --html docs/gaia-human-queue.html --markdown
+```
+
+Ruling on the issue and **removing the label** is what takes it off the queue.
+
+#### Parked work ages, so the run says how much
+
+Parking is cheap on the day and gets expensive quietly. The parked issue keeps its plan and its
+verdicts and looks exactly as resumable as it did when it was parked, while its siblings land on
+top of the very files the plan names. At some point resuming costs more than re-planning, and
+nothing was measuring that.
+
+So every park stamps the commit it was judged against and the files its plan named
+(`.gaia-runs/parked.jsonl`), and the end of every run reports the distance from there over
+**every issue still parked, including those parked by earlier runs**:
+
+```bash
+python3 scripts/gaia-launch/gaia_parked.py --status        # fresh / aging / stale, per issue
+```
+
+Commits *touching the plan's own files* dominate the verdict, not repository activity in
+general: a hundred commits elsewhere do not make a parked plan wrong, and three commits
+rewriting the two files it names probably do. The bounds — 21 days, 3 commits in the plan's
+files — are `--max-days` / `--max-touching`, judgement calls stated out loud rather than derived
+from anything. A stamp whose commit is no longer in the tree reports `unknown`, never `fresh`.
+Nothing acts on the verdict: it recommends re-planning over resuming, and a person decides. An
+issue that lands is recorded as unparked, so the list stays about work that is actually waiting.
 
 #### What the first supervised run cost us
 
@@ -941,6 +1045,9 @@ gaia:gaia-scientific-coder      44       1  Bash x43, Read x1
 | `.gaia-runs/gaia_run_queue.pid` | The loop's PID | no |
 | `.gaia-runs/cron.log` | Cron wrapper output | no |
 | `.gaia-runs/records.jsonl` | One corpus record per issue attempted — outcome, cost, turns, tool histogram, subagent roster, `delivery` block | no |
+| `.gaia-runs/science-concerns.jsonl` | The standing ledger: what two review rounds did not settle, across issues | no |
+| `.gaia-runs/panel-scope.jsonl` | One row per panel — the declared-scope split, for the drift check | no |
+| `.gaia-runs/parked.jsonl` | One stamp per park — the commit and the plan's files, for the staleness report | no |
 | `docs/provenance/ledger.jsonl` | One provenance line per issue — `parent_rev`, PR, dashboard, transcript, `pixi.lock` hash, total spend, the gate that ran, and the AI-assistance statement | **yes**, in the same commit as the code |
 
 The last row is deliberately committed rather than gitignored: provenance that lives only in

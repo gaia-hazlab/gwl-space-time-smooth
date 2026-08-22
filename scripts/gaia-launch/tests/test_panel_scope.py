@@ -20,8 +20,11 @@ relax for an in-milestone concern, and it must NOT relax for anything else -- in
 fail-closed paths, which are the reason the gate is trustworthy at all.
 """
 
+import json
 import os
+import subprocess
 import sys
+import tempfile
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -29,7 +32,8 @@ GAIA_DIR = os.path.dirname(HERE)
 sys.path.insert(0, GAIA_DIR)
 
 from gaia_panel import (DEFAULT_BLOCK_ON, aggregate, block_on,  # noqa: E402
-                        normalise_verdict, render)
+                        grade_priors, normalise_verdict, render, scope_log_row, scope_mix,
+                        scope_report, standing_prior)
 
 
 def concern(severity="critical", scope=None, claim="something is wrong",
@@ -324,6 +328,199 @@ class TheFirstSupervisedRun(unittest.TestCase):
                                     ["in-milestone"] * 6]))
         self.assertEqual(agg["decision"], "revise")
         self.assertEqual(len(agg["deferred_concerns"]), 12)
+
+
+class ScopeIsMeasuredNotAssumed(unittest.TestCase):
+    """Scope is self-declared and it decides whether work stops, which is an incentive to
+    inflate it. The design claim -- that reviewers declare it honestly -- is not something to
+    assert; it is something to log per panel and read as a series."""
+
+    def panel(self):
+        return aggregate([
+            verdict("gaia-auditor", "revise", [concern(scope="in-milestone"),
+                                               concern("major", "breaking"),
+                                               concern("minor", "in-milestone")]),
+            verdict("twin-geostatistician", "revise", [concern(scope="wrong-physics")])])
+
+    def test_the_split_is_recorded_per_scope_and_severity(self):
+        mix = self.panel()["scope_mix"]
+        self.assertEqual(mix["n_concerns"], 4)
+        self.assertEqual(mix["by_scope"], {"breaking": 1, "wrong-physics": 1, "in-milestone": 2})
+        self.assertEqual(mix["by_severity"], {"critical": 2, "major": 1, "minor": 1})
+
+    def test_stops_counts_only_what_actually_stops_work(self):
+        # A major concern scoped `breaking` does not stop the work, and neither does a critical
+        # one scoped `in-milestone`. Only the combination does, so only the combination counts.
+        mix = self.panel()["scope_mix"]
+        self.assertEqual(mix["stops"], 1)
+        self.assertEqual(mix["stops_share"], 0.25)
+
+    def test_an_undeclared_scope_is_counted_as_undeclared_even_though_it_blocks(self):
+        # It is normalised to `breaking` so it fails closed, but the measurement must not then
+        # report it as a reviewer who declared `breaking`: that is the drift being watched.
+        mix = aggregate([verdict("gaia-auditor", "revise", [concern(scope=None)])])["scope_mix"]
+        self.assertEqual(mix["undeclared"], 1)
+        self.assertEqual(mix["by_scope"]["breaking"], 1)
+
+    def test_each_reviewer_is_measured_separately(self):
+        per = self.panel()["scope_mix"]["per_persona"]
+        self.assertEqual(per["gaia-auditor"]["n_concerns"], 3)
+        self.assertEqual(per["twin-geostatistician"]["stops"], 1)
+        self.assertEqual(per["gaia-auditor"]["stops"], 0)
+
+    def test_the_row_carries_what_identifies_the_panel(self):
+        row = scope_log_row(self.panel(), issue=186, run_ts="20260820T000000Z", rounds=2)
+        self.assertEqual((row["issue"], row["round"], row["decision"]), (186, 2, "block"))
+        self.assertEqual(row["n_concerns"], 4)
+
+    def test_a_short_series_refuses_to_call_a_trend(self):
+        # The honesty property. Reporting a direction from two panels is the same overreach the
+        # panel itself exists to catch.
+        rows = [scope_log_row(self.panel(), issue=i) for i in (1, 2)]
+        md = scope_report(rows)
+        self.assertIn("too few to read a trend", md)
+        self.assertNotIn("rising", md)
+
+    def test_a_long_enough_series_reports_the_direction(self):
+        low = aggregate([verdict("a", "revise", [concern(scope="in-milestone")] * 4)])
+        high = aggregate([verdict("a", "revise", [concern(scope="breaking")] * 4)])
+        rows = [scope_log_row(low, issue=i) for i in range(3)] + \
+               [scope_log_row(high, issue=i) for i in range(3, 6)]
+        md = scope_report(rows)
+        self.assertIn("rising", md)
+        self.assertNotIn("too few", md)
+
+    def test_nothing_logged_says_so_rather_than_charting_zero(self):
+        self.assertIn("No panels logged yet", scope_report([]))
+
+
+class MovementMustMoveWhatBlocked(unittest.TestCase):
+    """`moved = resolved + withdrawn` is gameable in one line: a persona that will not drop its
+    blocking concern withdraws a minor one it never cared about, the stalemate rule goes quiet,
+    and the queue buys another planning round that settles nothing."""
+
+    PREV = {"blocking_concerns": [
+        {"persona": "twin-geostatistician",
+         "claim": "the Clopper-Pearson interval is anticonservative under clustered wells"}]}
+
+    def round2(self, priors, concerns=(), persona="twin-geostatistician"):
+        return [normalise_verdict({"verdict": "revise", "concerns": list(concerns),
+                                   "prior_concerns": priors}, persona)]
+
+    def test_a_ruling_on_the_blocking_concern_is_movement(self):
+        agg = aggregate(self.round2(
+            [{"claim": "the Clopper-Pearson interval", "status": "resolved", "why": "swapped"}],
+            concerns=[concern(scope="breaking")]), prev=self.PREV)
+        self.assertEqual(agg["decision"], "block")
+        self.assertEqual(agg["prior_grading"]["moved_blocking"], 1)
+        self.assertFalse(agg["stalemate"])
+
+    def test_a_withdrawal_of_something_that_never_blocked_is_hollow(self):
+        agg = aggregate(self.round2(
+            [{"claim": "the figure axis labels are unclear", "status": "withdrawn",
+              "why": "on reflection"},
+             {"claim": "the Clopper-Pearson interval", "status": "unresolved",
+              "why": "still wrong"}],
+            concerns=[concern(scope="breaking")]), prev=self.PREV)
+        g = agg["prior_grading"]
+        self.assertEqual(agg["prior_adjudicated"]["withdrawn"], 1)   # movement, by the old count
+        self.assertEqual(g["moved_blocking"], 0)                     # none of it moved the block
+        self.assertEqual(len(g["hollow"]), 1)
+        self.assertTrue(agg["stalemate"])
+
+    def test_the_hollow_ruling_is_named_in_the_markdown(self):
+        md = render(aggregate(self.round2(
+            [{"claim": "the figure axis labels", "status": "withdrawn", "why": "meh"}],
+            concerns=[concern(scope="breaking")]), prev=self.PREV))
+        self.assertIn("not among last round's blocking ones", md)
+        self.assertIn("Nothing that blocked moved", md)
+
+    def test_another_persona_cannot_move_a_block_it_did_not_raise(self):
+        agg = aggregate(self.round2(
+            [{"claim": "the Clopper-Pearson interval", "status": "resolved", "why": "fixed"}],
+            concerns=[concern(scope="breaking")], persona="gaia-auditor"), prev=self.PREV)
+        self.assertEqual(agg["prior_grading"]["moved_blocking"], 0)
+        self.assertTrue(agg["stalemate"])
+
+    def test_without_the_previous_round_the_old_rule_stands(self):
+        # The grading needs the previous panel. A missing file must never be what opens a gate,
+        # and must never be what closes one either: it falls back, exactly as before.
+        agg = aggregate(self.round2(
+            [{"claim": "anything at all", "status": "withdrawn", "why": "meh"}],
+            concerns=[concern(scope="breaking")]), prev=None)
+        self.assertFalse(agg["prior_grading"]["graded"])
+        self.assertFalse(agg["stalemate"])
+
+    def test_a_round_that_moves_the_block_and_clears_it_approves(self):
+        agg = aggregate(self.round2(
+            [{"claim": "the Clopper-Pearson interval", "status": "resolved", "why": "swapped"}],
+            persona="twin-geostatistician"), prev=self.PREV)
+        self.assertEqual(agg["decision"], "revise")
+        self.assertFalse(agg["stalemate"])
+        self.assertEqual(agg["prior_grading"]["moved_blocking"], 1)
+
+
+class TheChairHoldsTheProject(unittest.TestCase):
+    """A panel is convened per issue and remembers nothing. The standing ledger is the only
+    part of the pipeline that holds the project, and the chair is the one stage that can be
+    shown both -- so an echo between them is independent rediscovery, not a prompted one."""
+
+    LEDGER = [
+        dict(issue=186, disposition="deferred", scope="in-milestone", persona="gaia-auditor",
+             claim="the Clopper-Pearson interval is anticonservative under clustered wells",
+             decisive_test="block bootstrap over well clusters"),
+        dict(issue=186, disposition="deferred", scope="in-milestone", persona="twin-hydrogeologist",
+             claim="recharge is imposed rather than solved", decisive_test="mass balance"),
+    ]
+
+    def panel(self, claim):
+        return aggregate([normalise_verdict(
+            {"verdict": "revise", "concerns": [concern(scope="in-milestone", claim=claim)]},
+            "twin-geostatistician")])
+
+    def test_an_echo_of_an_earlier_issue_is_surfaced(self):
+        agg = self.panel("the Clopper-Pearson interval assumes independent wells")
+        echo = standing_prior(agg, self.LEDGER, exclude_issue=190)
+        self.assertEqual([e["issue"] for e in echo], [186])
+        self.assertIn("Clopper-Pearson", echo[0]["about"])
+        self.assertEqual(echo[0]["echoed_by"], "twin-geostatistician")
+
+    def test_the_panel_s_own_issue_is_never_its_own_prior_art(self):
+        agg = self.panel("the Clopper-Pearson interval assumes independent wells")
+        self.assertEqual(standing_prior(agg, self.LEDGER, exclude_issue=186), [])
+
+    def test_an_unrelated_standing_concern_is_not_dragged_in(self):
+        agg = self.panel("the variogram range is fitted on too few pairs")
+        self.assertEqual(standing_prior(agg, self.LEDGER, exclude_issue=190), [])
+
+    def test_the_echo_is_rendered_with_where_it_came_from(self):
+        agg = self.panel("the Clopper-Pearson interval assumes independent wells")
+        agg["standing_prior"] = standing_prior(agg, self.LEDGER, exclude_issue=190)
+        md = render(agg)
+        self.assertIn("The project has said this before", md)
+        self.assertIn("#186", md)
+
+    def test_a_panel_with_no_echo_says_nothing_at_all(self):
+        md = render(self.panel("the variogram range is fitted on too few pairs"))
+        self.assertNotIn("said this before", md)
+
+    def test_the_chair_is_actually_handed_it(self):
+        # The render is for the issue; the BRIEF is what the chair reads. Surfacing the echo in
+        # one and not the other would leave the chair writing "the panel raised X" about
+        # something the project has had open for two issues -- which is the whole gap this
+        # closes, so it is pinned end to end through the real CLI.
+        agg = self.panel("the Clopper-Pearson interval assumes independent wells")
+        agg["standing_prior"] = standing_prior(agg, self.LEDGER, exclude_issue=190)
+        with tempfile.TemporaryDirectory() as d:
+            f = os.path.join(d, "panel.json")
+            with open(f, "w", encoding="utf-8") as fh:
+                json.dump(agg, fh)
+            out = subprocess.run([sys.executable, os.path.join(GAIA_DIR, "gaia_panel.py"),
+                                  "--brief", f], capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("STANDING CONCERNS", out.stdout)
+        self.assertIn("#186", out.stdout)
+        self.assertIn("NO reviewer on this panel was shown them", out.stdout)
 
 
 if __name__ == "__main__":
