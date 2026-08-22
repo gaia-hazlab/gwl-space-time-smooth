@@ -1052,6 +1052,10 @@ agents run in the first place.
 
 ## What stays a human decision
 
+The placement of the human in this pipeline — every escalation path, why it sits where it
+does, what arrives with a page, and what the gate is forbidden from paging about — is
+treated in full in [`human-in-the-loop.md`](human-in-the-loop.md). The short list:
+
 - **Epics are never closed** by this pipeline, only commented on — matches the group's
   standing rule that tracking issues wait for your own review, not an automated "done."
 - **Anything that doesn't clear the gate** (tests, DOI check, quarto render, Copilot
