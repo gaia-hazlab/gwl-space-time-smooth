@@ -71,7 +71,7 @@ flowchart TD
         PLAN["<b>pre-register a plan</b><br/><i>read-only session, schema-validated</i><br/><i>fails closed</i>"]
         PANEL{"<b>science panel</b><br/><i>routed from labels + milestone</i><br/><i>auditor always seated</i><br/><i>dispatch verified in the transcript</i>"}
         BRIEF --> PLAN --> PANEL
-        PANEL -- "block (1 revision, then human)" --> PARKR
+        PANEL -- "block or revise (1 revision, then human)" --> PARKR
         PANEL -- approve --> ORCH
         ORCH["<b>claude -p</b> → gaia-orchestrator<br/><i>implements THE PLAN</i><br/><i>git+gh denied at the tool level</i><br/><code>--max-turns</code> · <code>timeout</code>"]
         BOUND{"turns / wall clock<br/>within caps?<br/><i>and no ref moved?</i>"}
@@ -510,7 +510,7 @@ a batch has already done its work.
 | `GAIA_MAX_DIFF_LINES` | `4000` | Blast radius: added + removed lines |
 | `GAIA_MAX_COST_USD` | `0` | `0` = uncapped; otherwise halt the queue between issues past this |
 | `GAIA_SCIENCE_GATE` | `1` | `0` skips plan pre-registration and the science panel (not recommended) |
-| `GAIA_PLAN_REVISIONS` | `1` | Plan revisions allowed after a panel block, before parking |
+| `GAIA_PLAN_REVISIONS` | `1` | Plan revisions allowed after a panel block or revise verdict, before parking. Only an explicit `approve` implements. |
 | `GAIA_PLAN_TIMEOUT` | `2700` | Wall clock for the planning session. Separate from `GAIA_AUX_TIMEOUT` on purpose — see below |
 | `GAIA_PLAN_MAX_TURNS` | `40` | Turns for the planning session |
 | `GAIA_ONLY_ISSUES` | *(unset)* | Supervised runs: restrict the queue to these issues, e.g. `186` or `153,152`. Filters the input to grouping, so ordering and blocker hold-back are unchanged |
@@ -601,7 +601,7 @@ sized for a short auditor verdict; planning reads the issue *and* the code it wo
 And a fourth, quieter one: a batch that died at the gate recorded **nothing**, because
 `write_measurement` is only reached at commit time. The corpus meant to answer "does
 reviewing plans change outcomes?" could not see the runs where the gate acted. Gate exits now
-write a record keyed by cause — `plan-timeout`, `plan-invalid`, `panel-block`.
+write a record keyed by cause — `plan-timeout`, `plan-invalid`, `panel-block`, `panel-revise`.
 
 #### The personas are verified, not assumed
 

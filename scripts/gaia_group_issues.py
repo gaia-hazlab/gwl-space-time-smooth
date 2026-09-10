@@ -16,6 +16,14 @@ priority) member, P0 first.
 
 Issues labeled "epic" are trackers, never work items, and are excluded.
 
+Issues labeled "needs-human-decision" (HOLD_LABEL) are excluded too. The
+queue itself applies that label when a science panel parks a plan or a
+collision arbitration sides against a PR; until 2026-09-10 nothing read it
+back, so the next run could re-plan the parked issue as if the hold had
+never happened (audit finding AUTO-06,
+docs/reviews/soil-twin-system-audit-2026-09-10.md). Only a human removing
+the label puts the issue back in the queue.
+
 Cross-issue dependencies (BLOCKED_BY, below) come from the probabilistic
 nowcast/forecast dependency graph in
 docs/probabilistic-nowcast-forecast-roadmap.md. An issue with an open
@@ -36,6 +44,10 @@ import subprocess
 import sys
 
 MAX_BATCH = 4
+
+# Applied by scripts/gaia_run_queue.sh when a plan is parked or a collision is lost. An
+# issue carrying it is a human's to release, never the scheduler's.
+HOLD_LABEL = "needs-human-decision"
 
 PRIORITY_RANK = {"P0": 0, "P1": 1, "P2": 2}
 
@@ -176,6 +188,13 @@ def main():
     for issue in issues:
         labels = [l["name"] for l in issue["labels"]]
         if "epic" in labels:
+            continue
+        if HOLD_LABEL in labels:
+            print(
+                f"holding back #{issue['number']} ({issue['title']}): "
+                f"labelled {HOLD_LABEL}; a human removes the label to re-queue it",
+                file=sys.stderr,
+            )
             continue
 
         blockers = [b for b in BLOCKED_BY.get(issue["number"], []) if b in open_numbers]

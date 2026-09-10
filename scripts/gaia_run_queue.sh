@@ -417,7 +417,7 @@ last_json_block() {
 # A batch that died at the science gate used to record NOTHING. write_measurement is only
 # reached at commit time, so the corpus never saw the runs where the gate actually acted --
 # selection bias in the one dataset built to answer "does reviewing plans change outcomes?".
-# Every gate exit now leaves a record, keyed by WHY: plan-timeout, plan-invalid, panel-block.
+# Every gate exit now leaves a record, keyed by WHY: plan-timeout, plan-invalid, panel-block, panel-revise.
 record_gate_block() {
   local number="$1" title="$2" raw="$3" outcome="$4" logfile="$5"
   local dir meta
@@ -576,17 +576,23 @@ Finish your reply with EXACTLY one fenced json block and nothing after it:
 
 $(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan to #${number})" | tee -a "$logfile"
 
-    [ "$decision" != "block" ] && return 0
+    # Only an explicit APPROVE proceeds. "revise" is an unfinished review, not permission to
+    # implement. Until 2026-09-10 the test here was `!= block`, so a panel that asked for
+    # revisions was implemented as planned and its concerns never reached the diff (audit
+    # finding A2, docs/reviews/soil-twin-system-audit-2026-09-10.md). A revise verdict now
+    # re-enters the plan loop exactly like a block and parks the same way once the revision
+    # budget is spent. $decision defaults to "block" above, so a missing panel.json parks too.
+    [ "$decision" = "approve" ] && return 0
     if [ "$rev" -ge "$GAIA_PLAN_REVISIONS" ]; then
-      echo "  !!! science panel blocked #${number} after ${rev} revision(s); not implementing" | tee -a "$logfile"
+      echo "  !!! science panel verdict '${decision}' on #${number} after ${rev} revision(s); not implementing" | tee -a "$logfile"
       add_label "$number" needs-human-decision "$logfile"
-      record_gate_block "$number" "$title" "$dir/plan.raw.jsonl" "panel-block" "$logfile"
+      record_gate_block "$number" "$title" "$dir/plan.raw.jsonl" "panel-${decision}" "$logfile"
       return 1
     fi
     rev=$((rev + 1))
     PANEL_FEEDBACK="
-The science panel BLOCKED your previous plan. Address these before re-planning; do not
-re-submit the same approach with different wording:
+The science panel returned '${decision}' on your previous plan. Address every concern below
+before re-planning; do not re-submit the same approach with different wording:
 $(jq -r '.verdicts[].concerns[] | "- [\(.severity)] \(.claim)  -> decisive test: \(.decisive_test)"' "$dir/panel.json" 2>/dev/null)"
     echo "  revising the plan for #${number} (revision ${rev}/${GAIA_PLAN_REVISIONS})" | tee -a "$logfile"
   done
