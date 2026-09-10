@@ -116,6 +116,9 @@ smap-validate = "python notebooks/validate_smap.py"
 # MERRA-2 reanalysis root-zone soil moisture (GES DISC; ~/.netrc) — depth-matched, incl. 2025; cached locally.
 merra2 = "python -m src.data.fetch_merra2 --output data/processed/merra2_soil_moisture_monthly_puget.zarr"
 merra2-validate = "python notebooks/validate_merra2.py"
+# NISAR SME2 (Beta) L-band satellite soil moisture ~200 m (ASF; ~/.netrc) — STAGED: data begins 2025-10,
+# BETA (not for research). Fetcher tested; inclusion in the analysis is deferred to ROADMAP milestones.
+nisar = "python -m src.data.fetch_nisar --output data/processed/nisar_soil_moisture_monthly_puget.zarr"
 # Soil-moisture state: SOLUS→Saxton-Rawls static envelope × Thornthwaite-Mather dynamic bucket.
 soil-moisture = "python -m src.models.soil_moisture --output-dir data/processed"
 soil-mechanics = "python -m src.models.soil_mechanics --vs30 data/processed/vs30_90m.tif --dtw data/processed/baseline_dtw_m.tif --output-dir data/processed"  # SCAFFOLD (#19)
