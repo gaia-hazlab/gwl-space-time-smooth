@@ -1,0 +1,116 @@
+{
+  "source_commit": "f33ceec68e87cc6765c7c75219809ab249437db4",
+  "source_url": "https://github.com/landlab/landlab/blob/f33ceec68e87cc6765c7c75219809ab249437db4/src/landlab/components/landslides/landslide_probability.py",
+  "blob_sha": "260746f51cdd2459d534d194b980f1ba4549901d",
+  "source_sha256": "1e8688bd4879e6424289ebb3975b07a626b44ef6b074193ef49b3ad2464b5c50",
+  "input_fields": [
+    {
+      "name": "soil__density",
+      "line": 260,
+      "intent": "in",
+      "optional": false,
+      "units": "kg/m3",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__internal_friction_angle",
+      "line": 268,
+      "intent": "in",
+      "optional": false,
+      "units": "degrees",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__maximum_total_cohesion",
+      "line": 276,
+      "intent": "in",
+      "optional": false,
+      "units": "Pa or kg/m-s2",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__minimum_total_cohesion",
+      "line": 295,
+      "intent": "in",
+      "optional": false,
+      "units": "Pa or kg/m-s2",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__mode_total_cohesion",
+      "line": 303,
+      "intent": "in",
+      "optional": false,
+      "units": "Pa or kg/m-s2",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__saturated_hydraulic_conductivity",
+      "line": 322,
+      "intent": "in",
+      "optional": false,
+      "units": "m/day",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__thickness",
+      "line": 334,
+      "intent": "in",
+      "optional": false,
+      "units": "m",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__transmissivity",
+      "line": 342,
+      "intent": "in",
+      "optional": false,
+      "units": "m2/day",
+      "mapping": "node"
+    },
+    {
+      "name": "topographic__slope",
+      "line": 353,
+      "intent": "in",
+      "optional": false,
+      "units": "tan theta",
+      "mapping": "node"
+    },
+    {
+      "name": "topographic__specific_contributing_area",
+      "line": 361,
+      "intent": "in",
+      "optional": false,
+      "units": "m",
+      "mapping": "node"
+    }
+  ],
+  "output_fields": [
+    {
+      "name": "landslide__probability_of_failure",
+      "line": 252,
+      "intent": "out",
+      "optional": false,
+      "units": "None",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__mean_relative_wetness",
+      "line": 284,
+      "intent": "out",
+      "optional": false,
+      "units": "None",
+      "mapping": "node"
+    },
+    {
+      "name": "soil__probability_of_saturation",
+      "line": 311,
+      "intent": "out",
+      "optional": false,
+      "units": "None",
+      "mapping": "node"
+    }
+  ],
+  "retrieved_on": "2026-09-10",
+  "scope": "Static inspection of pinned upstream source; no adapter implemented or runtime compatibility claimed."
+}

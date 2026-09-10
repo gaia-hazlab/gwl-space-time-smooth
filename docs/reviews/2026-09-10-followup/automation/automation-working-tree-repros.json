@@ -1,0 +1,125 @@
+{
+  "panel_revise_is_nonblock": {
+    "decision": "revise",
+    "n_personas": 2,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 1,
+    "verdicts": [
+      {
+        "persona": "gaia-auditor",
+        "verdict": "approve",
+        "concerns": []
+      },
+      {
+        "persona": "twin-geostatistician",
+        "verdict": "revise",
+        "concerns": [
+          {
+            "severity": "major",
+            "claim": "Acceptance test uses contaminated holdout.",
+            "decisive_test": "Rebuild folds without the withheld well."
+          }
+        ]
+      }
+    ]
+  },
+  "empty_panel_approves": {
+    "decision": "approve",
+    "n_personas": 0,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 0,
+    "verdicts": []
+  },
+  "malformed_concerns_approve": {
+    "decision": "approve",
+    "n_personas": 1,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 0,
+    "verdicts": [
+      {
+        "persona": "gaia-auditor",
+        "verdict": "approve",
+        "concerns": []
+      }
+    ]
+  },
+  "novelty_reviewers_silently_omitted_at_cap": [
+    "gaia-auditor",
+    "twin-da-methodologist",
+    "twin-geostatistician"
+  ],
+  "failed_dispatch_followed_by_wrapper_approval": {
+    "exit_code": 0,
+    "stderr": "dispatched",
+    "verdict": {
+      "verdict": "approve",
+      "concerns": []
+    }
+  },
+  "branch_identity_changes_with_backlog": {
+    "initial": [
+      {
+        "branch": "gaia/milestone-shared-milestone-rest-0",
+        "issues": [
+          105,
+          104,
+          103,
+          102
+        ]
+      },
+      {
+        "branch": "gaia/milestone-shared-milestone-rest-1",
+        "issues": [
+          101
+        ]
+      }
+    ],
+    "after_first_four_close": [
+      {
+        "branch": "gaia/milestone-shared-milestone-rest-0",
+        "issues": [
+          101
+        ]
+      }
+    ],
+    "new_issue_arrives": [
+      {
+        "branch": "gaia/milestone-shared-milestone-rest-0",
+        "issues": [
+          106,
+          105,
+          104,
+          103
+        ]
+      },
+      {
+        "branch": "gaia/milestone-shared-milestone-rest-1",
+        "issues": [
+          102,
+          101
+        ]
+      }
+    ]
+  },
+  "colliding_normalized_milestone_titles": [
+    {
+      "branch": "gaia/milestone-a-shared-very-long-milestone-t-rest-0",
+      "issues": [
+        901
+      ]
+    },
+    {
+      "branch": "gaia/milestone-a-shared-very-long-milestone-t-rest-0",
+      "issues": [
+        902
+      ]
+    }
+  ],
+  "real_human_blocked_issues_redispatched": [],
+  "gate_integrity_can_be_disabled_without_detector_finding": [],
+  "lowering_minimum_accuracy_not_detected": [],
+  "stop_after_first_issue_reaches_merge_path": "gate-and-merge reachable; worked: 900; Closes list: 900 901"
+}

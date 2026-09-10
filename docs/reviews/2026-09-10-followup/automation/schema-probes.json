@@ -1,0 +1,98 @@
+{
+  "empty_roster": {
+    "decision": "approve",
+    "n_personas": 0,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 0,
+    "verdicts": []
+  },
+  "missing_concerns": {
+    "decision": "approve",
+    "n_personas": 1,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 0,
+    "verdicts": [
+      {
+        "persona": "gaia-auditor",
+        "verdict": "approve",
+        "concerns": []
+      }
+    ]
+  },
+  "string_concerns": {
+    "decision": "approve",
+    "n_personas": 1,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 0,
+    "verdicts": [
+      {
+        "persona": "gaia-auditor",
+        "verdict": "approve",
+        "concerns": []
+      }
+    ]
+  },
+  "unknown_severity": {
+    "decision": "approve",
+    "n_personas": 1,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 0,
+    "verdicts": [
+      {
+        "persona": "gaia-auditor",
+        "verdict": "approve",
+        "concerns": [
+          {
+            "severity": "minor",
+            "claim": "mass error",
+            "decisive_test": "budget test"
+          }
+        ]
+      }
+    ]
+  },
+  "approve_major": {
+    "decision": "approve",
+    "n_personas": 1,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 1,
+    "verdicts": [
+      {
+        "persona": "gaia-auditor",
+        "verdict": "approve",
+        "concerns": [
+          {
+            "severity": "major",
+            "claim": "mass error",
+            "decisive_test": "budget test"
+          }
+        ]
+      }
+    ]
+  },
+  "null_claim": {
+    "decision": "approve",
+    "n_personas": 1,
+    "blocked_by": [],
+    "n_critical": 0,
+    "n_major": 0,
+    "verdicts": [
+      {
+        "persona": "gaia-auditor",
+        "verdict": "approve",
+        "concerns": [
+          {
+            "severity": "minor",
+            "claim": "None",
+            "decisive_test": "None"
+          }
+        ]
+      }
+    ]
+  }
+}

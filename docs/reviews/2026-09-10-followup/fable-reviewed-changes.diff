@@ -1,0 +1,66 @@
+diff --git a/docs/gaia-automation.md b/docs/gaia-automation.md
+index d6eedc1..2fe6db4 100644
+--- a/docs/gaia-automation.md
++++ b/docs/gaia-automation.md
+@@ -74 +74 @@ flowchart TD
+-        PANEL -- "block (1 revision, then human)" --> PARKR
++        PANEL -- "block or revise (1 revision, then human)" --> PARKR
+@@ -513 +513 @@ a batch has already done its work.
+-| `GAIA_PLAN_REVISIONS` | `1` | Plan revisions allowed after a panel block, before parking |
++| `GAIA_PLAN_REVISIONS` | `1` | Plan revisions allowed after a panel block or revise verdict, before parking. Only an explicit `approve` implements. |
+@@ -604 +604 @@ reviewing plans change outcomes?" could not see the runs where the gate acted. G
+-write a record keyed by cause — `plan-timeout`, `plan-invalid`, `panel-block`.
++write a record keyed by cause — `plan-timeout`, `plan-invalid`, `panel-block`, `panel-revise`.
+diff --git a/scripts/gaia_group_issues.py b/scripts/gaia_group_issues.py
+index cc742e8..43477fd 100755
+--- a/scripts/gaia_group_issues.py
++++ b/scripts/gaia_group_issues.py
+@@ -18,0 +19,8 @@ Issues labeled "epic" are trackers, never work items, and are excluded.
++Issues labeled "needs-human-decision" (HOLD_LABEL) are excluded too. The
++queue itself applies that label when a science panel parks a plan or a
++collision arbitration sides against a PR; until 2026-09-10 nothing read it
++back, so the next run could re-plan the parked issue as if the hold had
++never happened (audit finding AUTO-06,
++docs/reviews/soil-twin-system-audit-2026-09-10.md). Only a human removing
++the label puts the issue back in the queue.
++
+@@ -39,0 +48,4 @@ MAX_BATCH = 4
++# Applied by scripts/gaia_run_queue.sh when a plan is parked or a collision is lost. An
++# issue carrying it is a human's to release, never the scheduler's.
++HOLD_LABEL = "needs-human-decision"
++
+@@ -179,0 +192,7 @@ def main():
++        if HOLD_LABEL in labels:
++            print(
++                f"holding back #{issue['number']} ({issue['title']}): "
++                f"labelled {HOLD_LABEL}; a human removes the label to re-queue it",
++                file=sys.stderr,
++            )
++            continue
+diff --git a/scripts/gaia_run_queue.sh b/scripts/gaia_run_queue.sh
+index 57a6ab5..da5f631 100755
+--- a/scripts/gaia_run_queue.sh
++++ b/scripts/gaia_run_queue.sh
+@@ -420 +420 @@ last_json_block() {
+-# Every gate exit now leaves a record, keyed by WHY: plan-timeout, plan-invalid, panel-block.
++# Every gate exit now leaves a record, keyed by WHY: plan-timeout, plan-invalid, panel-block, panel-revise.
+@@ -579 +579,7 @@ $(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan t
+-    [ "$decision" != "block" ] && return 0
++    # Only an explicit APPROVE proceeds. "revise" is an unfinished review, not permission to
++    # implement. Until 2026-09-10 the test here was `!= block`, so a panel that asked for
++    # revisions was implemented as planned and its concerns never reached the diff (audit
++    # finding A2, docs/reviews/soil-twin-system-audit-2026-09-10.md). A revise verdict now
++    # re-enters the plan loop exactly like a block and parks the same way once the revision
++    # budget is spent. $decision defaults to "block" above, so a missing panel.json parks too.
++    [ "$decision" = "approve" ] && return 0
+@@ -581 +587 @@ $(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan t
+-      echo "  !!! science panel blocked #${number} after ${rev} revision(s); not implementing" | tee -a "$logfile"
++      echo "  !!! science panel verdict '${decision}' on #${number} after ${rev} revision(s); not implementing" | tee -a "$logfile"
+@@ -583 +589 @@ $(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan t
+-      record_gate_block "$number" "$title" "$dir/plan.raw.jsonl" "panel-block" "$logfile"
++      record_gate_block "$number" "$title" "$dir/plan.raw.jsonl" "panel-${decision}" "$logfile"
+@@ -588,2 +594,2 @@ $(cat "$dir/panel.md")" >> "$logfile" 2>&1 || echo "  (could not post the plan t
+-The science panel BLOCKED your previous plan. Address these before re-planning; do not
+-re-submit the same approach with different wording:
++The science panel returned '${decision}' on your previous plan. Address every concern below
++before re-planning; do not re-submit the same approach with different wording:

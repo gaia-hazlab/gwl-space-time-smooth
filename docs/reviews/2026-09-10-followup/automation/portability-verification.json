@@ -1,0 +1,21 @@
+{
+  "science_all_8_cases_identical": true,
+  "convergence_all_5_cases_identical": true,
+  "invoked_from_outside_repo": true,
+  "runner_hash_identical": true,
+  "nonempty_output_refused": {
+    "science-gate-harness.py": {
+      "exit_code": 2,
+      "message": "science-gate-harness.py: error: --output-dir must be absent or an empty directory; existing evidence is never overwritten"
+    },
+    "convergence-harness.py": {
+      "exit_code": 2,
+      "message": "convergence-harness.py: error: --output-dir must be absent or an empty directory; existing evidence is never overwritten"
+    }
+  },
+  "portable_script_sha256": {
+    "science-gate-harness.py": "6eda6abded2ac5916b86ec7125056ed7a2305c8a753536c07490e2b8d4294bc8",
+    "convergence-harness.py": "95e6228dbe57b3a59f387195936fc21ae49e12bd68e7bba213753b55709d3b86",
+    "gate-fixture.py": "6599d8b64263314d8f876d165b49b09f410ce22cdc6ee069554db547ccac124f"
+  }
+}

@@ -1,0 +1,4482 @@
+{
+  "schema_version": "proposal-0.1",
+  "status": "review_proposal_not_executable",
+  "generated_date": "2026-09-10",
+  "orientation": "prerequisite -> dependent",
+  "git_head": "509c3c6f6bc7b58f6af0f219943c88e6a9025cd0",
+  "source_hashes": {
+    "docs/reviews/2026-09-10-audit/issue-inventory.json": "f9602fa95cab9487ff9eec400c27b6a1786ffa6ddfc3a4bc22fa9e1e949df69c",
+    "docs/reviews/2026-09-10-audit/issue-source-snapshot.json": "f9174b83d65e6fd6df6f4fb0361c45262afcb0099d8b860d63da41f4bb7ca219",
+    "docs/probabilistic-nowcast-forecast-roadmap.md": "7c408d5bd51dedec5ae81909d43e7864b6a9b542fe80abf9d026616c373e5106",
+    "scripts/gaia_group_issues.py": "02b499223e01a57b15063ec77c820e758b0f4bdee980e78e704a464ae2a02350",
+    "/tmp/soil-twin-audit/issues.json": "85493ef733879f97a6d33ffe087f8b96a608fa0501c31bcc96e73174b1642d5c",
+    "/tmp/soil-twin-audit/comments.json": "6574818e5b738964d846a8a7e7ef32218ca77adb0d40a77195358f1a954ef842"
+  },
+  "coverage": {
+    "issue_inventory_reviewed": 160,
+    "issue_bodies_available": 159,
+    "comments_available": 74,
+    "current_BLOCKED_BY_edges_classified": 24,
+    "scope": "Complete classification of every current BLOCKED_BY edge; scoped principal probabilistic roadmap, explicit Vs30 gates, selected hazard and legacy domain dependencies. Not a final exhaustive dependency registry for all 160 issues. Historical references, tracker children, and overlapping work are not automatically hard edges.",
+    "unresolved": "See unresolved and issue-review-coverage.json; source bodies/comments are the original audit snapshot, not a fresh live GitHub read."
+  },
+  "type_semantics": {
+    "implementation_prerequisite": "Required artifact/interface before the named implementation or integration can run; co-implementation allowed if ordered within one accepted package.",
+    "release_evidence": "Required correctness/validation evidence before the named product/claim is released; does not block independent prototype work.",
+    "optional_fidelity": "Optional branch/fidelity tier; promote to explicit required evidence only after scope selection and diagnostic justification.",
+    "external_input": "Specific data, provenance, compute or benchmark evidence; ready only when verified available.",
+    "human_decision": "Explicit recorded scope/hold release/selection decision; no automatic promotion or timeout inference."
+  },
+  "scheduler_requirements": [
+    "Resolve readiness by accepted versioned artifact/criterion and current hold, not merely open/closed issue state.",
+    "Refresh holds, dependencies, decisions, PR status and head SHA between batches and before each issue dispatch.",
+    "Reject missing endpoints, unrecognized types, hard epic blockers and implementation cycles; report all exclusion reasons.",
+    "Scope each dispatched work package to one or more dependent node IDs.",
+    "Keep issue closure separate from sub-deliverable acceptance; close only when all approved required scope is evidenced.",
+    "Optional edges do not block other scopes; selected optional branch obtains explicit activation evidence.",
+    "A human-decision label/registry pause remains binding even if an implementation prerequisite is accepted.",
+    "Record sources and approval SHA/version for decisions and acceptance; replace proposal input IDs with concrete manifests before execution."
+  ],
+  "nodes": [
+    {
+      "id": "issue:52:product-semantics",
+      "kind": "issue",
+      "scope": "product-semantics",
+      "issue": 52,
+      "title": "P1: Resolve the two-theta ambiguity (estimate_soil_moisture vs total_water_bucket); fix sigma math",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:187:schema",
+      "kind": "issue",
+      "scope": "schema",
+      "issue": 187,
+      "title": "P0: Define the canonical probabilistic state, parameter, forcing, and observation contract",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:186:accepted-correctness",
+      "kind": "issue",
+      "scope": "accepted-correctness",
+      "issue": 186,
+      "title": "P0: Back-transform Stage-3 kriging predictive variance before combining uncertainty",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:187:operational-release",
+      "kind": "issue",
+      "scope": "operational-release",
+      "issue": 187,
+      "title": "P0: Define the canonical probabilistic state, parameter, forcing, and observation contract",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:89:accepted-correctness",
+      "kind": "issue",
+      "scope": "accepted-correctness",
+      "issue": 89,
+      "title": "Water budget: daily and monthly timesteps drain 4.7x differently \u2014 a monthly calibration cannot be used in daily mode",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:137:accepted-correctness",
+      "kind": "issue",
+      "scope": "accepted-correctness",
+      "issue": 137,
+      "title": "Defensible specific yield + held-out water-budget validation (shared foundation)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:172:accepted-correctness",
+      "kind": "issue",
+      "scope": "accepted-correctness",
+      "issue": 172,
+      "title": "Consistent storage account: close the massless vadose gap between the two reservoirs",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:storage-release-scope",
+      "kind": "decision",
+      "scope": "storage-release-scope"
+    },
+    {
+      "id": "issue:189:well-probe-records",
+      "kind": "issue",
+      "scope": "well-probe-records",
+      "issue": 189,
+      "title": "P1: Operationalize ground-sensor observation records, operators, QC, and holdouts",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:167:datum-age",
+      "kind": "issue",
+      "scope": "datum-age",
+      "issue": 167,
+      "title": "revisit_days is cadence, not datum age",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:well-probe-fixture",
+      "kind": "input",
+      "scope": "well-probe-fixture"
+    },
+    {
+      "id": "issue:189:well-probe-pilot-acceptance",
+      "kind": "issue",
+      "scope": "well-probe-pilot-acceptance",
+      "issue": 189,
+      "title": "P1: Operationalize ground-sensor observation records, operators, QC, and holdouts",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:188:hydrology-pilot",
+      "kind": "issue",
+      "scope": "hydrology-pilot",
+      "issue": 188,
+      "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:153:pilot-fixture-evidence",
+      "kind": "issue",
+      "scope": "pilot-fixture-evidence",
+      "issue": 153,
+      "title": "Reproducible from a clean checkout: pinned data snapshot + fixtures",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:188:pilot-acceptance",
+      "kind": "issue",
+      "scope": "pilot-acceptance",
+      "issue": 188,
+      "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:155:pilot-fixture-evidence",
+      "kind": "issue",
+      "scope": "pilot-fixture-evidence",
+      "issue": 155,
+      "title": "RNG determinism: single seeded generator + per-frame streams",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:156:pilot-fixture-evidence",
+      "kind": "issue",
+      "scope": "pilot-fixture-evidence",
+      "issue": 156,
+      "title": "Fetcher + assimilation tests (fixture-backed)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:188:operational-release",
+      "kind": "issue",
+      "scope": "operational-release",
+      "issue": 188,
+      "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:154:landed-backend",
+      "kind": "issue",
+      "scope": "landed-backend",
+      "issue": 154,
+      "title": "Dense covariance scalability wall (shared with the DA milestone)",
+      "snapshot_state": "closed",
+      "epic": false
+    },
+    {
+      "id": "issue:188:full-domain-release",
+      "kind": "issue",
+      "scope": "full-domain-release",
+      "issue": 188,
+      "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:full-domain-scale-benchmark",
+      "kind": "input",
+      "scope": "full-domain-scale-benchmark"
+    },
+    {
+      "id": "issue:163:barrier-metadata",
+      "kind": "issue",
+      "scope": "barrier-metadata",
+      "issue": 163,
+      "title": "Prior structure: scalable AND terrain-aware (GMRF/SPDE/Matern), not dense isotropic",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:163:terrain-connectivity",
+      "kind": "issue",
+      "scope": "terrain-connectivity",
+      "issue": 163,
+      "title": "Prior structure: scalable AND terrain-aware (GMRF/SPDE/Matern), not dense isotropic",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:188:enhanced-spatial-fidelity",
+      "kind": "issue",
+      "scope": "enhanced-spatial-fidelity",
+      "issue": 188,
+      "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:161:dynamic-propagation-closure",
+      "kind": "issue",
+      "scope": "dynamic-propagation-closure",
+      "issue": 161,
+      "title": "Temporal model: proper space-time covariance or a Kalman propagation",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:192:hydrology-diagnostics",
+      "kind": "issue",
+      "scope": "hydrology-diagnostics",
+      "issue": 192,
+      "title": "P1: Estimate and diagnose prior, process, and observation-error covariance (B/Q/R)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:192:real-data-calibration-acceptance",
+      "kind": "issue",
+      "scope": "real-data-calibration-acceptance",
+      "issue": 192,
+      "title": "P1: Estimate and diagnose prior, process, and observation-error covariance (B/Q/R)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:spatially-blocked-oof-residuals",
+      "kind": "input",
+      "scope": "spatially-blocked-oof-residuals"
+    },
+    {
+      "id": "issue:192:production-tuning",
+      "kind": "issue",
+      "scope": "production-tuning",
+      "issue": 192,
+      "title": "P1: Estimate and diagnose prior, process, and observation-error covariance (B/Q/R)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:194:hydrology-value-added",
+      "kind": "issue",
+      "scope": "hydrology-value-added",
+      "issue": 194,
+      "title": "P1: Quantify nowcast uncertainty reduction and value added with withheld sensors",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:191:ensemble-forecast",
+      "kind": "issue",
+      "scope": "ensemble-forecast",
+      "issue": 191,
+      "title": "P1: Make SoilStateForecast ensemble-native and initialize it from the DA posterior",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:191:operational-release",
+      "kind": "issue",
+      "scope": "operational-release",
+      "issue": 191,
+      "title": "P1: Make SoilStateForecast ensemble-native and initialize it from the DA posterior",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:meteorological-member-design",
+      "kind": "decision",
+      "scope": "meteorological-member-design"
+    },
+    {
+      "id": "issue:191:meteorological-ensemble-acceptance",
+      "kind": "issue",
+      "scope": "meteorological-ensemble-acceptance",
+      "issue": 191,
+      "title": "P1: Make SoilStateForecast ensemble-native and initialize it from the DA posterior",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:meteorological-members-and-reforecasts",
+      "kind": "input",
+      "scope": "meteorological-members-and-reforecasts"
+    },
+    {
+      "id": "issue:32:reconciled-forcing-evidence",
+      "kind": "issue",
+      "scope": "reconciled-forcing-evidence",
+      "issue": 32,
+      "title": "GWL forcing/method ensemble \u2014 forcing-UQ parity with the soil-moisture bucket",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:71:reconciled-forcing-evidence",
+      "kind": "issue",
+      "scope": "reconciled-forcing-evidence",
+      "issue": 71,
+      "title": "Forward forcing: GraphCast/ACE2 QPF via earth2studio \u2192 90 m precip downscaler \u2192 antecedent-state ensemble",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:136:reconciled-forcing-evidence",
+      "kind": "issue",
+      "scope": "reconciled-forcing-evidence",
+      "issue": 136,
+      "title": "Run the FuXi forecast engine and orographically bias-correct it",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:58:penman-monteith",
+      "kind": "issue",
+      "scope": "penman-monteith",
+      "issue": 58,
+      "title": "P2: Penman-Monteith PET path (use AI-model radiation/humidity/wind)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:191:enhanced-pet-fidelity",
+      "kind": "issue",
+      "scope": "enhanced-pet-fidelity",
+      "issue": 191,
+      "title": "P1: Make SoilStateForecast ensemble-native and initialize it from the DA posterior",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:195:hydrology-forecast-validation",
+      "kind": "issue",
+      "scope": "hydrology-forecast-validation",
+      "issue": 195,
+      "title": "P1: Calibrate and validate probabilistic nowcasts and forecasts by lead time and native support",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:193:hazard-outputs",
+      "kind": "issue",
+      "scope": "hazard-outputs",
+      "issue": 193,
+      "title": "P2: Propagate joint hydrologic, parameter, forcing, and mechanical ensembles into hazards",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:195:hazard-validation",
+      "kind": "issue",
+      "scope": "hazard-validation",
+      "issue": 195,
+      "title": "P1: Calibrate and validate probabilistic nowcasts and forecasts by lead time and native support",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:194:innovation-diagnostics",
+      "kind": "issue",
+      "scope": "innovation-diagnostics",
+      "issue": 194,
+      "title": "P1: Quantify nowcast uncertainty reduction and value added with withheld sensors",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:205:switching-model",
+      "kind": "issue",
+      "scope": "switching-model",
+      "issue": 205,
+      "title": "Diagnostic-gated regime-switching \u03c4 for the OU temporal model (wet/dry-conditional; follow-on of #194)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:regime-switch-diagnostic-fired",
+      "kind": "decision",
+      "scope": "regime-switch-diagnostic-fired"
+    },
+    {
+      "id": "issue:198:shared-seismic-operator",
+      "kind": "issue",
+      "scope": "shared-seismic-operator",
+      "issue": 198,
+      "title": "P0: Use one depth-resolved hydromechanical operator for forward prediction and inversion",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:176:hysteretic-dynamics",
+      "kind": "issue",
+      "scope": "hysteretic-dynamics",
+      "issue": 176,
+      "title": "Route hysteresis into the soil-water DYNAMICS, not only the dv/v observable",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:198:hysteretic-seismic-integration",
+      "kind": "issue",
+      "scope": "hysteretic-seismic-integration",
+      "issue": 198,
+      "title": "P0: Use one depth-resolved hydromechanical operator for forward prediction and inversion",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:188:seismic-assimilation-extension",
+      "kind": "issue",
+      "scope": "seismic-assimilation-extension",
+      "issue": 188,
+      "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:191:seismic-prediction-or-validation",
+      "kind": "issue",
+      "scope": "seismic-prediction-or-validation",
+      "issue": 191,
+      "title": "P1: Make SoilStateForecast ensemble-native and initialize it from the DA posterior",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:194:seismic-prediction-or-validation",
+      "kind": "issue",
+      "scope": "seismic-prediction-or-validation",
+      "issue": 194,
+      "title": "P1: Quantify nowcast uncertainty reduction and value added with withheld sensors",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:195:seismic-prediction-or-validation",
+      "kind": "issue",
+      "scope": "seismic-prediction-or-validation",
+      "issue": 195,
+      "title": "P1: Calibrate and validate probabilistic nowcasts and forecasts by lead time and native support",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:164:seismic-operator-error-evidence",
+      "kind": "issue",
+      "scope": "seismic-operator-error-evidence",
+      "issue": 164,
+      "title": "Diagonal R for dv/v double-counts correlated coda errors",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:188:seismic-assimilation-acceptance",
+      "kind": "issue",
+      "scope": "seismic-assimilation-acceptance",
+      "issue": 188,
+      "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:192:seismic-bqr-acceptance",
+      "kind": "issue",
+      "scope": "seismic-bqr-acceptance",
+      "issue": 192,
+      "title": "P1: Estimate and diagnose prior, process, and observation-error covariance (B/Q/R)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:165:seismic-operator-error-evidence",
+      "kind": "issue",
+      "scope": "seismic-operator-error-evidence",
+      "issue": 165,
+      "title": "Petrophysical gain belongs in G (S_theta != 1), its uncertainty in R",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:168:seismic-operator-error-evidence",
+      "kind": "issue",
+      "scope": "seismic-operator-error-evidence",
+      "issue": 168,
+      "title": "Coda footprint operator bias into R; 3-D (not separable 2-D) kernel",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:real-banded-dvv-records",
+      "kind": "input",
+      "scope": "real-banded-dvv-records"
+    },
+    {
+      "id": "issue:30:operational-seismic-data",
+      "kind": "issue",
+      "scope": "operational-seismic-data",
+      "issue": 30,
+      "title": "Ingest real ambient-noise dv/v + calibrate coupling parameters (promote demo \u2192 operational)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:189:seismic-records",
+      "kind": "issue",
+      "scope": "seismic-records",
+      "issue": 189,
+      "title": "P1: Operationalize ground-sensor observation records, operators, QC, and holdouts",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:190:synthetic-transitions",
+      "kind": "issue",
+      "scope": "synthetic-transitions",
+      "issue": 190,
+      "title": "P2: Make mechanical damage, disturbance, and healing states probabilistic and conditionable",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:190:real-dvv-conditioning",
+      "kind": "issue",
+      "scope": "real-dvv-conditioning",
+      "issue": 190,
+      "title": "P2: Make mechanical damage, disturbance, and healing states probabilistic and conditionable",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:162:augmented-conditioning",
+      "kind": "issue",
+      "scope": "augmented-conditioning",
+      "issue": 162,
+      "title": "Static BLUE -> augmented space-time estimator (so attribution can run)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:169:identifiability-evidence",
+      "kind": "issue",
+      "scope": "identifiability-evidence",
+      "issue": 169,
+      "title": "Attribution identifiability precondition (rank-deficiency)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:conditional-filter-architecture",
+      "kind": "decision",
+      "scope": "conditional-filter-architecture"
+    },
+    {
+      "id": "decision:memory-issue-identity-repair",
+      "kind": "decision",
+      "scope": "memory-issue-identity-repair"
+    },
+    {
+      "id": "issue:190:real-event-integration",
+      "kind": "issue",
+      "scope": "real-event-integration",
+      "issue": 190,
+      "title": "P2: Make mechanical damage, disturbance, and healing states probabilistic and conditionable",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:known-event-catalog",
+      "kind": "input",
+      "scope": "known-event-catalog"
+    },
+    {
+      "id": "issue:193:mechanical-memory-hazard-path",
+      "kind": "issue",
+      "scope": "mechanical-memory-hazard-path",
+      "issue": 193,
+      "title": "P2: Propagate joint hydrologic, parameter, forcing, and mechanical ensembles into hazards",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:145:triggering-firewall",
+      "kind": "issue",
+      "scope": "triggering-firewall",
+      "issue": 145,
+      "title": "Firewall the coseismic dv/v damage/healing state from liquefaction TRIGGERING (category error)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:193:liquefaction-release",
+      "kind": "issue",
+      "scope": "liquefaction-release",
+      "issue": 193,
+      "title": "P2: Propagate joint hydrologic, parameter, forcing, and mechanical ensembles into hazards",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:200:source-term-schema",
+      "kind": "issue",
+      "scope": "source-term-schema",
+      "issue": 200,
+      "title": "Flood: soil-state source-term export contract (runoff/interflow/baseflow + uncertainty, member-preserving)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:200:forecast-source-term-integration",
+      "kind": "issue",
+      "scope": "forecast-source-term-integration",
+      "issue": 200,
+      "title": "Flood: soil-state source-term export contract (runoff/interflow/baseflow + uncertainty, member-preserving)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:201:routing-adapter",
+      "kind": "issue",
+      "scope": "routing-adapter",
+      "issue": 201,
+      "title": "Flood: select and pilot a routing component (LandLab OverlandFlow/FlowAccumulator vs external HAND inundation)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:pilot-routing-component",
+      "kind": "decision",
+      "scope": "pilot-routing-component"
+    },
+    {
+      "id": "issue:201:routed-hydrographs",
+      "kind": "issue",
+      "scope": "routed-hydrographs",
+      "issue": 201,
+      "title": "Flood: select and pilot a routing component (LandLab OverlandFlow/FlowAccumulator vs external HAND inundation)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:202:gauge-validation",
+      "kind": "issue",
+      "scope": "gauge-validation",
+      "issue": 202,
+      "title": "Flood: validate routed discharge against USGS gauge hydrographs (reuse D7 BFI/Q\u2013P calibration, #98)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:withheld-gauge-hydrographs",
+      "kind": "input",
+      "scope": "withheld-gauge-hydrographs"
+    },
+    {
+      "id": "input:inundation-observations",
+      "kind": "input",
+      "scope": "inundation-observations"
+    },
+    {
+      "id": "issue:202:inundation-extent-validation",
+      "kind": "issue",
+      "scope": "inundation-extent-validation",
+      "issue": 202,
+      "title": "Flood: validate routed discharge against USGS gauge hydrographs (reuse D7 BFI/Q\u2013P calibration, #98)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:128:pressure-aware-mechanics",
+      "kind": "issue",
+      "scope": "pressure-aware-mechanics",
+      "issue": 128,
+      "title": "Implement soil_mechanics: infinite-slope factor-of-safety + pore pressure (the MVP mechanics)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:129:landslide-pilot",
+      "kind": "issue",
+      "scope": "landslide-pilot",
+      "issue": 129,
+      "title": "Run LandLab LandslideProbability end-to-end on a pilot corridor and score vs a landslide inventory",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:landslide-pressure-closure",
+      "kind": "decision",
+      "scope": "landslide-pressure-closure"
+    },
+    {
+      "id": "input:pilot-landslide-inventory",
+      "kind": "input",
+      "scope": "pilot-landslide-inventory"
+    },
+    {
+      "id": "issue:129:landslide-pilot-validation",
+      "kind": "issue",
+      "scope": "landslide-pilot-validation",
+      "issue": 129,
+      "title": "Run LandLab LandslideProbability end-to-end on a pilot corridor and score vs a landslide inventory",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:130:selected-regime-physics",
+      "kind": "issue",
+      "scope": "selected-regime-physics",
+      "issue": 130,
+      "title": "Two subsurface stores (shallow perched + deep GWL) for fall-shallow vs spring-deep regimes",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:129:regime-specific-release",
+      "kind": "issue",
+      "scope": "regime-specific-release",
+      "issue": 129,
+      "title": "Run LandLab LandslideProbability end-to-end on a pilot corridor and score vs a landslide inventory",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:131:selected-regime-physics",
+      "kind": "issue",
+      "scope": "selected-regime-physics",
+      "issue": 131,
+      "title": "Vadose transit lag: recharge must not teleport to the water table",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:132:selected-regime-physics",
+      "kind": "issue",
+      "scope": "selected-regime-physics",
+      "issue": 132,
+      "title": "Sub-daily rainfall intensity for Hortonian / post-fire triggering",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:133:selected-regime-physics",
+      "kind": "issue",
+      "scope": "selected-regime-physics",
+      "issue": 133,
+      "title": "Downslope-convergent interflow delivered as positive pore pressure, not a stream sink",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:134:selected-regime-physics",
+      "kind": "issue",
+      "scope": "selected-regime-physics",
+      "issue": 134,
+      "title": "Root cohesion, colluvium thickness, and post-fire (Ks/cohesion) states for landslides",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:135:selected-regime-physics",
+      "kind": "issue",
+      "scope": "selected-regime-physics",
+      "issue": 135,
+      "title": "<=10 m slope + explicit cut-slope layer for shallow failures",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:142:accepted-hazard-input",
+      "kind": "issue",
+      "scope": "accepted-hazard-input",
+      "issue": 142,
+      "title": "Seasonal-high depth-to-water in liquefiable units: sub-1.5 m accuracy, uncertainty, non-TOPMODEL prior",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:141:liquefaction-screen-release",
+      "kind": "issue",
+      "scope": "liquefaction-screen-release",
+      "issue": 141,
+      "title": "MVP: geospatial liquefaction GLM driven by the dynamic seasonal-high water table + scenario ShakeMap PGV",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:143:accepted-hazard-input",
+      "kind": "issue",
+      "scope": "accepted-hazard-input",
+      "issue": 143,
+      "title": "Ingest USGS ShakeMap ground motion (PGA / PGV / Mw) with epistemic uncertainty",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:144:accepted-hazard-input",
+      "kind": "issue",
+      "scope": "accepted-hazard-input",
+      "issue": 144,
+      "title": "Per-cell Vs30 sigma field so P(NEHRP class) is not decorative",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:189:water-table-target-classification",
+      "kind": "issue",
+      "scope": "water-table-target-classification",
+      "issue": 189,
+      "title": "P1: Operationalize ground-sensor observation records, operators, QC, and holdouts",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:142:seasonal-tail-validation",
+      "kind": "issue",
+      "scope": "seasonal-tail-validation",
+      "issue": 142,
+      "title": "Seasonal-high depth-to-water in liquefiable units: sub-1.5 m accuracy, uncertainty, non-TOPMODEL prior",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:64:probabilistic-release",
+      "kind": "issue",
+      "scope": "probabilistic-release",
+      "issue": 64,
+      "title": "LandLab export: wire the dynamic bundle to real products + CLI + per-cell \u03c3 and confidence mask",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:142:probabilistic-release",
+      "kind": "issue",
+      "scope": "probabilistic-release",
+      "issue": 142,
+      "title": "Seasonal-high depth-to-water in liquefiable units: sub-1.5 m accuracy, uncertainty, non-TOPMODEL prior",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:144:probabilistic-release",
+      "kind": "issue",
+      "scope": "probabilistic-release",
+      "issue": 144,
+      "title": "Per-cell Vs30 sigma field so P(NEHRP class) is not decorative",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:depth-triggering-scope",
+      "kind": "decision",
+      "scope": "depth-triggering-scope"
+    },
+    {
+      "id": "issue:146:full-triggering",
+      "kind": "issue",
+      "scope": "full-triggering",
+      "issue": 146,
+      "title": "Future: depth-resolved triggering (CPT/SPT + Vs(z) critical layer + CSR/CRR)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:resume-vs30-milestone",
+      "kind": "decision",
+      "scope": "resume-vs30-milestone"
+    },
+    {
+      "id": "issue:81:any-dispatch",
+      "kind": "issue",
+      "scope": "any-dispatch",
+      "issue": 81,
+      "title": "Vs30 densification: source measured Vs profiles (the validation anchor \u2014 BLOCKER)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:82:any-dispatch",
+      "kind": "issue",
+      "scope": "any-dispatch",
+      "issue": 82,
+      "title": "Vs30 densification: fetch the missing SOLUS soil covariates (bulk density, organic carbon, soil thickness)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:83:any-dispatch",
+      "kind": "issue",
+      "scope": "any-dispatch",
+      "issue": 83,
+      "title": "Vs30 densification: two-layer travel-time model from soil thickness / depth-to-bedrock",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:84:any-dispatch",
+      "kind": "issue",
+      "scope": "any-dispatch",
+      "issue": 84,
+      "title": "Vs30 densification: stratify Vs(z) profiles by surficial geology (glacial overconsolidation)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:85:any-dispatch",
+      "kind": "issue",
+      "scope": "any-dispatch",
+      "issue": 85,
+      "title": "Vs30 densification: effective-stress coupling to the water table (makes Vs dynamic)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:86:any-dispatch",
+      "kind": "issue",
+      "scope": "any-dispatch",
+      "issue": 86,
+      "title": "Vs30 densification: mean-preserving block-constrained downscaling + block CV",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:measured-vs-profiles",
+      "kind": "input",
+      "scope": "measured-vs-profiles"
+    },
+    {
+      "id": "issue:81:validated-profile-table",
+      "kind": "issue",
+      "scope": "validated-profile-table",
+      "issue": 81,
+      "title": "Vs30 densification: source measured Vs profiles (the validation anchor \u2014 BLOCKER)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:82:accepted-densification-work",
+      "kind": "issue",
+      "scope": "accepted-densification-work",
+      "issue": 82,
+      "title": "Vs30 densification: fetch the missing SOLUS soil covariates (bulk density, organic carbon, soil thickness)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:83:accepted-densification-work",
+      "kind": "issue",
+      "scope": "accepted-densification-work",
+      "issue": 83,
+      "title": "Vs30 densification: two-layer travel-time model from soil thickness / depth-to-bedrock",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:84:accepted-densification-work",
+      "kind": "issue",
+      "scope": "accepted-densification-work",
+      "issue": 84,
+      "title": "Vs30 densification: stratify Vs(z) profiles by surficial geology (glacial overconsolidation)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:85:accepted-densification-work",
+      "kind": "issue",
+      "scope": "accepted-densification-work",
+      "issue": 85,
+      "title": "Vs30 densification: effective-stress coupling to the water table (makes Vs dynamic)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:86:accepted-densification-work",
+      "kind": "issue",
+      "scope": "accepted-densification-work",
+      "issue": 86,
+      "title": "Vs30 densification: mean-preserving block-constrained downscaling + block CV",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:82:soil-thickness-covariates",
+      "kind": "issue",
+      "scope": "soil-thickness-covariates",
+      "issue": 82,
+      "title": "Vs30 densification: fetch the missing SOLUS soil covariates (bulk density, organic carbon, soil thickness)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:83:thickness-aware-profile",
+      "kind": "issue",
+      "scope": "thickness-aware-profile",
+      "issue": 83,
+      "title": "Vs30 densification: two-layer travel-time model from soil thickness / depth-to-bedrock",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:82:bulk-density-covariates",
+      "kind": "issue",
+      "scope": "bulk-density-covariates",
+      "issue": 82,
+      "title": "Vs30 densification: fetch the missing SOLUS soil covariates (bulk density, organic carbon, soil thickness)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:85:dynamic-profile",
+      "kind": "issue",
+      "scope": "dynamic-profile",
+      "issue": 85,
+      "title": "Vs30 densification: effective-stress coupling to the water table (makes Vs dynamic)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:84:geology-stratified-profiles",
+      "kind": "issue",
+      "scope": "geology-stratified-profiles",
+      "issue": 84,
+      "title": "Vs30 densification: stratify Vs(z) profiles by surficial geology (glacial overconsolidation)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:86:densification",
+      "kind": "issue",
+      "scope": "densification",
+      "issue": 86,
+      "title": "Vs30 densification: mean-preserving block-constrained downscaling + block CV",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:203:wrapper-contract",
+      "kind": "issue",
+      "scope": "wrapper-contract",
+      "issue": 203,
+      "title": "Earth2Studio model-structure & assimilation compatibility (Prognostic/Diagnostic wrapper + member/lead_time contract)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:203:end-to-end-wrapper-validation",
+      "kind": "issue",
+      "scope": "end-to-end-wrapper-validation",
+      "issue": 203,
+      "title": "Earth2Studio model-structure & assimilation compatibility (Prognostic/Diagnostic wrapper + member/lead_time contract)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:2:landed-domain-mask",
+      "kind": "issue",
+      "scope": "landed-domain-mask",
+      "issue": 2,
+      "title": "Hydrogeologic domain mask layer (foundational)",
+      "snapshot_state": "closed",
+      "epic": false
+    },
+    {
+      "id": "issue:3:domain-aware-implementation",
+      "kind": "issue",
+      "scope": "domain-aware-implementation",
+      "issue": 3,
+      "title": "Per-domain validation gates + variogram-sized CV blocks (retire <8 m / 200 km)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:7:domain-aware-implementation",
+      "kind": "issue",
+      "scope": "domain-aware-implementation",
+      "issue": 7,
+      "title": "Stage 3 nugget = representativeness variance (stay-close-to-data knob)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:8:domain-aware-implementation",
+      "kind": "issue",
+      "scope": "domain-aware-implementation",
+      "issue": 8,
+      "title": "Stage 2 response time tau conditioned on aquifer type",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:9:domain-aware-implementation",
+      "kind": "issue",
+      "scope": "domain-aware-implementation",
+      "issue": 9,
+      "title": "Aquifer-aware deep/confined well screening (shallow-only target)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "issue:10:domain-aware-implementation",
+      "kind": "issue",
+      "scope": "domain-aware-implementation",
+      "issue": 10,
+      "title": "Coastal & stream boundary conditions (sea level, stream stage)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "input:coastal-geology-gap-resolution",
+      "kind": "input",
+      "scope": "coastal-geology-gap-resolution"
+    },
+    {
+      "id": "issue:2:coastal-extent-release-evidence",
+      "kind": "issue",
+      "scope": "coastal-extent-release-evidence",
+      "issue": 2,
+      "title": "Hydrogeologic domain mask layer (foundational)",
+      "snapshot_state": "closed",
+      "epic": false
+    },
+    {
+      "id": "issue:25:entry-by-entry-bibliography-evidence",
+      "kind": "issue",
+      "scope": "entry-by-entry-bibliography-evidence",
+      "issue": 25,
+      "title": "Verify references.bib integrity (zero fabricated DOIs)",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "release:scientific-book",
+      "kind": "release",
+      "scope": "scientific-book"
+    },
+    {
+      "id": "decision:release-hold-163",
+      "kind": "decision",
+      "scope": "release-hold-163"
+    },
+    {
+      "id": "issue:163:any-dispatch",
+      "kind": "issue",
+      "scope": "any-dispatch",
+      "issue": 163,
+      "title": "Prior structure: scalable AND terrain-aware (GMRF/SPDE/Matern), not dense isotropic",
+      "snapshot_state": "open",
+      "epic": false
+    },
+    {
+      "id": "decision:release-hold-186",
+      "kind": "decision",
+      "scope": "release-hold-186"
+    },
+    {
+      "id": "issue:186:any-dispatch",
+      "kind": "issue",
+      "scope": "any-dispatch",
+      "issue": 186,
+      "title": "P0: Back-transform Stage-3 kriging predictive variance before combining uncertainty",
+      "snapshot_state": "open",
+      "epic": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "D001",
+      "prerequisite": "issue:52:product-semantics",
+      "dependent": "issue:187:schema",
+      "type": "implementation_prerequisite",
+      "evidence": "The schema requires one unambiguous soil-moisture variable.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D002",
+      "prerequisite": "issue:186:accepted-correctness",
+      "dependent": "issue:187:operational-release",
+      "type": "release_evidence",
+      "evidence": "Correct physical uncertainty, timestep and storage semantics gate use of the schema in an operational product, not drafting a synthetic contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "#171 is an epic; its approved storage acceptance package is represented by the human decision below and concrete #172/#137 evidence. No full empirical completion is required to draft the schema.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D003",
+      "prerequisite": "issue:89:accepted-correctness",
+      "dependent": "issue:187:operational-release",
+      "type": "release_evidence",
+      "evidence": "Correct physical uncertainty, timestep and storage semantics gate use of the schema in an operational product, not drafting a synthetic contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "#171 is an epic; its approved storage acceptance package is represented by the human decision below and concrete #172/#137 evidence. No full empirical completion is required to draft the schema.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D004",
+      "prerequisite": "issue:137:accepted-correctness",
+      "dependent": "issue:187:operational-release",
+      "type": "release_evidence",
+      "evidence": "Correct physical uncertainty, timestep and storage semantics gate use of the schema in an operational product, not drafting a synthetic contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "#171 is an epic; its approved storage acceptance package is represented by the human decision below and concrete #172/#137 evidence. No full empirical completion is required to draft the schema.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D005",
+      "prerequisite": "issue:172:accepted-correctness",
+      "dependent": "issue:187:operational-release",
+      "type": "release_evidence",
+      "evidence": "Correct physical uncertainty, timestep and storage semantics gate use of the schema in an operational product, not drafting a synthetic contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "#171 is an epic; its approved storage acceptance package is represented by the human decision below and concrete #172/#137 evidence. No full empirical completion is required to draft the schema.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D006",
+      "prerequisite": "decision:storage-release-scope",
+      "dependent": "issue:187:operational-release",
+      "type": "human_decision",
+      "evidence": "Define the reservoir partition and exact leaf issues required for the first storage release.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 171,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/171",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 172,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/172",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Resolve #131/#173/#174 interfaces jointly; do not replace #171 with every child as an unconditional implementation blocker.",
+      "basis": "proposed_decision",
+      "acceptance_required": true
+    },
+    {
+      "id": "D007",
+      "prerequisite": "issue:187:schema",
+      "dependent": "issue:189:well-probe-records",
+      "type": "implementation_prerequisite",
+      "evidence": "Operational observation records use the canonical observation contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 189,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/189",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D008",
+      "prerequisite": "issue:167:datum-age",
+      "dependent": "issue:189:well-probe-records",
+      "type": "implementation_prerequisite",
+      "evidence": "#189 explicitly must implement datum age, not revisit cadence.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 189,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/189",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "May be implemented in the same work package; do not demand a separate PR if acceptance is evidenced together.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D009",
+      "prerequisite": "input:well-probe-fixture",
+      "dependent": "issue:189:well-probe-pilot-acceptance",
+      "type": "external_input",
+      "evidence": "Real well/probe records, support, instrument-error provenance and fixed holdouts are necessary for observed pilot acceptance.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 189,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/189",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 153,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/153",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Schema/parser work may proceed with synthetic fixtures; operational source availability is a separate predicate.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D010",
+      "prerequisite": "issue:187:schema",
+      "dependent": "issue:188:hydrology-pilot",
+      "type": "implementation_prerequisite",
+      "evidence": "The cycling pilot consumes the canonical state contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D011",
+      "prerequisite": "issue:189:well-probe-records",
+      "dependent": "issue:188:hydrology-pilot",
+      "type": "implementation_prerequisite",
+      "evidence": "The first observed cycle needs the well/probe observation records and holdouts.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 189,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/189",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "A synthetic filter fixture can precede operational record completion; no seismic stream is required.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D012",
+      "prerequisite": "issue:153:pilot-fixture-evidence",
+      "dependent": "issue:188:pilot-acceptance",
+      "type": "release_evidence",
+      "evidence": "The accepted pilot must rerun from pinned fixtures with deterministic member streams and tested assimilation paths.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 153,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/153",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Bound each source issue to the first pilot; do not wait for every fetcher or all full-domain products.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D013",
+      "prerequisite": "issue:155:pilot-fixture-evidence",
+      "dependent": "issue:188:pilot-acceptance",
+      "type": "release_evidence",
+      "evidence": "The accepted pilot must rerun from pinned fixtures with deterministic member streams and tested assimilation paths.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 155,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/155",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Bound each source issue to the first pilot; do not wait for every fetcher or all full-domain products.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D014",
+      "prerequisite": "issue:156:pilot-fixture-evidence",
+      "dependent": "issue:188:pilot-acceptance",
+      "type": "release_evidence",
+      "evidence": "The accepted pilot must rerun from pinned fixtures with deterministic member streams and tested assimilation paths.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 156,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/156",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Bound each source issue to the first pilot; do not wait for every fetcher or all full-domain products.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D015",
+      "prerequisite": "issue:89:accepted-correctness",
+      "dependent": "issue:188:operational-release",
+      "type": "release_evidence",
+      "evidence": "Operational posterior propagation needs defensible mass, timestep and physical-unit uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 186,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Hydrology-only small prototype remains permitted with disclosed baseline limitations.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D016",
+      "prerequisite": "issue:137:accepted-correctness",
+      "dependent": "issue:188:operational-release",
+      "type": "release_evidence",
+      "evidence": "Operational posterior propagation needs defensible mass, timestep and physical-unit uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 186,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Hydrology-only small prototype remains permitted with disclosed baseline limitations.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D017",
+      "prerequisite": "issue:172:accepted-correctness",
+      "dependent": "issue:188:operational-release",
+      "type": "release_evidence",
+      "evidence": "Operational posterior propagation needs defensible mass, timestep and physical-unit uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 186,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Hydrology-only small prototype remains permitted with disclosed baseline limitations.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D018",
+      "prerequisite": "issue:186:accepted-correctness",
+      "dependent": "issue:188:operational-release",
+      "type": "release_evidence",
+      "evidence": "Operational posterior propagation needs defensible mass, timestep and physical-unit uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 187,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/187",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 186,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Hydrology-only small prototype remains permitted with disclosed baseline limitations.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D019",
+      "prerequisite": "issue:154:landed-backend",
+      "dependent": "issue:188:full-domain-release",
+      "type": "release_evidence",
+      "evidence": "Full-domain work reuses the already-landed StationaryGridPrior numerical backend.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 163,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/163#issuecomment-5357194639"
+        }
+      ],
+      "qualifier": "#154 is closed; verify the intended revision and production workload evidence instead of redoing scalability under #163.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D020",
+      "prerequisite": "input:full-domain-scale-benchmark",
+      "dependent": "issue:188:full-domain-release",
+      "type": "external_input",
+      "evidence": "The chosen pilot-to-domain configuration needs memory/runtime/convergence evidence at its declared scale.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 154,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/154",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "A landed backend is not itself proof of every ensemble configuration at production scale.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D021",
+      "prerequisite": "issue:163:barrier-metadata",
+      "dependent": "issue:188:operational-release",
+      "type": "release_evidence",
+      "evidence": "Analysis metadata must report the approximate barrier/localization semantics.",
+      "sources": [
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 163,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/163#issuecomment-5357194639"
+        },
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188#issuecomment-5351360136"
+        }
+      ],
+      "qualifier": "Barrier-metadata work is separate from optional terrain anisotropy or soft barriers; preserve landed Mat\u00e9rn/residual/state-specific smoothness work.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D022",
+      "prerequisite": "issue:163:terrain-connectivity",
+      "dependent": "issue:188:enhanced-spatial-fidelity",
+      "type": "optional_fidelity",
+      "evidence": "Terrain-aware/soft-connectivity models remain empirical enhancements to the existing stationary backend.",
+      "sources": [
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 163,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/163#issuecomment-5357194639"
+        }
+      ],
+      "qualifier": "Activate only if diagnostics and declared application scope justify them.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D023",
+      "prerequisite": "issue:188:hydrology-pilot",
+      "dependent": "issue:161:dynamic-propagation-closure",
+      "type": "release_evidence",
+      "evidence": "#161 OU gain/drift treatment is already landed; remaining dynamic propagation is evidenced by the cycling implementation.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 161,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/161",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Do not add the reverse issue-level blocker #161 -> #188; that creates an artificial cycle.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D024",
+      "prerequisite": "issue:188:hydrology-pilot",
+      "dependent": "issue:192:hydrology-diagnostics",
+      "type": "implementation_prerequisite",
+      "evidence": "B/Q/R diagnosis needs a running cycle.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D025",
+      "prerequisite": "issue:189:well-probe-records",
+      "dependent": "issue:192:hydrology-diagnostics",
+      "type": "implementation_prerequisite",
+      "evidence": "Diagnosis needs record-level support, QC, R metadata and holdout roles.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D026",
+      "prerequisite": "issue:187:schema",
+      "dependent": "issue:192:hydrology-diagnostics",
+      "type": "implementation_prerequisite",
+      "evidence": "B/Q/R components must use the same variables, units and member contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D027",
+      "prerequisite": "issue:186:accepted-correctness",
+      "dependent": "issue:192:real-data-calibration-acceptance",
+      "type": "release_evidence",
+      "evidence": "Calibrate physical-unit static predictive uncertainty before trusting real-data B estimates.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D028",
+      "prerequisite": "input:spatially-blocked-oof-residuals",
+      "dependent": "issue:192:real-data-calibration-acceptance",
+      "type": "external_input",
+      "evidence": "Real-data covariance fitting requires out-of-fold spatially blocked residual tables with correct measurement targets.",
+      "sources": [
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192#issuecomment-5351358978"
+        }
+      ],
+      "qualifier": "The fitter and self-test already exist; source comment says real OOF tables do not. No in-sample or raw-map substitute.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D029",
+      "prerequisite": "issue:154:landed-backend",
+      "dependent": "issue:192:production-tuning",
+      "type": "release_evidence",
+      "evidence": "Production tuning follows the scalable representation decision.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 163,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/163#issuecomment-5357194639"
+        }
+      ],
+      "qualifier": "Reuse accepted #154 implementation, not an open-issue-status requirement.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D030",
+      "prerequisite": "issue:188:hydrology-pilot",
+      "dependent": "issue:194:hydrology-value-added",
+      "type": "implementation_prerequisite",
+      "evidence": "Paired withheld-sensor experiments require the cycle, operational holdouts and diagnosed B/Q/R.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 194,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/194",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D031",
+      "prerequisite": "issue:189:well-probe-records",
+      "dependent": "issue:194:hydrology-value-added",
+      "type": "implementation_prerequisite",
+      "evidence": "Paired withheld-sensor experiments require the cycle, operational holdouts and diagnosed B/Q/R.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 194,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/194",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D032",
+      "prerequisite": "issue:192:hydrology-diagnostics",
+      "dependent": "issue:194:hydrology-value-added",
+      "type": "implementation_prerequisite",
+      "evidence": "Paired withheld-sensor experiments require the cycle, operational holdouts and diagnosed B/Q/R.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 194,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/194",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D033",
+      "prerequisite": "issue:187:schema",
+      "dependent": "issue:191:ensemble-forecast",
+      "type": "implementation_prerequisite",
+      "evidence": "Forecast members use the canonical state and forcing contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D034",
+      "prerequisite": "issue:188:hydrology-pilot",
+      "dependent": "issue:191:ensemble-forecast",
+      "type": "implementation_prerequisite",
+      "evidence": "Posterior ensemble initializes forecasts without resetting covariance.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D035",
+      "prerequisite": "issue:89:accepted-correctness",
+      "dependent": "issue:191:operational-release",
+      "type": "release_evidence",
+      "evidence": "Forecast release explicitly depends on daily-step and storage-account correctness.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Stub/synthetic forcing interface implementation can precede these release results; #171 tracker is not executable.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D036",
+      "prerequisite": "issue:137:accepted-correctness",
+      "dependent": "issue:191:operational-release",
+      "type": "release_evidence",
+      "evidence": "Forecast release explicitly depends on daily-step and storage-account correctness.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Stub/synthetic forcing interface implementation can precede these release results; #171 tracker is not executable.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D037",
+      "prerequisite": "issue:172:accepted-correctness",
+      "dependent": "issue:191:operational-release",
+      "type": "release_evidence",
+      "evidence": "Forecast release explicitly depends on daily-step and storage-account correctness.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Stub/synthetic forcing interface implementation can precede these release results; #171 tracker is not executable.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D038",
+      "prerequisite": "decision:meteorological-member-design",
+      "dependent": "issue:191:meteorological-ensemble-acceptance",
+      "type": "human_decision",
+      "evidence": "Commission a calibrated meteorological-member source, ensemble size, paired P/T dependence and hindcast protocol.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "#32 currently covers method spread and #136 one engine run; neither alone specifies this deliverable.",
+      "basis": "proposed_decision",
+      "acceptance_required": true
+    },
+    {
+      "id": "D039",
+      "prerequisite": "input:meteorological-members-and-reforecasts",
+      "dependent": "issue:191:meteorological-ensemble-acceptance",
+      "type": "external_input",
+      "evidence": "A real forecast needs paired forcing members and data for out-of-sample bias/spread evaluation.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Local schema and posterior-initialization tests may use synthetic members.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D040",
+      "prerequisite": "issue:32:reconciled-forcing-evidence",
+      "dependent": "issue:191:meteorological-ensemble-acceptance",
+      "type": "release_evidence",
+      "evidence": "Reconciled forcing work contributes member-level propagation and real FuXi/bias-correction evidence.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Repair stale GraphCast/ACE2 instructions and assign one owner; do not treat each old issue as a separate mandatory engine.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D041",
+      "prerequisite": "issue:71:reconciled-forcing-evidence",
+      "dependent": "issue:191:meteorological-ensemble-acceptance",
+      "type": "release_evidence",
+      "evidence": "Reconciled forcing work contributes member-level propagation and real FuXi/bias-correction evidence.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Repair stale GraphCast/ACE2 instructions and assign one owner; do not treat each old issue as a separate mandatory engine.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D042",
+      "prerequisite": "issue:136:reconciled-forcing-evidence",
+      "dependent": "issue:191:meteorological-ensemble-acceptance",
+      "type": "release_evidence",
+      "evidence": "Reconciled forcing work contributes member-level propagation and real FuXi/bias-correction evidence.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 191,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/191",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Repair stale GraphCast/ACE2 instructions and assign one owner; do not treat each old issue as a separate mandatory engine.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D043",
+      "prerequisite": "issue:58:penman-monteith",
+      "dependent": "issue:191:enhanced-pet-fidelity",
+      "type": "optional_fidelity",
+      "evidence": "Penman\u2013Monteith is a fidelity extension when forcing supports it.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 58,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/58",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Documented PET fallback can support the first accepted pilot.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D044",
+      "prerequisite": "issue:191:ensemble-forecast",
+      "dependent": "issue:195:hydrology-forecast-validation",
+      "type": "implementation_prerequisite",
+      "evidence": "State/forecast validation needs forecast members and the paired DA value-added experiment.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 195,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/195",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D045",
+      "prerequisite": "issue:194:hydrology-value-added",
+      "dependent": "issue:195:hydrology-forecast-validation",
+      "type": "implementation_prerequisite",
+      "evidence": "State/forecast validation needs forecast members and the paired DA value-added experiment.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 195,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/195",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D046",
+      "prerequisite": "issue:193:hazard-outputs",
+      "dependent": "issue:195:hazard-validation",
+      "type": "release_evidence",
+      "evidence": "Hazard probability verification consumes hazard member outputs.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 195,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/195",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Do not hold hydrologic forecast scoring until every hazard pathway exists.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D047",
+      "prerequisite": "issue:194:innovation-diagnostics",
+      "dependent": "issue:205:switching-model",
+      "type": "optional_fidelity",
+      "evidence": "Switching tau is contingent on diagnosed wet/dry residual behavior, not merely closure of #194.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 205,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/205",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 205,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/205#issuecomment-5351359705"
+        }
+      ],
+      "qualifier": "First estimate baseline tau and uncertainty; proceed only if regime differences exceed uncertainty.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D048",
+      "prerequisite": "decision:regime-switch-diagnostic-fired",
+      "dependent": "issue:205:switching-model",
+      "type": "human_decision",
+      "evidence": "Record the positive diagnostic and approved scope before promoting the optional model into the queue.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 205,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/205",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 205,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/205#issuecomment-5351359705"
+        }
+      ],
+      "qualifier": "A negative diagnostic is a valid deferral/closure outcome, not a reason to construct the model anyway.",
+      "basis": "proposed_decision",
+      "acceptance_required": true
+    },
+    {
+      "id": "D049",
+      "prerequisite": "issue:187:schema",
+      "dependent": "issue:198:shared-seismic-operator",
+      "type": "implementation_prerequisite",
+      "evidence": "Shared forward/inverse operator requires canonical state, parameter and observation semantics.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D050",
+      "prerequisite": "issue:176:hysteretic-dynamics",
+      "dependent": "issue:198:hysteretic-seismic-integration",
+      "type": "implementation_prerequisite",
+      "evidence": "Hysteretic integration requires memory in water dynamics, rather than only in the observable.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Non-hysteretic operator mathematics and diagnostic tests can be scoped independently; entire #198 completion still includes its required mode.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D051",
+      "prerequisite": "issue:198:shared-seismic-operator",
+      "dependent": "issue:188:seismic-assimilation-extension",
+      "type": "implementation_prerequisite",
+      "evidence": "#198 explicitly blocks #188 for assimilation of seismic observations.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "No dependency on #198 for the declared well-and-probe hydrology pilot.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D052",
+      "prerequisite": "issue:198:shared-seismic-operator",
+      "dependent": "issue:191:seismic-prediction-or-validation",
+      "type": "implementation_prerequisite",
+      "evidence": "The same operator must predict and condition the seismic observable.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies to seismic-conditioned results or seismic forecast verification, not the hydrologic slice.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D053",
+      "prerequisite": "issue:198:shared-seismic-operator",
+      "dependent": "issue:194:seismic-prediction-or-validation",
+      "type": "implementation_prerequisite",
+      "evidence": "The same operator must predict and condition the seismic observable.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies to seismic-conditioned results or seismic forecast verification, not the hydrologic slice.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D054",
+      "prerequisite": "issue:198:shared-seismic-operator",
+      "dependent": "issue:195:seismic-prediction-or-validation",
+      "type": "implementation_prerequisite",
+      "evidence": "The same operator must predict and condition the seismic observable.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies to seismic-conditioned results or seismic forecast verification, not the hydrologic slice.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D055",
+      "prerequisite": "issue:164:seismic-operator-error-evidence",
+      "dependent": "issue:188:seismic-assimilation-acceptance",
+      "type": "release_evidence",
+      "evidence": "Seismic posterior uncertainty requires correlated R, correct gains and kernel/error treatment.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 164,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/164",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Coordinate overlapping #165 implementation with #198; no duplicate gain implementation.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D056",
+      "prerequisite": "issue:164:seismic-operator-error-evidence",
+      "dependent": "issue:192:seismic-bqr-acceptance",
+      "type": "release_evidence",
+      "evidence": "Trustworthy dv/v B/Q/R requires these stream-specific error/operator controls.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 164,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/164",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Not an all-stream prerequisite for well/probe diagnostics.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D057",
+      "prerequisite": "issue:165:seismic-operator-error-evidence",
+      "dependent": "issue:188:seismic-assimilation-acceptance",
+      "type": "release_evidence",
+      "evidence": "Seismic posterior uncertainty requires correlated R, correct gains and kernel/error treatment.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 164,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/164",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Coordinate overlapping #165 implementation with #198; no duplicate gain implementation.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D058",
+      "prerequisite": "issue:165:seismic-operator-error-evidence",
+      "dependent": "issue:192:seismic-bqr-acceptance",
+      "type": "release_evidence",
+      "evidence": "Trustworthy dv/v B/Q/R requires these stream-specific error/operator controls.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 164,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/164",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Not an all-stream prerequisite for well/probe diagnostics.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D059",
+      "prerequisite": "issue:168:seismic-operator-error-evidence",
+      "dependent": "issue:188:seismic-assimilation-acceptance",
+      "type": "release_evidence",
+      "evidence": "Seismic posterior uncertainty requires correlated R, correct gains and kernel/error treatment.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 188,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/188",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 164,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/164",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 198,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/198",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Coordinate overlapping #165 implementation with #198; no duplicate gain implementation.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D060",
+      "prerequisite": "issue:168:seismic-operator-error-evidence",
+      "dependent": "issue:192:seismic-bqr-acceptance",
+      "type": "release_evidence",
+      "evidence": "Trustworthy dv/v B/Q/R requires these stream-specific error/operator controls.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 192,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/192",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 164,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/164",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Not an all-stream prerequisite for well/probe diagnostics.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D061",
+      "prerequisite": "input:real-banded-dvv-records",
+      "dependent": "issue:30:operational-seismic-data",
+      "type": "external_input",
+      "evidence": "Operational calibration requires real processing-qualified ambient-noise observations.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 30,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/30",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "No external contact is authorized by this proposal.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D062",
+      "prerequisite": "issue:30:operational-seismic-data",
+      "dependent": "issue:189:seismic-records",
+      "type": "implementation_prerequisite",
+      "evidence": "The seismic record stream consumes real observations and their reference conventions.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 189,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/189",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Well/probe records can land independently.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D063",
+      "prerequisite": "issue:187:schema",
+      "dependent": "issue:190:synthetic-transitions",
+      "type": "implementation_prerequisite",
+      "evidence": "Mechanical-state/member conventions reuse the canonical contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 190,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/190",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D064",
+      "prerequisite": "issue:188:hydrology-pilot",
+      "dependent": "issue:190:real-dvv-conditioning",
+      "type": "implementation_prerequisite",
+      "evidence": "Real-data mechanical conditioning requires a coupled hydrologic prior, shared operator, dynamic estimator and identifiability checks.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 190,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/190",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Synthetic transitions, jump/healing mechanics and basic particle tests may proceed before these integrations.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D065",
+      "prerequisite": "issue:198:shared-seismic-operator",
+      "dependent": "issue:190:real-dvv-conditioning",
+      "type": "implementation_prerequisite",
+      "evidence": "Real-data mechanical conditioning requires a coupled hydrologic prior, shared operator, dynamic estimator and identifiability checks.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 190,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/190",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Synthetic transitions, jump/healing mechanics and basic particle tests may proceed before these integrations.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D066",
+      "prerequisite": "issue:162:augmented-conditioning",
+      "dependent": "issue:190:real-dvv-conditioning",
+      "type": "implementation_prerequisite",
+      "evidence": "Real-data mechanical conditioning requires a coupled hydrologic prior, shared operator, dynamic estimator and identifiability checks.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 190,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/190",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Synthetic transitions, jump/healing mechanics and basic particle tests may proceed before these integrations.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D067",
+      "prerequisite": "issue:169:identifiability-evidence",
+      "dependent": "issue:190:real-dvv-conditioning",
+      "type": "implementation_prerequisite",
+      "evidence": "Real-data mechanical conditioning requires a coupled hydrologic prior, shared operator, dynamic estimator and identifiability checks.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 190,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/190",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/probabilistic-nowcast-forecast-roadmap.md",
+          "locator": "Phases 1\u20134 and dependency graph"
+        }
+      ],
+      "qualifier": "Synthetic transitions, jump/healing mechanics and basic particle tests may proceed before these integrations.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D068",
+      "prerequisite": "decision:conditional-filter-architecture",
+      "dependent": "issue:190:real-dvv-conditioning",
+      "type": "human_decision",
+      "evidence": "Select the inference approximation after correcting the claimed conditional exactness and testing it.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/soil-twin-audit-response-2026-09-10.md",
+          "locator": "Stage 1.3"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 190,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/190",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "A per-particle Jacobian does not establish an exact conditionally linear likelihood.",
+      "basis": "proposed_decision",
+      "acceptance_required": true
+    },
+    {
+      "id": "D069",
+      "prerequisite": "decision:memory-issue-identity-repair",
+      "dependent": "issue:190:real-event-integration",
+      "type": "human_decision",
+      "evidence": "Repair #119\u2013#125 title/body shifts before assigning event, damage and disturbance ownership.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Do not encode shifted #121/#122/#123/#124 references as settled implementation blockers.",
+      "basis": "proposed_decision",
+      "acceptance_required": true
+    },
+    {
+      "id": "D070",
+      "prerequisite": "input:known-event-catalog",
+      "dependent": "issue:169:identifiability-evidence",
+      "type": "external_input",
+      "evidence": "Attribution conditioning requires a known catalog and actual record length.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 169,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/169",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "#124 is named by the issue but its body is shifted; resolve ownership before replacing this input node with an issue edge.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D071",
+      "prerequisite": "issue:191:ensemble-forecast",
+      "dependent": "issue:193:hazard-outputs",
+      "type": "implementation_prerequisite",
+      "evidence": "Joint hazard paths consume stable forecast member identities.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 193,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/193",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D072",
+      "prerequisite": "issue:190:real-dvv-conditioning",
+      "dependent": "issue:193:mechanical-memory-hazard-path",
+      "type": "optional_fidelity",
+      "evidence": "Mechanical-state propagation is required only where the selected hazard path uses such memory.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 193,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/193",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Once selected for a release this becomes required path-specific evidence; explicitly excluded memory does not block other paths.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D073",
+      "prerequisite": "issue:145:triggering-firewall",
+      "dependent": "issue:193:liquefaction-release",
+      "type": "release_evidence",
+      "evidence": "Slow damage/healing must not become liquefaction-triggering pore pressure.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 190,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/190",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 193,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/193",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D074",
+      "prerequisite": "issue:187:schema",
+      "dependent": "issue:200:source-term-schema",
+      "type": "implementation_prerequisite",
+      "evidence": "Flood source terms retain the canonical ensemble-member contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 200,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/200",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D075",
+      "prerequisite": "issue:191:ensemble-forecast",
+      "dependent": "issue:200:forecast-source-term-integration",
+      "type": "implementation_prerequisite",
+      "evidence": "Actual forecast-source export uses the forecast ensemble.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 200,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/200",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "scripts/gaia_group_issues.py",
+          "locator": "BLOCKED_BY[200]"
+        }
+      ],
+      "qualifier": "The source-term schema and synthetic round trip can proceed before the forecast engine is complete.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D076",
+      "prerequisite": "issue:200:source-term-schema",
+      "dependent": "issue:201:routing-adapter",
+      "type": "implementation_prerequisite",
+      "evidence": "Routing integration consumes the source-term export contract.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 201,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/201",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D077",
+      "prerequisite": "decision:pilot-routing-component",
+      "dependent": "issue:201:routing-adapter",
+      "type": "human_decision",
+      "evidence": "Select the routing model and pilot basin before implementation claims a routed product.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 201,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/201",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Selection research and isolated component spikes need not wait on real forecast members.",
+      "basis": "proposed_decision",
+      "acceptance_required": true
+    },
+    {
+      "id": "D078",
+      "prerequisite": "issue:201:routed-hydrographs",
+      "dependent": "issue:202:gauge-validation",
+      "type": "implementation_prerequisite",
+      "evidence": "Gauge validation consumes routed hydrographs.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 202,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/202",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D079",
+      "prerequisite": "input:withheld-gauge-hydrographs",
+      "dependent": "issue:202:gauge-validation",
+      "type": "external_input",
+      "evidence": "Validate on withheld gauge periods with rating-curve uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 202,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/202",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "#98 calibration is reused as baseline evidence, not counted as independent validation.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D080",
+      "prerequisite": "input:inundation-observations",
+      "dependent": "issue:202:inundation-extent-validation",
+      "type": "external_input",
+      "evidence": "Extent skill requires observed inundation.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 202,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/202",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Conditional: absent extent observations forbid an extent-skill claim but do not block discharge evaluation.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D081",
+      "prerequisite": "issue:128:pressure-aware-mechanics",
+      "dependent": "issue:129:landslide-pilot",
+      "type": "implementation_prerequisite",
+      "evidence": "The pilot must consume a defensible named pressure/mechanics path.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 128,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/128",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 129,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/129",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "Proposed integration requirement from the audit, not an explicit issue-number dependency in #129. A component-specific adapter may satisfy the named pressure/mechanics contract; resolve Landlab component suitability for the selected shallow/deep regime before treating #128 code as mandatory.",
+      "basis": "proposed_integration_requirement",
+      "acceptance_required": true
+    },
+    {
+      "id": "D082",
+      "prerequisite": "decision:landslide-pressure-closure",
+      "dependent": "issue:128:pressure-aware-mechanics",
+      "type": "human_decision",
+      "evidence": "Name hydrostatic, slope-parallel or transient closure and its validity domain.",
+      "sources": [
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 128,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/128#issuecomment-5351359241"
+        }
+      ],
+      "qualifier": "Closure functions exist; select and test the relevant integration instead of reimplementing them.",
+      "basis": "proposed_decision",
+      "acceptance_required": true
+    },
+    {
+      "id": "D083",
+      "prerequisite": "input:pilot-landslide-inventory",
+      "dependent": "issue:129:landslide-pilot-validation",
+      "type": "external_input",
+      "evidence": "An end-to-end pilot requires inventory scoring.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 129,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/129",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "An unscored FS map is not validation.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D084",
+      "prerequisite": "issue:130:selected-regime-physics",
+      "dependent": "issue:129:regime-specific-release",
+      "type": "release_evidence",
+      "evidence": "Selected perched/deep, intensity, convergence, strength and terrain scope must be supported by the relevant physics.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 127,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/127",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 130,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/130",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 129,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/129",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Conditional on explicitly selected failure regime. Do not make every landslide enhancement a blocker for all pilot code.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D085",
+      "prerequisite": "issue:131:selected-regime-physics",
+      "dependent": "issue:129:regime-specific-release",
+      "type": "release_evidence",
+      "evidence": "Selected perched/deep, intensity, convergence, strength and terrain scope must be supported by the relevant physics.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 127,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/127",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 131,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/131",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 129,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/129",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Conditional on explicitly selected failure regime. Do not make every landslide enhancement a blocker for all pilot code.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D086",
+      "prerequisite": "issue:132:selected-regime-physics",
+      "dependent": "issue:129:regime-specific-release",
+      "type": "release_evidence",
+      "evidence": "Selected perched/deep, intensity, convergence, strength and terrain scope must be supported by the relevant physics.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 127,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/127",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 132,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/132",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 129,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/129",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Conditional on explicitly selected failure regime. Do not make every landslide enhancement a blocker for all pilot code.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D087",
+      "prerequisite": "issue:133:selected-regime-physics",
+      "dependent": "issue:129:regime-specific-release",
+      "type": "release_evidence",
+      "evidence": "Selected perched/deep, intensity, convergence, strength and terrain scope must be supported by the relevant physics.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 127,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/127",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 133,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/133",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 129,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/129",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Conditional on explicitly selected failure regime. Do not make every landslide enhancement a blocker for all pilot code.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D088",
+      "prerequisite": "issue:134:selected-regime-physics",
+      "dependent": "issue:129:regime-specific-release",
+      "type": "release_evidence",
+      "evidence": "Selected perched/deep, intensity, convergence, strength and terrain scope must be supported by the relevant physics.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 127,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/127",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 134,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/134",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 129,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/129",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Conditional on explicitly selected failure regime. Do not make every landslide enhancement a blocker for all pilot code.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D089",
+      "prerequisite": "issue:135:selected-regime-physics",
+      "dependent": "issue:129:regime-specific-release",
+      "type": "release_evidence",
+      "evidence": "Selected perched/deep, intensity, convergence, strength and terrain scope must be supported by the relevant physics.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 127,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/127",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 135,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/135",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 129,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/129",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Conditional on explicitly selected failure regime. Do not make every landslide enhancement a blocker for all pilot code.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D090",
+      "prerequisite": "issue:142:accepted-hazard-input",
+      "dependent": "issue:141:liquefaction-screen-release",
+      "type": "release_evidence",
+      "evidence": "A susceptibility release needs seasonal-high DTW, scenario ground motion and defensible input uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 139,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/139",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 141,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/141",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 142,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/142",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Prototype the GLM with named fixtures; release claims wait for the input evidence.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D091",
+      "prerequisite": "issue:143:accepted-hazard-input",
+      "dependent": "issue:141:liquefaction-screen-release",
+      "type": "release_evidence",
+      "evidence": "A susceptibility release needs seasonal-high DTW, scenario ground motion and defensible input uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 139,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/139",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 141,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/141",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 143,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/143",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Prototype the GLM with named fixtures; release claims wait for the input evidence.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D092",
+      "prerequisite": "issue:144:accepted-hazard-input",
+      "dependent": "issue:141:liquefaction-screen-release",
+      "type": "release_evidence",
+      "evidence": "A susceptibility release needs seasonal-high DTW, scenario ground motion and defensible input uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 139,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/139",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 141,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/141",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 144,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/144",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Prototype the GLM with named fixtures; release claims wait for the input evidence.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D093",
+      "prerequisite": "issue:189:water-table-target-classification",
+      "dependent": "issue:142:seasonal-tail-validation",
+      "type": "implementation_prerequisite",
+      "evidence": "Tail validation must use water-table targets, excluding confined/artesian/unknown records.",
+      "sources": [
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 142,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/142#issuecomment-5351359070"
+        },
+        {
+          "kind": "github_comment_snapshot",
+          "issue": 189,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/189#issuecomment-5351359360"
+        }
+      ],
+      "qualifier": "Classifier and guarded point footprint already landed; operational integration and reporting remain.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D094",
+      "prerequisite": "issue:137:accepted-correctness",
+      "dependent": "issue:142:seasonal-tail-validation",
+      "type": "release_evidence",
+      "evidence": "Specific-yield/held-out hydrology validation is shared DTW foundation.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 142,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/142",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D095",
+      "prerequisite": "issue:186:accepted-correctness",
+      "dependent": "issue:64:probabilistic-release",
+      "type": "release_evidence",
+      "evidence": "#186 explicitly blocks trustworthy propagation of uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 186,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Do not block pure I/O/schema work or imply all uncertainty sources arise from groundwater kriging.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D096",
+      "prerequisite": "issue:186:accepted-correctness",
+      "dependent": "issue:142:probabilistic-release",
+      "type": "release_evidence",
+      "evidence": "#186 explicitly blocks trustworthy propagation of uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 186,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Do not block pure I/O/schema work or imply all uncertainty sources arise from groundwater kriging.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D097",
+      "prerequisite": "issue:186:accepted-correctness",
+      "dependent": "issue:144:probabilistic-release",
+      "type": "release_evidence",
+      "evidence": "#186 explicitly blocks trustworthy propagation of uncertainty.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 186,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Do not block pure I/O/schema work or imply all uncertainty sources arise from groundwater kriging.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D098",
+      "prerequisite": "decision:depth-triggering-scope",
+      "dependent": "issue:146:full-triggering",
+      "type": "human_decision",
+      "evidence": "Full CPT/SPT/CSR/CRR triggering is deferred scope distinct from the susceptibility screen.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 146,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/146",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "docs/reviews/2026-09-10-audit/roadmap-review.md",
+          "locator": "Proposed practical critical path"
+        }
+      ],
+      "qualifier": "No automatic promotion after completion of other milestone issues.",
+      "basis": "proposed_decision",
+      "acceptance_required": true
+    },
+    {
+      "id": "D099",
+      "prerequisite": "decision:resume-vs30-milestone",
+      "dependent": "issue:81:any-dispatch",
+      "type": "human_decision",
+      "evidence": "ROADMAP records the user pause until water-budget work lands.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "ROADMAP.md",
+          "locator": "v0.3 \u2014 Vs30 densification \u2014 paused"
+        }
+      ],
+      "qualifier": "A human must explicitly release the pause and define what water acceptance satisfied it; this registry does not authorize resumption.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D100",
+      "prerequisite": "decision:resume-vs30-milestone",
+      "dependent": "issue:82:any-dispatch",
+      "type": "human_decision",
+      "evidence": "ROADMAP records the user pause until water-budget work lands.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "ROADMAP.md",
+          "locator": "v0.3 \u2014 Vs30 densification \u2014 paused"
+        }
+      ],
+      "qualifier": "A human must explicitly release the pause and define what water acceptance satisfied it; this registry does not authorize resumption.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D101",
+      "prerequisite": "decision:resume-vs30-milestone",
+      "dependent": "issue:83:any-dispatch",
+      "type": "human_decision",
+      "evidence": "ROADMAP records the user pause until water-budget work lands.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "ROADMAP.md",
+          "locator": "v0.3 \u2014 Vs30 densification \u2014 paused"
+        }
+      ],
+      "qualifier": "A human must explicitly release the pause and define what water acceptance satisfied it; this registry does not authorize resumption.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D102",
+      "prerequisite": "decision:resume-vs30-milestone",
+      "dependent": "issue:84:any-dispatch",
+      "type": "human_decision",
+      "evidence": "ROADMAP records the user pause until water-budget work lands.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "ROADMAP.md",
+          "locator": "v0.3 \u2014 Vs30 densification \u2014 paused"
+        }
+      ],
+      "qualifier": "A human must explicitly release the pause and define what water acceptance satisfied it; this registry does not authorize resumption.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D103",
+      "prerequisite": "decision:resume-vs30-milestone",
+      "dependent": "issue:85:any-dispatch",
+      "type": "human_decision",
+      "evidence": "ROADMAP records the user pause until water-budget work lands.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "ROADMAP.md",
+          "locator": "v0.3 \u2014 Vs30 densification \u2014 paused"
+        }
+      ],
+      "qualifier": "A human must explicitly release the pause and define what water acceptance satisfied it; this registry does not authorize resumption.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D104",
+      "prerequisite": "decision:resume-vs30-milestone",
+      "dependent": "issue:86:any-dispatch",
+      "type": "human_decision",
+      "evidence": "ROADMAP records the user pause until water-budget work lands.",
+      "sources": [
+        {
+          "kind": "repository_file",
+          "path": "ROADMAP.md",
+          "locator": "v0.3 \u2014 Vs30 densification \u2014 paused"
+        }
+      ],
+      "qualifier": "A human must explicitly release the pause and define what water acceptance satisfied it; this registry does not authorize resumption.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D105",
+      "prerequisite": "input:measured-vs-profiles",
+      "dependent": "issue:81:validated-profile-table",
+      "type": "external_input",
+      "evidence": "Need measured profiles with provenance, recomputed travel-time Vs30 and a documented block split.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 81,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/81",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Availability/count inside pilot must be established before selecting statistical ambition.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D106",
+      "prerequisite": "issue:81:validated-profile-table",
+      "dependent": "issue:82:accepted-densification-work",
+      "type": "implementation_prerequisite",
+      "evidence": "#81 explicitly gates every other issue in the milestone; fits and acceptance require independent measured profiles.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 81,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/81",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 82,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/82",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Preserve this existing scope. A future human-approved split may permit pure fetch/math prototypes beforehand; release cannot claim improved resolution without held-out profiles.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D107",
+      "prerequisite": "issue:81:validated-profile-table",
+      "dependent": "issue:83:accepted-densification-work",
+      "type": "implementation_prerequisite",
+      "evidence": "#81 explicitly gates every other issue in the milestone; fits and acceptance require independent measured profiles.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 81,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/81",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 83,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/83",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Preserve this existing scope. A future human-approved split may permit pure fetch/math prototypes beforehand; release cannot claim improved resolution without held-out profiles.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D108",
+      "prerequisite": "issue:81:validated-profile-table",
+      "dependent": "issue:84:accepted-densification-work",
+      "type": "implementation_prerequisite",
+      "evidence": "#81 explicitly gates every other issue in the milestone; fits and acceptance require independent measured profiles.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 81,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/81",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 84,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/84",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Preserve this existing scope. A future human-approved split may permit pure fetch/math prototypes beforehand; release cannot claim improved resolution without held-out profiles.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D109",
+      "prerequisite": "issue:81:validated-profile-table",
+      "dependent": "issue:85:accepted-densification-work",
+      "type": "implementation_prerequisite",
+      "evidence": "#81 explicitly gates every other issue in the milestone; fits and acceptance require independent measured profiles.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 81,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/81",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 85,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/85",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Preserve this existing scope. A future human-approved split may permit pure fetch/math prototypes beforehand; release cannot claim improved resolution without held-out profiles.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D110",
+      "prerequisite": "issue:81:validated-profile-table",
+      "dependent": "issue:86:accepted-densification-work",
+      "type": "implementation_prerequisite",
+      "evidence": "#81 explicitly gates every other issue in the milestone; fits and acceptance require independent measured profiles.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 81,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/81",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 86,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/86",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Preserve this existing scope. A future human-approved split may permit pure fetch/math prototypes beforehand; release cannot claim improved resolution without held-out profiles.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D111",
+      "prerequisite": "issue:82:soil-thickness-covariates",
+      "dependent": "issue:83:thickness-aware-profile",
+      "type": "implementation_prerequisite",
+      "evidence": "Two-layer profile uses the fetched depth-to-restrictive-layer product.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 82,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/82",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 83,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/83",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Reuses existing thickness sources where present; source reconciliation must be explicit.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D112",
+      "prerequisite": "issue:82:bulk-density-covariates",
+      "dependent": "issue:85:dynamic-profile",
+      "type": "implementation_prerequisite",
+      "evidence": "Effective-stress profile explicitly consumes bulk density from #82.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 85,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/85",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D113",
+      "prerequisite": "issue:84:geology-stratified-profiles",
+      "dependent": "issue:86:densification",
+      "type": "implementation_prerequisite",
+      "evidence": "Downscaling architecture explicitly uses geologic-unit-stratified profile parameters.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 86,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/86",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D114",
+      "prerequisite": "issue:187:schema",
+      "dependent": "issue:203:wrapper-contract",
+      "type": "implementation_prerequisite",
+      "evidence": "Do not start the wrapper before the canonical contract lands.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 203,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/203",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Applies only to the named deliverable scope.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D115",
+      "prerequisite": "issue:188:hydrology-pilot",
+      "dependent": "issue:203:end-to-end-wrapper-validation",
+      "type": "release_evidence",
+      "evidence": "The completed wrapper must exercise the actual nowcast/forecast model it wraps.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 203,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/203",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Interface/mock work can precede full model integration.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D116",
+      "prerequisite": "issue:191:ensemble-forecast",
+      "dependent": "issue:203:end-to-end-wrapper-validation",
+      "type": "release_evidence",
+      "evidence": "The completed wrapper must exercise the actual nowcast/forecast model it wraps.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 203,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/203",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Interface/mock work can precede full model integration.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D117",
+      "prerequisite": "issue:2:landed-domain-mask",
+      "dependent": "issue:3:domain-aware-implementation",
+      "type": "implementation_prerequisite",
+      "evidence": "Legacy issue explicitly consumes the hydrogeologic domain mask.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 3,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/3",
+          "locator": "Opening dependency statement",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "#2 is closed; treat accepted artifact as satisfied but retain the #14 coastal completeness dispute separately.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D118",
+      "prerequisite": "issue:2:landed-domain-mask",
+      "dependent": "issue:7:domain-aware-implementation",
+      "type": "implementation_prerequisite",
+      "evidence": "Legacy issue explicitly consumes the hydrogeologic domain mask.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 7,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/7",
+          "locator": "Opening dependency statement",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "#2 is closed; treat accepted artifact as satisfied but retain the #14 coastal completeness dispute separately.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D119",
+      "prerequisite": "issue:2:landed-domain-mask",
+      "dependent": "issue:8:domain-aware-implementation",
+      "type": "implementation_prerequisite",
+      "evidence": "Legacy issue explicitly consumes the hydrogeologic domain mask.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 8,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/8",
+          "locator": "Opening dependency statement",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "#2 is closed; treat accepted artifact as satisfied but retain the #14 coastal completeness dispute separately.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D120",
+      "prerequisite": "issue:2:landed-domain-mask",
+      "dependent": "issue:9:domain-aware-implementation",
+      "type": "implementation_prerequisite",
+      "evidence": "Legacy issue explicitly consumes the hydrogeologic domain mask.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 9,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/9",
+          "locator": "Tasks: cross the domain (#2) with NWIS well construction",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "#2 is closed; treat accepted artifact as satisfied but retain the #14 coastal completeness dispute separately.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D121",
+      "prerequisite": "issue:2:landed-domain-mask",
+      "dependent": "issue:10:domain-aware-implementation",
+      "type": "implementation_prerequisite",
+      "evidence": "Legacy issue explicitly consumes the hydrogeologic domain mask.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 10,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/10",
+          "locator": "Opening dependency statement",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "#2 is closed; treat accepted artifact as satisfied but retain the #14 coastal completeness dispute separately.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D122",
+      "prerequisite": "input:coastal-geology-gap-resolution",
+      "dependent": "issue:2:coastal-extent-release-evidence",
+      "type": "external_input",
+      "evidence": "#14 disputes the coastal/CRBG extent acceptance despite #2 closure.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 14,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/14",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "The stale downloader #10 reference conflicts with the current #10 title; resolve #14/#21/#22 ownership first.",
+      "basis": "proposed_input_record",
+      "acceptance_required": true
+    },
+    {
+      "id": "D123",
+      "prerequisite": "issue:25:entry-by-entry-bibliography-evidence",
+      "dependent": "release:scientific-book",
+      "type": "release_evidence",
+      "evidence": "Existing #25 already requires entry-level Crossref verification; #158 resolver CI is a distinct landed check.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 25,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/25",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 158,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/158",
+          "locator": "Dependencies",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        }
+      ],
+      "qualifier": "Extend #25 to verify titles/authors/venues and provenance; do not open a duplicate as Fable Stage 1.6 proposes.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D124",
+      "prerequisite": "decision:release-hold-163",
+      "dependent": "issue:163:any-dispatch",
+      "type": "human_decision",
+      "evidence": "Existing needs-human-decision label remains a queue hold.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 163,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/163",
+          "locator": "labels",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "scripts/gaia_group_issues.py",
+          "locator": "HOLD_LABEL exclusion"
+        }
+      ],
+      "qualifier": "For #163 first repair/retry invalid persona infrastructure, preserve accepted work and live scientific concerns, then record approval. Valid verdicts alone are insufficient. For #186 preserve substantive review decisions.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    },
+    {
+      "id": "D125",
+      "prerequisite": "decision:release-hold-186",
+      "dependent": "issue:186:any-dispatch",
+      "type": "human_decision",
+      "evidence": "Existing needs-human-decision label remains a queue hold.",
+      "sources": [
+        {
+          "kind": "github_issue_snapshot",
+          "issue": 186,
+          "url": "https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186",
+          "locator": "labels",
+          "snapshot": "2026-09-10 original audit; not refreshed live"
+        },
+        {
+          "kind": "repository_file",
+          "path": "scripts/gaia_group_issues.py",
+          "locator": "HOLD_LABEL exclusion"
+        }
+      ],
+      "qualifier": "For #163 first repair/retry invalid persona infrastructure, preserve accepted work and live scientific concerns, then record approval. Valid verdicts alone are insufficient. For #186 preserve substantive review decisions.",
+      "basis": "explicit_or_scoped_source",
+      "acceptance_required": true
+    }
+  ],
+  "legacy_blocker_dispositions": [
+    {
+      "dependent_issue": 187,
+      "prerequisite_issue": 186,
+      "proposed_edges": [
+        "D002"
+      ],
+      "disposition": "Release evidence, not schema implementation blocker."
+    },
+    {
+      "dependent_issue": 187,
+      "prerequisite_issue": 52,
+      "proposed_edges": [
+        "D001"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 187,
+      "prerequisite_issue": 89,
+      "proposed_edges": [
+        "D003"
+      ],
+      "disposition": "Release evidence, not schema implementation blocker."
+    },
+    {
+      "dependent_issue": 187,
+      "prerequisite_issue": 137,
+      "proposed_edges": [
+        "D004"
+      ],
+      "disposition": "Release evidence, not schema implementation blocker."
+    },
+    {
+      "dependent_issue": 187,
+      "prerequisite_issue": 171,
+      "proposed_edges": [],
+      "disposition": "Replace epic blocker with bounded storage-release evidence (#172/#137 and agreed leaf scope); never wait on epic closure."
+    },
+    {
+      "dependent_issue": 187,
+      "prerequisite_issue": 172,
+      "proposed_edges": [
+        "D005"
+      ],
+      "disposition": "Release evidence, not schema implementation blocker."
+    },
+    {
+      "dependent_issue": 189,
+      "prerequisite_issue": 187,
+      "proposed_edges": [
+        "D007"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 188,
+      "prerequisite_issue": 154,
+      "proposed_edges": [
+        "D019"
+      ],
+      "disposition": "Already-landed backend plus scale evidence for full-domain release; not a hydrology pilot blocker."
+    },
+    {
+      "dependent_issue": 188,
+      "prerequisite_issue": 187,
+      "proposed_edges": [
+        "D010"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 188,
+      "prerequisite_issue": 189,
+      "proposed_edges": [
+        "D011"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 192,
+      "prerequisite_issue": 188,
+      "proposed_edges": [
+        "D024"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 194,
+      "prerequisite_issue": 192,
+      "proposed_edges": [
+        "D032"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 191,
+      "prerequisite_issue": 188,
+      "proposed_edges": [
+        "D034"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 190,
+      "prerequisite_issue": 187,
+      "proposed_edges": [
+        "D063"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 193,
+      "prerequisite_issue": 191,
+      "proposed_edges": [
+        "D071"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 195,
+      "prerequisite_issue": 191,
+      "proposed_edges": [
+        "D044"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 195,
+      "prerequisite_issue": 193,
+      "proposed_edges": [
+        "D046"
+      ],
+      "disposition": "Only hazard validation waits; hydrologic forecast scoring can proceed."
+    },
+    {
+      "dependent_issue": 195,
+      "prerequisite_issue": 194,
+      "proposed_edges": [
+        "D045"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 203,
+      "prerequisite_issue": 187,
+      "proposed_edges": [
+        "D114"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 205,
+      "prerequisite_issue": 194,
+      "proposed_edges": [
+        "D047"
+      ],
+      "disposition": "Optional fidelity gated by positive diagnosis; #194 closed is not a sufficient trigger."
+    },
+    {
+      "dependent_issue": 200,
+      "prerequisite_issue": 187,
+      "proposed_edges": [
+        "D074"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 200,
+      "prerequisite_issue": 191,
+      "proposed_edges": [
+        "D075"
+      ],
+      "disposition": "Only actual forecast-source integration waits; source-term schema can proceed."
+    },
+    {
+      "dependent_issue": 201,
+      "prerequisite_issue": 200,
+      "proposed_edges": [
+        "D076"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    },
+    {
+      "dependent_issue": 202,
+      "prerequisite_issue": 201,
+      "proposed_edges": [
+        "D078"
+      ],
+      "disposition": "Retain at scoped deliverable level; accepted artifact determines satisfaction, not issue closure alone."
+    }
+  ],
+  "validation": {
+    "edge_count": 125,
+    "types": {
+      "implementation_prerequisite": 48,
+      "release_evidence": 46,
+      "human_decision": 16,
+      "external_input": 11,
+      "optional_fidelity": 4
+    },
+    "implementation_edges": 48,
+    "implementation_DAG_cycles": [],
+    "implementation_topological_order": [
+      "decision:conditional-filter-architecture",
+      "decision:depth-triggering-scope",
+      "decision:landslide-pressure-closure",
+      "decision:memory-issue-identity-repair",
+      "decision:meteorological-member-design",
+      "decision:pilot-routing-component",
+      "decision:regime-switch-diagnostic-fired",
+      "decision:release-hold-163",
+      "decision:release-hold-186",
+      "decision:resume-vs30-milestone",
+      "decision:storage-release-scope",
+      "input:coastal-geology-gap-resolution",
+      "input:full-domain-scale-benchmark",
+      "input:inundation-observations",
+      "input:known-event-catalog",
+      "input:measured-vs-profiles",
+      "input:meteorological-members-and-reforecasts",
+      "input:pilot-landslide-inventory",
+      "input:real-banded-dvv-records",
+      "input:spatially-blocked-oof-residuals",
+      "input:well-probe-fixture",
+      "input:withheld-gauge-hydrographs",
+      "issue:128:pressure-aware-mechanics",
+      "issue:129:landslide-pilot-validation",
+      "issue:129:regime-specific-release",
+      "issue:130:selected-regime-physics",
+      "issue:131:selected-regime-physics",
+      "issue:132:selected-regime-physics",
+      "issue:133:selected-regime-physics",
+      "issue:134:selected-regime-physics",
+      "issue:135:selected-regime-physics",
+      "issue:136:reconciled-forcing-evidence",
+      "issue:137:accepted-correctness",
+      "issue:141:liquefaction-screen-release",
+      "issue:142:accepted-hazard-input",
+      "issue:142:probabilistic-release",
+      "issue:143:accepted-hazard-input",
+      "issue:144:accepted-hazard-input",
+      "issue:144:probabilistic-release",
+      "issue:145:triggering-firewall",
+      "issue:146:full-triggering",
+      "issue:153:pilot-fixture-evidence",
+      "issue:154:landed-backend",
+      "issue:155:pilot-fixture-evidence",
+      "issue:156:pilot-fixture-evidence",
+      "issue:161:dynamic-propagation-closure",
+      "issue:162:augmented-conditioning",
+      "issue:163:any-dispatch",
+      "issue:163:barrier-metadata",
+      "issue:163:terrain-connectivity",
+      "issue:164:seismic-operator-error-evidence",
+      "issue:165:seismic-operator-error-evidence",
+      "issue:167:datum-age",
+      "issue:168:seismic-operator-error-evidence",
+      "issue:169:identifiability-evidence",
+      "issue:172:accepted-correctness",
+      "issue:176:hysteretic-dynamics",
+      "issue:186:accepted-correctness",
+      "issue:186:any-dispatch",
+      "issue:187:operational-release",
+      "issue:188:enhanced-spatial-fidelity",
+      "issue:188:full-domain-release",
+      "issue:188:operational-release",
+      "issue:188:pilot-acceptance",
+      "issue:188:seismic-assimilation-acceptance",
+      "issue:189:water-table-target-classification",
+      "issue:189:well-probe-pilot-acceptance",
+      "issue:190:real-event-integration",
+      "issue:191:enhanced-pet-fidelity",
+      "issue:191:meteorological-ensemble-acceptance",
+      "issue:191:operational-release",
+      "issue:192:production-tuning",
+      "issue:192:real-data-calibration-acceptance",
+      "issue:192:seismic-bqr-acceptance",
+      "issue:193:liquefaction-release",
+      "issue:193:mechanical-memory-hazard-path",
+      "issue:194:innovation-diagnostics",
+      "issue:195:hazard-validation",
+      "issue:201:routed-hydrographs",
+      "issue:202:inundation-extent-validation",
+      "issue:203:end-to-end-wrapper-validation",
+      "issue:205:switching-model",
+      "issue:25:entry-by-entry-bibliography-evidence",
+      "issue:2:coastal-extent-release-evidence",
+      "issue:2:landed-domain-mask",
+      "issue:30:operational-seismic-data",
+      "issue:32:reconciled-forcing-evidence",
+      "issue:52:product-semantics",
+      "issue:58:penman-monteith",
+      "issue:64:probabilistic-release",
+      "issue:71:reconciled-forcing-evidence",
+      "issue:81:any-dispatch",
+      "issue:81:validated-profile-table",
+      "issue:82:any-dispatch",
+      "issue:82:bulk-density-covariates",
+      "issue:82:soil-thickness-covariates",
+      "issue:83:any-dispatch",
+      "issue:84:any-dispatch",
+      "issue:84:geology-stratified-profiles",
+      "issue:85:any-dispatch",
+      "issue:86:any-dispatch",
+      "issue:89:accepted-correctness",
+      "release:scientific-book",
+      "issue:129:landslide-pilot",
+      "issue:198:hysteretic-seismic-integration",
+      "issue:142:seasonal-tail-validation",
+      "issue:202:gauge-validation",
+      "issue:3:domain-aware-implementation",
+      "issue:7:domain-aware-implementation",
+      "issue:8:domain-aware-implementation",
+      "issue:9:domain-aware-implementation",
+      "issue:10:domain-aware-implementation",
+      "issue:189:seismic-records",
+      "issue:187:schema",
+      "issue:82:accepted-densification-work",
+      "issue:83:accepted-densification-work",
+      "issue:84:accepted-densification-work",
+      "issue:85:accepted-densification-work",
+      "issue:86:accepted-densification-work",
+      "issue:85:dynamic-profile",
+      "issue:83:thickness-aware-profile",
+      "issue:86:densification",
+      "issue:189:well-probe-records",
+      "issue:198:shared-seismic-operator",
+      "issue:190:synthetic-transitions",
+      "issue:200:source-term-schema",
+      "issue:203:wrapper-contract",
+      "issue:188:hydrology-pilot",
+      "issue:188:seismic-assimilation-extension",
+      "issue:191:seismic-prediction-or-validation",
+      "issue:194:seismic-prediction-or-validation",
+      "issue:195:seismic-prediction-or-validation",
+      "issue:201:routing-adapter",
+      "issue:192:hydrology-diagnostics",
+      "issue:191:ensemble-forecast",
+      "issue:190:real-dvv-conditioning",
+      "issue:194:hydrology-value-added",
+      "issue:193:hazard-outputs",
+      "issue:200:forecast-source-term-integration",
+      "issue:195:hydrology-forecast-validation"
+    ],
+    "hard_epic_prerequisites": 0
+  },
+  "unresolved": [
+    {
+      "scope": "#119\u2013#125 memory identities",
+      "reason": "Bodies shifted; determine authoritative event catalog/damage/disturbance/attribution owners before replacing decision/input nodes with concrete edges."
+    },
+    {
+      "scope": "#171 storage release",
+      "reason": "Select concrete minimum physics scope and reconcile #87/#131/#172; do not serialize every reservoir edit or close #172 after capillary debit alone."
+    },
+    {
+      "scope": "#163 hold",
+      "reason": "Invalid verdict is retryable infrastructure; inspect surviving substantive verdicts and authorize remaining metadata/empirical scope separately."
+    },
+    {
+      "scope": "#186 split scope",
+      "reason": "Estimator-oracle correctness can be separated from real-product rebuild/coverage evidence only by an explicit closure/scope decision."
+    },
+    {
+      "scope": "#71/#136/#32 meteorological ensemble",
+      "reason": "Assign one actual atmospheric-member construction/calibration owner; registry cannot manufacture a member source from method spread or one engine run."
+    },
+    {
+      "scope": "#3/#47/#142 quantitative gates",
+      "reason": "Pre-register domain/sample/tail metric and uncertainty tolerances; a pooled calibration score or achieved mean does not establish seasonal-tail skill."
+    },
+    {
+      "scope": "#14/#21/#22 geology and references #10/#17/#27/#63",
+      "reason": "Stale or non-issue references and closed #2 completeness dispute require identity reconciliation; no guessed hard edges."
+    },
+    {
+      "scope": "#99/#100/v0.4",
+      "reason": "Snow acceptance remains open while v0.4 is declared complete; define release evidence before expanding east."
+    },
+    {
+      "scope": "#81\u2013#86 pause",
+      "reason": "Need explicit scope decision naming water-budget acceptance and approved resumption; do not infer release from ordering."
+    },
+    {
+      "scope": "All other issue-body cross-references",
+      "reason": "Not all imply implementation dependencies; stage/status, parent tracker, reuse, duplicate and coordinate relations remain to be normalized."
+    }
+  ]
+}

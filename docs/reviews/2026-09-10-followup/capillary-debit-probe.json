@@ -1,0 +1,31 @@
+{
+  "source_sha256": "4889732934b673671df914f37a196b905e04cd23ba4db90316b09e841396129e",
+  "hypothetical_edit": {
+    "before": "h = h + rech / 1000.0 / max(specific_yield, 1e-6)",
+    "after": "h = h + (rech - cap_eff) / 1000.0 / max(specific_yield, 1e-6)"
+  },
+  "cases": [
+    {
+      "case": "legacy_default",
+      "root_storage_change_mm": 0.7392331957817022,
+      "groundwater_storage_change_mm": -0.7351934909820557,
+      "external_outflow_mm": 0.0,
+      "balance_residual_mm": 0.0040397047996465485
+    },
+    {
+      "case": "legacy_negligible_recession",
+      "root_storage_change_mm": 0.7392331957817022,
+      "groundwater_storage_change_mm": -0.7392346858978271,
+      "external_outflow_mm": 0.0,
+      "balance_residual_mm": -1.4901161249358807e-06
+    },
+    {
+      "case": "hand_zero",
+      "root_storage_change_mm": 0.7392331957817022,
+      "groundwater_storage_change_mm": -0.7392346858978271,
+      "external_outflow_mm": 0.0,
+      "balance_residual_mm": -1.4901161249358807e-06
+    }
+  ],
+  "note": "In-memory candidate only. Legacy recession can add water back for negative h while reporting no negative boundary flux."
+}

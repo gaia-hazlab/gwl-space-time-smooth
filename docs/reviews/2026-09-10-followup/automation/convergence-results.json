@@ -1,0 +1,55 @@
+[
+  {
+    "scenario": "valid",
+    "input": {
+      "converged": true,
+      "blocking": [],
+      "rationale": "Fixture accepted."
+    },
+    "harness_exit_code": 0,
+    "gate_return_code": "0"
+  },
+  {
+    "scenario": "contradiction",
+    "input": {
+      "converged": true,
+      "blocking": [
+        "Mass residual is unresolved."
+      ],
+      "rationale": "Contradictory fixture."
+    },
+    "harness_exit_code": 0,
+    "gate_return_code": "0"
+  },
+  {
+    "scenario": "string_true",
+    "input": {
+      "converged": "true",
+      "blocking": [],
+      "rationale": "Wrong type."
+    },
+    "harness_exit_code": 0,
+    "gate_return_code": "0"
+  },
+  {
+    "scenario": "missing_blocking",
+    "input": {
+      "converged": true,
+      "rationale": "Missing list."
+    },
+    "harness_exit_code": 0,
+    "gate_return_code": "0"
+  },
+  {
+    "scenario": "proper_block",
+    "input": {
+      "converged": false,
+      "blocking": [
+        "Mass residual."
+      ],
+      "rationale": "Not done."
+    },
+    "harness_exit_code": 0,
+    "gate_return_code": "1"
+  }
+]

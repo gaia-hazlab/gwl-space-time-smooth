@@ -1,0 +1,78 @@
+{
+  "method": "Verbatim science_gate() extracted from working-tree runner; real gaia_plan.py/gaia_panel.py; stub brief, gh, claude, timeout, record and label functions. Not a full-queue integration test.",
+  "runner_sha256": "e6d16fc174a4de1dbc3cdaebbf5eb3761b7eec15801730ab5bfe883b9bf6d60d",
+  "cases": [
+    {
+      "scenario": "approve",
+      "harness_exit_code": 0,
+      "gate_return_code": "0",
+      "plan_attempts": "1",
+      "labels": null,
+      "outcomes": null,
+      "second_plan_contains_concern": false
+    },
+    {
+      "scenario": "revise_approve",
+      "harness_exit_code": 0,
+      "gate_return_code": "0",
+      "plan_attempts": "2",
+      "labels": null,
+      "outcomes": null,
+      "second_plan_contains_concern": true
+    },
+    {
+      "scenario": "revise_exhaust",
+      "harness_exit_code": 0,
+      "gate_return_code": "1",
+      "plan_attempts": "2",
+      "labels": "900:needs-human-decision",
+      "outcomes": "panel-revise",
+      "second_plan_contains_concern": true
+    },
+    {
+      "scenario": "block_approve",
+      "harness_exit_code": 0,
+      "gate_return_code": "0",
+      "plan_attempts": "2",
+      "labels": null,
+      "outcomes": null,
+      "second_plan_contains_concern": true
+    },
+    {
+      "scenario": "major_approve",
+      "harness_exit_code": 0,
+      "gate_return_code": "0",
+      "plan_attempts": "1",
+      "labels": null,
+      "outcomes": null,
+      "second_plan_contains_concern": false
+    },
+    {
+      "scenario": "malformed_concerns",
+      "harness_exit_code": 0,
+      "gate_return_code": "0",
+      "plan_attempts": "1",
+      "labels": null,
+      "outcomes": null,
+      "second_plan_contains_concern": false
+    },
+    {
+      "scenario": "failed_dispatch",
+      "harness_exit_code": 0,
+      "gate_return_code": "0",
+      "plan_attempts": "1",
+      "labels": null,
+      "outcomes": null,
+      "second_plan_contains_concern": false
+    },
+    {
+      "scenario": "wrong_identity",
+      "harness_exit_code": 0,
+      "gate_return_code": "0",
+      "plan_attempts": "1",
+      "labels": null,
+      "outcomes": null,
+      "second_plan_contains_concern": false
+    }
+  ]
+}

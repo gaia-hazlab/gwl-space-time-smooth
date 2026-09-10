@@ -1,0 +1,16 @@
+{
+  "recorded_at_utc": "2026-09-10T22:40:08.407660+00:00",
+  "head": "509c3c6f6bc7b58f6af0f219943c88e6a9025cd0",
+  "source": "uncommitted working tree including Fable fixes",
+  "source_sha256": {
+    "scripts/gaia_run_queue.sh": "e6d16fc174a4de1dbc3cdaebbf5eb3761b7eec15801730ab5bfe883b9bf6d60d",
+    "scripts/gaia_group_issues.py": "02b499223e01a57b15063ec77c820e758b0f4bdee980e78e704a464ae2a02350",
+    "scripts/gaia-launch/gaia_panel.py": "2c6445e7776e70f2194af1ee5375cf8e92e709b829e620dc3da242e074f62f87",
+    "scripts/gaia-launch/gaia_plan.py": "36ace356217c46b02315c3f079df6edb114df2e4c1d1eb797b1a3d68fb95bf2a",
+    "src/models/water_budget.py": "4889732934b673671df914f37a196b905e04cd23ba4db90316b09e841396129e",
+    "docs/reviews/2026-09-10-audit/automation-main-repros.py": "a1a420ca2e93a4ab103a0078f135b73f354e620b5d8480717a0f46b60bfe7486",
+    "docs/reviews/2026-09-10-audit/reproduce_capillary_mass.py": "583e34a68f21fac15b332ab753b8efcfed859b3e1121c792e167734e238f8b26"
+  },
+  "python": "Python 3.11.15",
+  "historical_evidence": "Unchanged; results written outside original bundle."
+}

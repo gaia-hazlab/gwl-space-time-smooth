@@ -1,0 +1,14 @@
+{
+  "date": "2026-09-10",
+  "head": "509c3c6f6bc7b58f6af0f219943c88e6a9025cd0",
+  "review_target": "HEAD plus Fable uncommitted working-tree edits",
+  "input_sha256": {
+    "scripts/gaia_run_queue.sh": "e6d16fc174a4de1dbc3cdaebbf5eb3761b7eec15801730ab5bfe883b9bf6d60d",
+    "scripts/gaia_group_issues.py": "02b499223e01a57b15063ec77c820e758b0f4bdee980e78e704a464ae2a02350",
+    "scripts/gaia-launch/tests/test_group_issues.py": "e1af0cae54a4bf3677da7cf9073eec725cc51ebc002326f1cdc6e655669a8878",
+    "docs/gaia-automation.md": "6822983cab6d5046fcb9e4ea6979d1773b015f1ec4561d3f6b6c1a9c8bc8d0d7",
+    "docs/reviews/soil-twin-audit-response-2026-09-10.md": "9220080213b5bc492894171cd92861fc8a13f266e136290dbc2faf8817812956",
+    "docs/reviews/2026-09-10-audit/protect-main-ruleset-target-main.json": "152cab4b1530b6188690e0769f9c8c1d230a7b4a95279457457242ffdca8f368",
+    "docs/references.bib": "c89976483d09902b16aa82bf9eb8c6754f3b37faa5c729906d9dff3762e5add9"
+  }
+}

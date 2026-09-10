@@ -1,0 +1,1570 @@
+[
+  {
+    "issue": 205,
+    "title": "Diagnostic-gated regime-switching \u03c4 for the OU temporal model (wet/dry-conditional; follow-on of #194)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D047",
+      "D048"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 204,
+    "title": "[epic] Book/twin rewrite \u2014 the codex editorial framework (operating loop, unified notation, status boxes, State2Hazard rename)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 203,
+    "title": "Earth2Studio model-structure & assimilation compatibility (Prognostic/Diagnostic wrapper + member/lead_time contract)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D114",
+      "D115",
+      "D116"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 202,
+    "title": "Flood: validate routed discharge against USGS gauge hydrographs (reuse D7 BFI/Q\u2013P calibration, #98)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D078",
+      "D079",
+      "D080"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 201,
+    "title": "Flood: select and pilot a routing component (LandLab OverlandFlow/FlowAccumulator vs external HAND inundation)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D076",
+      "D077",
+      "D078"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 200,
+    "title": "Flood: soil-state source-term export contract (runoff/interflow/baseflow + uncertainty, member-preserving)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D074",
+      "D075",
+      "D076"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 199,
+    "title": "[epic] Flood/inundation handoff \u2014 from soil-state source terms to routed discharge",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 198,
+    "title": "P0: Use one depth-resolved hydromechanical operator for forward prediction and inversion",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D049",
+      "D050",
+      "D051",
+      "D052",
+      "D053",
+      "D054",
+      "D065"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 197,
+    "title": "Ingest NISAR Beta Soil Moisture (V1, 200 m) as a soil-moisture validation/assimilation stream",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 195,
+    "title": "P1: Calibrate and validate probabilistic nowcasts and forecasts by lead time and native support",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D044",
+      "D045",
+      "D046",
+      "D054"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 194,
+    "title": "P1: Quantify nowcast uncertainty reduction and value added with withheld sensors",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D030",
+      "D031",
+      "D032",
+      "D045",
+      "D047",
+      "D053"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 193,
+    "title": "P2: Propagate joint hydrologic, parameter, forcing, and mechanical ensembles into hazards",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D046",
+      "D071",
+      "D072",
+      "D073"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 192,
+    "title": "P1: Estimate and diagnose prior, process, and observation-error covariance (B/Q/R)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D024",
+      "D025",
+      "D026",
+      "D027",
+      "D028",
+      "D029",
+      "D032",
+      "D056",
+      "D058",
+      "D060"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 191,
+    "title": "P1: Make SoilStateForecast ensemble-native and initialize it from the DA posterior",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D033",
+      "D034",
+      "D035",
+      "D036",
+      "D037",
+      "D038",
+      "D039",
+      "D040",
+      "D041",
+      "D042",
+      "D043",
+      "D044",
+      "D052",
+      "D071",
+      "D075",
+      "D116"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 190,
+    "title": "P2: Make mechanical damage, disturbance, and healing states probabilistic and conditionable",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D063",
+      "D064",
+      "D065",
+      "D066",
+      "D067",
+      "D068",
+      "D069",
+      "D072"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 189,
+    "title": "P1: Operationalize ground-sensor observation records, operators, QC, and holdouts",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D007",
+      "D008",
+      "D009",
+      "D011",
+      "D025",
+      "D031",
+      "D062",
+      "D093"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 188,
+    "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D010",
+      "D011",
+      "D012",
+      "D013",
+      "D014",
+      "D015",
+      "D016",
+      "D017",
+      "D018",
+      "D019",
+      "D020",
+      "D021",
+      "D022",
+      "D023",
+      "D024",
+      "D030",
+      "D034",
+      "D051",
+      "D055",
+      "D057",
+      "D059",
+      "D064",
+      "D115"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 187,
+    "title": "P0: Define the canonical probabilistic state, parameter, forcing, and observation contract",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D001",
+      "D002",
+      "D003",
+      "D004",
+      "D005",
+      "D006",
+      "D007",
+      "D010",
+      "D026",
+      "D033",
+      "D049",
+      "D063",
+      "D074",
+      "D114"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 186,
+    "title": "P0: Back-transform Stage-3 kriging predictive variance before combining uncertainty",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D002",
+      "D018",
+      "D027",
+      "D095",
+      "D096",
+      "D097",
+      "D125"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 177,
+    "title": "Minor fixes (groundwater / vadose review)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 176,
+    "title": "Route hysteresis into the soil-water DYNAMICS, not only the dv/v observable",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D050"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 175,
+    "title": "Baseflow sink: break the near-circular BFI anchor; nonlinear recession",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 174,
+    "title": "Interflow: give it a store and a defensible coefficient",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 173,
+    "title": "Saturation-excess runoff: no one-step fill to the water table; stop double-counting root-zone space",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 172,
+    "title": "Consistent storage account: close the massless vadose gap between the two reservoirs",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D005",
+      "D017",
+      "D037"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 171,
+    "title": "[epic] Water budget: restore the unsaturated zone; validate the calibration",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 170,
+    "title": "Minor fixes (DA review)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 169,
+    "title": "Attribution identifiability precondition (rank-deficiency)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D067",
+      "D070"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 168,
+    "title": "Coda footprint operator bias into R; 3-D (not separable 2-D) kernel",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D059",
+      "D060"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 167,
+    "title": "revisit_days is cadence, not datum age",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D008"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 166,
+    "title": "effective_observability is not a covariance diagonal \u2014 label or derive it",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 165,
+    "title": "Petrophysical gain belongs in G (S_theta != 1), its uncertainty in R",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D057",
+      "D058"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 164,
+    "title": "Diagonal R for dv/v double-counts correlated coda errors",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D055",
+      "D056"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 163,
+    "title": "Prior structure: scalable AND terrain-aware (GMRF/SPDE/Matern), not dense isotropic",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D021",
+      "D022",
+      "D124"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 162,
+    "title": "Static BLUE -> augmented space-time estimator (so attribution can run)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D066"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 161,
+    "title": "Temporal model: proper space-time covariance or a Kalman propagation",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D023"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 160,
+    "title": "[epic] DA estimator correctness \u2014 time, prior, operator, identifiability",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 159,
+    "title": "Minor fixes (software review)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 158,
+    "title": "references.bib DOI integrity check in CI",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 157,
+    "title": "pixi: compatible-release bounds on the scientific core",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 156,
+    "title": "Fetcher + assimilation tests (fixture-backed)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D014"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 155,
+    "title": "RNG determinism: single seeded generator + per-frame streams",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D013"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 154,
+    "title": "Dense covariance scalability wall (shared with the DA milestone)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [
+      "D019",
+      "D029"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 153,
+    "title": "Reproducible from a clean checkout: pinned data snapshot + fixtures",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D012"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 152,
+    "title": "Real skips, not silent pass: pytest collection + importorskip",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 151,
+    "title": "CI test gate: pytest + `pixi run test` + a ci.yml on push/PR",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 150,
+    "title": "[epic] Software hardening: CI, tests, reproducibility, scale",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 149,
+    "title": "Minor fixes (liquefaction review)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 148,
+    "title": "Wald-Allen Vs30 proxy is near-degenerate on flat liquefiable ground \u2014 document and guard",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 147,
+    "title": "Scope honestly: a susceptibility screen, not an LPI \u2014 90 m from a 200 m SVM cannot resolve facies",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 146,
+    "title": "Future: depth-resolved triggering (CPT/SPT + Vs(z) critical layer + CSR/CRR)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D098"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 145,
+    "title": "Firewall the coseismic dv/v damage/healing state from liquefaction TRIGGERING (category error)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D073"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 144,
+    "title": "Per-cell Vs30 sigma field so P(NEHRP class) is not decorative",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D092",
+      "D097"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 143,
+    "title": "Ingest USGS ShakeMap ground motion (PGA / PGV / Mw) with epistemic uncertainty",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D091"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 142,
+    "title": "Seasonal-high depth-to-water in liquefiable units: sub-1.5 m accuracy, uncertainty, non-TOPMODEL prior",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D090",
+      "D093",
+      "D094",
+      "D096"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 141,
+    "title": "MVP: geospatial liquefaction GLM driven by the dynamic seasonal-high water table + scenario ShakeMap PGV",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D090",
+      "D091",
+      "D092"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 140,
+    "title": "Reframe Vs30 as site amplification / class, NOT a liquefaction triggering variable",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 139,
+    "title": "[epic] Sanger-Maurer liquefaction framework \u2014 a dynamic-water-table susceptibility product",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 138,
+    "title": "Minor fixes (LandLab / landslide review)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 137,
+    "title": "Defensible specific yield + held-out water-budget validation (shared foundation)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D004",
+      "D016",
+      "D036",
+      "D094"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 136,
+    "title": "Run the FuXi forecast engine and orographically bias-correct it",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D042"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 135,
+    "title": "<=10 m slope + explicit cut-slope layer for shallow failures",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D089"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 134,
+    "title": "Root cohesion, colluvium thickness, and post-fire (Ks/cohesion) states for landslides",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D088"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 133,
+    "title": "Downslope-convergent interflow delivered as positive pore pressure, not a stream sink",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D087"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 132,
+    "title": "Sub-daily rainfall intensity for Hortonian / post-fire triggering",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D086"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 131,
+    "title": "Vadose transit lag: recharge must not teleport to the water table",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D085"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 130,
+    "title": "Two subsurface stores (shallow perched + deep GWL) for fall-shallow vs spring-deep regimes",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D084"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 129,
+    "title": "Run LandLab LandslideProbability end-to-end on a pilot corridor and score vs a landslide inventory",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D081",
+      "D083",
+      "D084",
+      "D085",
+      "D086",
+      "D087",
+      "D088",
+      "D089"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 128,
+    "title": "Implement soil_mechanics: infinite-slope factor-of-safety + pore pressure (the MVP mechanics)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D081",
+      "D082"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 127,
+    "title": "[epic] LandLab landslide handoff \u2014 from hydrology to a factor-of-safety",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 126,
+    "title": "BUG: landlab_export ships the UNCALIBRATED MONTHLY recharge under a calibrated banner",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 125,
+    "title": "Report chapter: Memory & disturbance",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 124,
+    "title": "Disturbance event catalog on the data plane (ShakeMap, fire, landslide, liquefaction)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 123,
+    "title": "dv/v attribution: augment the BLUE to separate hydrology / damage / disturbance",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 122,
+    "title": "Surface-disturbance hydromechanics: wildfire, agricultural (tillage), landslide",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 121,
+    "title": "Coseismic damage + log-linear healing as a carried dv/v state",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 120,
+    "title": "Capillary hysteresis in the vadose retention (Kool-Parker scanning curves)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 119,
+    "title": "[epic] Soil-state memory and landscape disturbance",
+    "state": "open",
+    "body_present": false,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 114,
+    "title": "ERA5-Land as the independent multi-variable evaluation reanalysis (SM + runoff + snow)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 112,
+    "title": "Stream observation/forcing Zarr as earth2studio DataSources (time/variable adapter)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 110,
+    "title": "SMAP output + NISAR readiness: distributed soil-moisture assimilation/validation",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 109,
+    "title": "Surface-water extent (Sentinel-2 optical) as a distributed flux / variable-source-area constraint",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 100,
+    "title": "D8: Snow is the water-table clock \u2014 calibrate the snow module and verify the April peak emerges",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 99,
+    "title": "S1: Stehekin \u2014 scope the eastern-Cascades extension (rain shadow + snowmelt regime)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 98,
+    "title": "D7: Recalibrate the flux partition against the gauges \u2014 closes #88 and #90",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 97,
+    "title": "D6: Acceptance \u2014 verify >=5 gauged basins are fully inside the extended domain",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 96,
+    "title": "D5: Baseline water table (RF + kriging) for the extended domain",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 95,
+    "title": "D4: Vs30 from the SVM Kopah Zarr for the extended domain (nearly free)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 94,
+    "title": "D3: SOLUS soils + Saxton-Rawls hydraulic envelope for the extended domain",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 93,
+    "title": "D2: 3DEP terrain derivatives for the extended domain (HAND / slope / TWI / flow accumulation)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 92,
+    "title": "D1: Freeze the extended domain grid (bbox / CRS / 90 m) \u2014 the contract everything else builds on",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 91,
+    "title": "Static-layer domain does not cover the gauged basins \u2014 only 1 of 8 basins is inside",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 90,
+    "title": "Water budget: model baseflow index is 0.00, gauges say 0.47 \u2014 the river sink discharges nothing",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 89,
+    "title": "Water budget: daily and monthly timesteps drain 4.7x differently \u2014 a monthly calibration cannot be used in daily mode",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D003",
+      "D015",
+      "D035"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 88,
+    "title": "Water budget: no lateral outlet \u2014 94% of rain becomes recharge, GWL rise over-predicted 8-26x",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 87,
+    "title": "Forecast: recharge reaches the water table instantaneously (no unsaturated travel-time lag)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 86,
+    "title": "Vs30 densification: mean-preserving block-constrained downscaling + block CV",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D104",
+      "D110",
+      "D113"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 85,
+    "title": "Vs30 densification: effective-stress coupling to the water table (makes Vs dynamic)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D103",
+      "D109",
+      "D112"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 84,
+    "title": "Vs30 densification: stratify Vs(z) profiles by surficial geology (glacial overconsolidation)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D102",
+      "D108",
+      "D113"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 83,
+    "title": "Vs30 densification: two-layer travel-time model from soil thickness / depth-to-bedrock",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D101",
+      "D107",
+      "D111"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 82,
+    "title": "Vs30 densification: fetch the missing SOLUS soil covariates (bulk density, organic carbon, soil thickness)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D100",
+      "D106",
+      "D111",
+      "D112"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 81,
+    "title": "Vs30 densification: source measured Vs profiles (the validation anchor \u2014 BLOCKER)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D099",
+      "D105",
+      "D106",
+      "D107",
+      "D108",
+      "D109",
+      "D110"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 73,
+    "title": "EPIC: Forecast forcing + downstream handoff \u2014 from observed/AI rainfall to hazard antecedent state",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 72,
+    "title": "ERA5-Land as an independent gridded cross-validation product (upscale-then-compare)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 71,
+    "title": "Forward forcing: GraphCast/ACE2 QPF via earth2studio \u2192 90 m precip downscaler \u2192 antecedent-state ensemble",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D041"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 70,
+    "title": "Hindcast forcing: drive the coupled water budget from PRISM rainfall (preferred source)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 65,
+    "title": "Publish the LandLab dynamic bundle as COG/Zarr + STAC provenance (s3://cresst)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 64,
+    "title": "LandLab export: wire the dynamic bundle to real products + CLI + per-cell \u03c3 and confidence mask",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D095"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 60,
+    "title": "Epic: peer-review remediation (P0/P1/P2) \u2014 tackle one at a time",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 59,
+    "title": "P2: Event-based validation - one PNW atmospheric-river hindcast",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 58,
+    "title": "P2: Penman-Monteith PET path (use AI-model radiation/humidity/wind)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D043"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 57,
+    "title": "P2: Re-derive the bucket at daily/hourly resolution; populate beta4/TFN for atmospheric rivers",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 56,
+    "title": "P2: Forcing-interface table (P, PET, SPI-3, dSWE, PDO; spatial+temporal downscaling; bias correction)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 55,
+    "title": "P2: Reframe the forecast path as antecedent-state; require an external runoff+routing model",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 54,
+    "title": "P1: Replace synthetic Vs30 with a real Vs30 model + real uncertainty",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 53,
+    "title": "P1: Translate Vs30 sigma into P(NEHRP site class)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 52,
+    "title": "P1: Resolve the two-theta ambiguity (estimate_soil_moisture vs total_water_bucket); fix sigma math",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D001"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 51,
+    "title": "P1: Twin is truth-in/truth-out - inject dv/v measurement+inversion error; run separate_depth for Vs30",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 50,
+    "title": "P1: Per-hydrostratigraphic-unit k_sat (confined vs unconfined: Sy vs S, drained vs undrained)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 49,
+    "title": "P1: Demote MERRA-2 to inter-model consistency; report a lowland USCRN/ISMN result",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 48,
+    "title": "P1: State per-product depth support; stop calling the ~45 m dv/v band 'soil moisture'",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 47,
+    "title": "P1: Report achieved per-domain valley-fill RMSE / bias / coverage (not just pooled 18.5 m)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 46,
+    "title": "P1: HAND is unconfined-only; screen wells by aquifer; add confined-glacial-drift / perched domain",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 45,
+    "title": "Bug: recalibrate S_THETA (=-2.0 implies ~20% dv/v per 0.1 theta; observed 0.1-1%)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 44,
+    "title": "Water budget: downhill runoff (surface infiltration/saturation-excess + subsurface lateral flow)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 43,
+    "title": "Water budget: vertical infiltration / recharge coupling (theta excess -> water table)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 42,
+    "title": "P0: State the real Stage-2/3 is kriged observed anomalies (beta-map/TFN forecast is future)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 41,
+    "title": "P0: Downgrade 'coupled' to co-located / jointly-estimated; state no recharge feedback",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 40,
+    "title": "P0: Reconcile TerraClimate consistency r = 0.94 vs 0.98",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 39,
+    "title": "P0: Fix Earth2Studio claims (matrix-multiply scope, 'reference ET', flood vs state)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 38,
+    "title": "P0: Disclaim the attribution tautology (Vs30 ~100% HAND; theta ~89% sand)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 37,
+    "title": "P0: Relabel the synthetic Vs30 (drop 'Sanger-Maurer', watermark, fix 'real 90 m data' caption)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 36,
+    "title": "P0: Separate synthetic from real in Results (REAL/SYNTHETIC/MODEL basis column)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 35,
+    "title": "P0: Data classification, assimilation principle, and water-budget documentation",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 32,
+    "title": "GWL forcing/method ensemble \u2014 forcing-UQ parity with the soil-moisture bucket",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D040"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 31,
+    "title": "Data-informed / model-driven downscaler beyond the bilinear resampling baseline",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 30,
+    "title": "Ingest real ambient-noise dv/v + calibrate coupling parameters (promote demo \u2192 operational)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D061",
+      "D062"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 29,
+    "title": "Native-scale calibration/validation vs SMAP, NISAR, NLDAS-v3, GRACE (upscale-then-compare)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 28,
+    "title": "SNOTEL soil-moisture observation anchors + assimilation (obs-anchor SM like GWL)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 25,
+    "title": "Verify references.bib integrity (zero fabricated DOIs)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D123"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 24,
+    "title": "Rename repository to gaia-soil-reanalysis",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 23,
+    "title": "Prototype Rung-2 TFN dynamics (linear reservoir, Pastas) behind climate_response",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 22,
+    "title": "DataHub: confirm raw geology archive format (GeoParquet vector vs Zarr)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 21,
+    "title": "Complete DNR lithology crosswalk + adopt local rasterizer (unblocks #14 / #2)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 20,
+    "title": "Implement soil-moisture state module (\u03b8 static envelope + dynamic driver)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 19,
+    "title": "[P1] dv/v coupling: seismic-constrained dynamic soil mechanics + reanalysis",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 18,
+    "title": "EPIC: gaia-soil-reanalysis \u2014 coupled subsurface-state (soil moisture + GWL + soil mechanics + dv/v)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  },
+  {
+    "issue": 14,
+    "title": "Lithology data gap over Puget Sound blocks #2 acceptance (depends on downloader #10)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 12,
+    "title": "LandLab / geotech bridge: hillslope water table for landslide & road hazard",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 11,
+    "title": "Rewrite paper Validation Strategy section to match stratified scheme",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 10,
+    "title": "Coastal & stream boundary conditions (sea level, stream stage)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D121"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 9,
+    "title": "Aquifer-aware deep/confined well screening (shallow-only target)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D120"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 8,
+    "title": "Stage 2 response time tau conditioned on aquifer type",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D119"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 7,
+    "title": "Stage 3 nugget = representativeness variance (stay-close-to-data knob)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D118"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 6,
+    "title": "Temporal validation at continuous recorders (phase, recession, aliasing)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 5,
+    "title": "Calibrated uncertainty: coverage / PIT / CRPS check",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 4,
+    "title": "Variogram-driven confidence mask (retire fixed 50 km)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "no_new_hard_edge_asserted; identity/scope/reuse relationships may still need normalization"
+  },
+  {
+    "issue": 3,
+    "title": "Per-domain validation gates + variogram-sized CV blocks (retire <8 m / 200 km)",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [
+      "D117"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 2,
+    "title": "Hydrogeologic domain mask layer (foundational)",
+    "state": "closed",
+    "body_present": true,
+    "represented_edges": [
+      "D117",
+      "D118",
+      "D119",
+      "D120",
+      "D121",
+      "D122"
+    ],
+    "disposition": "represented_in_scoped_proposal"
+  },
+  {
+    "issue": 1,
+    "title": "EPIC: Hydrogeologist review \u2014 stratified, data-anchored validation, domain masking & calibrated uncertainty",
+    "state": "open",
+    "body_present": true,
+    "represented_edges": [],
+    "disposition": "tracker_not_executable"
+  }
+]
