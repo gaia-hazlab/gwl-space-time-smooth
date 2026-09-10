@@ -1,0 +1,18 @@
+{
+  "0.0": {
+    "capillary_rise_mm": 0.0,
+    "root_storage_change_mm": 1.4901161138336505e-06,
+    "groundwater_storage_change_mm": 0.0,
+    "external_input_mm": 0.0,
+    "external_output_mm": 0.0,
+    "total_water_balance_residual_mm": 1.4901161138336505e-06
+  },
+  "30.0": {
+    "capillary_rise_mm": 0.7392348647117615,
+    "root_storage_change_mm": 0.7392331957817022,
+    "groundwater_storage_change_mm": 0.0,
+    "external_input_mm": 0.0,
+    "external_output_mm": 0.0,
+    "total_water_balance_residual_mm": 0.7392331957817022
+  }
+}

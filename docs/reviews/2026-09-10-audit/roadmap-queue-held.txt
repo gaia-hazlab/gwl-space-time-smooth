@@ -1,0 +1,14 @@
+holding back #205 (Diagnostic-gated regime-switching τ for the OU temporal model (wet/dry-conditional; follow-on of #194)): blocked by open #194
+holding back #203 (Earth2Studio model-structure & assimilation compatibility (Prognostic/Diagnostic wrapper + member/lead_time contract)): blocked by open #187
+holding back #202 (Flood: validate routed discharge against USGS gauge hydrographs (reuse D7 BFI/Q–P calibration, #98)): blocked by open #201
+holding back #201 (Flood: select and pilot a routing component (LandLab OverlandFlow/FlowAccumulator vs external HAND inundation)): blocked by open #200
+holding back #200 (Flood: soil-state source-term export contract (runoff/interflow/baseflow + uncertainty, member-preserving)): blocked by open #187, #191
+holding back #195 (P1: Calibrate and validate probabilistic nowcasts and forecasts by lead time and native support): blocked by open #191, #193, #194
+holding back #194 (P1: Quantify nowcast uncertainty reduction and value added with withheld sensors): blocked by open #192
+holding back #193 (P2: Propagate joint hydrologic, parameter, forcing, and mechanical ensembles into hazards): blocked by open #191
+holding back #192 (P1: Estimate and diagnose prior, process, and observation-error covariance (B/Q/R)): blocked by open #188
+holding back #191 (P1: Make SoilStateForecast ensemble-native and initialize it from the DA posterior): blocked by open #188
+holding back #190 (P2: Make mechanical damage, disturbance, and healing states probabilistic and conditionable): blocked by open #187
+holding back #189 (P1: Operationalize ground-sensor observation records, operators, QC, and holdouts): blocked by open #187
+holding back #188 (P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage): blocked by open #187, #189
+holding back #187 (P0: Define the canonical probabilistic state, parameter, forcing, and observation contract): blocked by open #186, #52, #89, #137, #171, #172

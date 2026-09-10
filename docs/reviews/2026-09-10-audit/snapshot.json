@@ -1,0 +1,141 @@
+{
+  "audit_date": "2026-09-10",
+  "repository": "gaia-hazlab/gwl-space-time-smooth",
+  "main_sha": "435445f17b90e1cdc4ee4e12a9e1cb17338f7e3f",
+  "local_sha": "5e807676c166d2e1a6f619b996f529a22d804f96",
+  "local_branch": "feat/nisar-soil-moisture-fetcher",
+  "counts": {
+    "issues": 160,
+    "open_issues": 126,
+    "closed_issues": 34,
+    "open_epics": 12,
+    "open_non_epic_tasks": 114,
+    "milestones": 12,
+    "comments": 74,
+    "prs": 62,
+    "merged_prs": 59,
+    "open_draft_prs": 1,
+    "unmilestoned_open_issues": 35,
+    "unassigned_open_issues": 126,
+    "non_epic_tasks_without_canonical_priority": 44,
+    "tracker_checkbox_state_discrepancies": 23
+  },
+  "effective_main_rules": [],
+  "named_ruleset": {
+    "id": 19355902,
+    "name": "protect-main",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "gaia-hazlab/gwl-space-time-smooth",
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": []
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "pull_request",
+        "parameters": {
+          "required_approving_review_count": 1,
+          "dismiss_stale_reviews_on_push": true,
+          "required_reviewers": [],
+          "require_code_owner_review": true,
+          "dismissal_restriction": {
+            "enabled": false,
+            "allowed_actors": []
+          },
+          "require_last_push_approval": false,
+          "required_review_thread_resolution": false,
+          "require_extra_approval_for_unattributed_changes": true,
+          "allowed_merge_methods": [
+            "merge",
+            "squash",
+            "rebase"
+          ]
+        }
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": true,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "test",
+              "integration_id": 15368
+            }
+          ]
+        }
+      },
+      {
+        "type": "copilot_code_review",
+        "parameters": {
+          "review_on_push": true,
+          "review_draft_pull_requests": true
+        }
+      }
+    ],
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5HjZUAzgEnWP4",
+    "created_at": "2026-07-21T00:01:50.097-07:00",
+    "updated_at": "2026-07-21T01:30:33.701-07:00",
+    "bypass_actors": [
+      {
+        "actor_id": 18743724,
+        "actor_type": "User",
+        "bypass_mode": "pull_request"
+      }
+    ],
+    "current_user_can_bypass": "pull_requests_only",
+    "_links": {
+      "self": {
+        "href": "https://api.github.com/repos/gaia-hazlab/gwl-space-time-smooth/rulesets/19355902"
+      },
+      "html": {
+        "href": "https://github.com/gaia-hazlab/gwl-space-time-smooth/rules/19355902"
+      }
+    }
+  },
+  "classic_branch_protection": {
+    "message": "Branch not protected",
+    "documentation_url": "https://docs.github.com/rest/branches/branch-protection#get-branch-protection",
+    "status": "404"
+  },
+  "checks": {
+    "main_pytest": {
+      "command": "python -m pytest tests/ -q -p no:cacheprovider",
+      "passed": 217,
+      "warnings": 5,
+      "seconds": 113.58
+    },
+    "automation_unittest": {
+      "command": "python3 -m unittest discover -s scripts/gaia-launch/tests -v",
+      "passed": 32
+    },
+    "environment_note": "Main snapshot tested with pre-existing local Pixi Python environment; no clean environment provisioning or real-data rebuild.",
+    "main_ci_run": "https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/runs/32420307247"
+  },
+  "retrieved_input_sha256": {
+    "issues.json": "85493ef733879f97a6d33ffe087f8b96a608fa0501c31bcc96e73174b1642d5c",
+    "comments.json": "6574818e5b738964d846a8a7e7ef32218ca77adb0d40a77195358f1a954ef842",
+    "milestones-pages.json": "2fa3553275eb945e2633ef7a89b7605a31b0dccb2b1d79d454b6e72d0e00c9d9",
+    "pulls-pages.json": "207ee1de8a4ce224eacbf5f2749223b3e4f2b1fc0af8cdb8b3b264a8b093bb8b",
+    "ruleset-protect-main.json": "793a92f080fb2531e21625942eba18469df48087ca12906bc51b5e6fa43dcb80",
+    "effective-main-rules.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "main-branch.json": "44487fb18f83fd4c5521753601994f7df378dd763c31da9124440b740cc6bf34",
+    "actions-runs.json": "f4528fd4d7568734b5b0d6afaf7b7ed9fe8aa1591e7dfae2df4f93b0bd2daf33"
+  },
+  "limitations": [
+    "Remote deployed runner and uncommitted changes not inspected",
+    "PR metadata complete; inline review coverage targeted, not every historic review thread",
+    "No full reanalysis, GPU forecast, hazard validation, or exhaustive literature verification rerun"
+  ],
+  "external_mutations": false
+}

@@ -1,0 +1,58 @@
+[
+  [
+    "empty_panel",
+    {
+      "decision": "approve",
+      "n_personas": 0,
+      "blocked_by": [],
+      "n_critical": 0,
+      "n_major": 0,
+      "verdicts": []
+    }
+  ],
+  [
+    "major_approve",
+    {
+      "decision": "approve",
+      "n_personas": 1,
+      "blocked_by": [],
+      "n_critical": 0,
+      "n_major": 1,
+      "verdicts": [
+        {
+          "persona": "hydrology",
+          "verdict": "approve",
+          "concerns": [
+            {
+              "severity": "major",
+              "claim": "unvalidated mass budget",
+              "decisive_test": "closed-column budget"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  [
+    "misspelled_critical",
+    {
+      "persona": "hydrology",
+      "verdict": "approve",
+      "concerns": [
+        {
+          "severity": "minor",
+          "claim": "must stop",
+          "decisive_test": "budget"
+        }
+      ]
+    }
+  ],
+  [
+    "novelty_seating",
+    [
+      "gaia-auditor",
+      "twin-hydrogeologist",
+      "twin-atmospheric-scientist"
+    ]
+  ]
+]
