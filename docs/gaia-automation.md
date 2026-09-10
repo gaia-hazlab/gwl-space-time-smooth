@@ -1,4 +1,38 @@
-# Running the gaia agents unattended, in sync with GitHub
+# GAIA automation: current policy and runner reference
+
+## Current operating policy — 10 September 2026
+
+Follow the [soil twin operational plan](soil-twin-operational-plan.md). Marine has
+accepted the two narrow fixes committed in `98d2c36`: a `revise` plan verdict must
+re-enter review, and issues carrying `needs-human-decision` are excluded from the
+grouper's fetched snapshot. Those repairs do not commission the rest of the queue.
+
+**Current work uses interactive agents for scoped local changes, followed by
+independent review and Marine's PR review.** Science, data fixtures and schema work
+can proceed alongside automation repair. Preserve issue holds and the Vs30 pause;
+the operational plan specifies the next work packages and their acceptance evidence.
+
+**Do not start `scripts/gaia_run_queue.sh` against the live repository under this
+policy.** It still invokes `gh pr ready` and `gh pr merge`, and its panel, closure
+and revision paths have unresolved audit findings. Watching the process or setting
+`GAIA_MAX_BATCHES=1` / `GAIA_ONLY_ISSUES` does not make it draft-only. This policy
+selects a separate manual workflow; it does not claim to implement a runtime guard
+or to stop an already-running remote scheduler.
+
+Before a live queue pilot, implement and test an explicit review-only mode that
+cannot mark ready, merge or close issues, including on failure/resume paths. Record
+the deployed revision and verify any older scheduler is stopped or cannot merge.
+Unattended execution has the additional commissioning criteria in the operational
+plan: complete mandatory panels, concern resolution, issue-level acceptance,
+trusted validation, approvals bound to the candidate SHA, and a separate automation
+identity. Missing review evidence blocks acceptance; a valid `revise` or `block`
+verdict is not approval.
+
+The following technical reference retains the legacy runner's lifecycle and launch
+examples for repair and offline testing. Its intended guarantees are **not current
+acceptance evidence**; see the [audit follow-up](reviews/soil-twin-audit-followup-2026-09-10.md).
+
+## Legacy runner design
 
 This describes the remote-server automation that works the open issue backlog with the
 **gaia** agent family (`.claude/gaia/plugins/gaia`), independently of any interactive
@@ -19,7 +53,8 @@ Claude Code session, and keeps GitHub as the source of truth throughout. The mov
 | `scripts/gaia-launch/gaia_pr_dashboard.sh` | Renders and stages the dashboard for one PR |
 | `scripts/gaia-launch/gaia_runs_site_index.py` | Builds the index over all published dashboards |
 
-> **The safety model, in nine invariants.** Everything below follows from these:
+> **Intended safety model, not a verified contract.** The audit records counterexamples
+> to several of these nine design invariants; the commissioning tests must close them:
 >
 > 1. **Nothing is ever deleted.** Failure parks work — committed, pushed, renamed out of the
 >    way. The only automatic branch removal is after a successful merge.
@@ -127,8 +162,9 @@ flowchart TD
     class MERGE,CLOSE,EPIC good
 ```
 
-Every red path leaves the PR **open** and the issues **open**, with a log. Nothing merges
-on a guess, and no failure path deletes work.
+The red paths are intended to preserve work and leave PRs and issues open. The audit's
+partial-batch and acceptance counterexamples must be resolved before relying on that
+behavior in a live queue.
 
 ### 2. Who touches the code — agents, the working tree, and GitHub
 
@@ -432,26 +468,19 @@ One more org-dependent flag: arbitration returns a losing PR to draft with
 Confirm it works on one throwaway PR; if it does not, arbitration still posts its verdict
 and still refuses to merge — the PR just stays marked ready.
 
-If `main` has a ruleset/branch-protection rule requiring an approving review, note that
-**Copilot's code review never submits "Approve"** — only ever `COMMENTED` — so a plain
-`required_approving_review_count` will block this pipeline's merge step forever, no matter
-how many revision rounds run. The fix used on this repo: add the automation's GitHub
-identity (the same account/token `gh auth login` uses) as a **bypass actor** on the
-ruleset, with `bypass_mode: "pull_request"` (bypasses the review/status-check requirement
-on merge only — direct-push protections like `deletion`/`non_fast_forward` still apply to
-that identity). Via the API:
+**Obsolete bypass guidance.** Earlier versions of this runbook recommended adding
+the automation identity as a ruleset bypass actor to work around the absence of a
+human approving review. That is not the current operating policy. Marine's existing
+human bypass is distinct from the separate, non-bypassing automation identity required
+for commissioning. Copilot comments do not substitute for the required approval.
+Test permissions with an unapproved candidate and prove automation cannot merge it;
+do not grant a bypass merely to make the merge command succeed.
 
-```bash
-gh api user --jq '.id'   # numeric actor_id for the account gaia_run_queue.sh authenticates as
-# then PUT the ruleset (see its current rules via `gh api repos/{owner}/{repo}/rulesets/{id}`)
-# with bypass_actors: [{"actor_id": <id>, "actor_type": "User", "bypass_mode": "pull_request"}]
-```
+## Legacy launch examples — not commissioned
 
-Confirm the merge step actually works end-to-end once — if the bypass isn't configured, or a
-CODEOWNERS file later makes `require_code_owner_review` bite, the merge fails loudly, which
-is the safe outcome, but you won't get the close-the-loop behavior until it's resolved.
-
-## Running it safely
+These examples document the existing runner for repair. They are not authorization
+to launch it against the live repository. The current manual workflow and the
+commissioning prerequisites at the top of this document take precedence.
 
 ### Always look at the queue first
 
@@ -477,7 +506,7 @@ worth reading — they are the issues the queue is deliberately *not* attempting
 python3 scripts/gaia_group_issues.py 2>&1 >/dev/null   # dependency diagnostics only
 ```
 
-### Start with one batch
+### Legacy single-batch invocation
 
 ```bash
 cd "$REPO_DIR"
@@ -723,14 +752,18 @@ pgrep -af 'claude -p Use the gaia'   # should print nothing
 The PID file also prevents a second concurrent run: launching while one is live exits with
 the running PID. The `flock` in the cron example below is belt-and-braces on top of that.
 
-### Unattended, recurring
+### Legacy recurring invocation — commissioning required
+
+Do not install or enable this schedule under the current policy. It is retained
+to identify and repair older deployments; an existing remote schedule must be
+inspected before any future commissioned run.
 
 ```cron
 */30 * * * * flock -n /tmp/gaia_run_queue.lock /path/to/scripts/gaia_run_queue.sh >> $HOME/gwl-space-time-smooth/.gaia-runs/cron.log 2>&1
 ```
 
-For a cron schedule, consider `GAIA_MAX_BATCHES=1` so each wake-up does one batch and
-exits, rather than one wake-up occupying the box for hours.
+`GAIA_MAX_BATCHES=1` limits a wake-up to one batch; it does not disable automatic
+readiness, merging or issue closure.
 
 ### When a batch fails
 

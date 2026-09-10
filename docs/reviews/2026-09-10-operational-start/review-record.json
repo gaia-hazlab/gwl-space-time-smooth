@@ -1,0 +1,76 @@
+{
+  "date": "2026-09-10",
+  "base_commit": "98d2c366e91c72d4a21da57fbd9617d0ef0f7e98",
+  "operating_mode": "bounded local implementation and manual review; no live queue invocation",
+  "scope": {
+    "B1": "Exactly eight preverified correction-required bibliography entries; partial #25",
+    "D1": "Active operating/review instructions and status wording in README, ROADMAP, gaia-automation and Copilot instructions; partial #204",
+    "plan": "Adopt concurrent scientific foundations and automation commissioning, preserving holds and human release decisions"
+  },
+  "candidate_file_sha256": {
+    "README.md": "03ea4291cad557fe41f0aa7a07d3fd9ddc5279efb0b2bd5e8a4b4813b9d2bc4b",
+    "ROADMAP.md": "2dcb5bcb80bf2e67464c842380444d08924074f81fa886a5ef71a8844a39c075",
+    "docs/gaia-automation.md": "dc461340ce976f19efeb1aac46e75b5e1058ad1b6dca3100ead1f23a26678cac",
+    ".github/copilot-instructions.md": "650496b3b92755bb54d0e52cddc31d80322b3d1fe4d6285275777a2a88f1b8f7",
+    "docs/soil-twin-operational-plan.md": "d82bbd04e3e83894081a74f643f7ee0a7f592d371c08be5ee6731b32be2d6e5e",
+    "docs/references.bib": "5c4d6fcbb16c3297b3b110546dfcb6efed9bad4987360100af490ae77098f720"
+  },
+  "reviews": [
+    {
+      "reviewer": "/root/operational_plan",
+      "role": "independent B1 provenance review",
+      "verdict": "approve",
+      "scope": "Eight corrected records match archived primary evidence; keys and DOIs preserved; unresolved records untouched",
+      "round": 1
+    },
+    {
+      "reviewer": "/root",
+      "role": "independent B1 reference verification",
+      "verdict": "approve",
+      "scope": "Pandoc parses all 107 entries; all 5 changed author lists match primary records; remaining 3 field corrections and 99 unchanged entries verified",
+      "evidence": "bibliography-pandoc-verification.json"
+    },
+    {
+      "reviewer": "/root/operational_plan",
+      "role": "independent D1 repository/scientific consistency review",
+      "verdict": "revise",
+      "round": 1,
+      "concerns": [
+        "D1-1: README still described closed/live/consumer-ready capabilities without acceptance evidence",
+        "D1-2: runbook still instructed granting automation bypass and launching a queue"
+      ]
+    },
+    {
+      "reviewer": "/root/operational_plan",
+      "role": "independent D1 repository/scientific consistency review",
+      "verdict": "approve",
+      "round": 2,
+      "resolved_concerns": [
+        "D1-1",
+        "D1-2"
+      ],
+      "scope": "Reviewed exact file hashes above; this accepts documentation, not runtime commissioning"
+    },
+    {
+      "reviewer": "/root/review_instructions",
+      "role": "independent operational-plan reader",
+      "verdict": "approve",
+      "round": 1,
+      "scope": "Plan content, including fix boundaries, mandatory approval, holds, concurrency, and honest permission/deployment limits"
+    },
+    {
+      "reviewer": "/root",
+      "role": "final scoped review",
+      "verdict": "approve",
+      "scope": "Accepted narrow fixes are byte-identical to tested sources; new changes match approved B1/D1 scope; current GitHub reads and bibliography checks support stated outcomes"
+    }
+  ],
+  "remaining": [
+    "#25 metadata checker repair, unavailable-record accounting, unresolved manuscript/software evidence and citation-support review",
+    "#204 broader assumptions, limitations, book and issue-status reconciliation",
+    "Full storage conservation and pressure/operator corrections",
+    "All runtime commissioning gates; remote scheduler state remains unverified"
+  ],
+  "closure_disposition": "Refs #25 and #204 only; no issue closed or hold released",
+  "limits": "Review records describe actual local review tasks and content hashes. They are not a claim of implemented runner dispatch validation, reviewer capability isolation or deployment commissioning."
+}

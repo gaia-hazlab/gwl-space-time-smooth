@@ -1,0 +1,45 @@
+{
+  "reviewer": "Codex root, independent of bibliography implementer",
+  "method": "Pandoc BibTeX-to-CSL conversion of baseline and candidate; compare all entries, then compare complete parsed author sequences to saved primary records (spacing/punctuation normalized).",
+  "baseline_commit": "98d2c366e91c72d4a21da57fbd9617d0ef0f7e98",
+  "candidate_bibliography_sha256": "5c4d6fcbb16c3297b3b110546dfcb6efed9bad4987360100af490ae77098f720",
+  "primary_evidence_sha256": "cfd75fd6d857176609af78f79951ad7347c28a87d7b7e1470d2e7676245ad009",
+  "entry_count": 107,
+  "changed_keys": [
+    "cook2009floodmapping",
+    "degraaf2015global",
+    "jasechko2023rapid",
+    "mckee1993spi",
+    "ramcharan2018soil",
+    "shi2026agroseismology",
+    "wadnr2016landslidemapping",
+    "zhu2015geospatial"
+  ],
+  "unchanged_entries": 99,
+  "doi_count": 98,
+  "doi_values_unchanged": true,
+  "author_checks": {
+    "shi2026agroseismology": {
+      "author_count": 12,
+      "all_names_and_order_match_primary_record": true
+    },
+    "ramcharan2018soil": {
+      "author_count": 7,
+      "all_names_and_order_match_primary_record": true
+    },
+    "degraaf2015global": {
+      "author_count": 7,
+      "all_names_and_order_match_primary_record": true
+    },
+    "zhu2015geospatial": {
+      "author_count": 6,
+      "all_names_and_order_match_primary_record": true
+    },
+    "cook2009floodmapping": {
+      "author_count": 2,
+      "all_names_and_order_match_primary_record": true
+    }
+  },
+  "other_field_checks_pass": true,
+  "scope": "Eight correction-required entries only. Does not certify scientific citation support or close #25."
+}

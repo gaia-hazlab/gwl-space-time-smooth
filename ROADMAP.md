@@ -3,8 +3,20 @@
 The durable plan. **This file, plus the linked GitHub issues, is the source of truth** — not any
 agent's context. If a session loses its memory, start here.
 
-Everything below is measured, not asserted. Where a number appears, it came from data, and the
-command that produced it is named.
+## Current execution order — 10 September 2026
+
+The [operational plan](docs/soil-twin-operational-plan.md) governs work selection and
+acceptance while this roadmap's historical issue/status descriptions are reconciled.
+Marine has accepted the two narrow queue repairs in `98d2c36`; the broader automation
+contract remains open. Scoped local work and human PR review start now. Scientific
+fixtures, storage physics and schema work proceed concurrently with automation repair.
+The current queue is not approved for live execution, and the existing Vs30 pause and
+issue holds remain binding.
+
+The milestone narrative below includes implementation reports and calibration results.
+An implemented component, a fitted diagnostic and an independently validated product
+are different acceptance states; use the audit evidence and operational plan before
+closing an issue or claiming a scientific release.
 
 ---
 

@@ -7,13 +7,19 @@
 
 [![Render & Publish Quarto Site](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml/badge.svg)](https://github.com/gaia-hazlab/gwl-space-time-smooth/actions/workflows/quarto-pages.yml)
 
-**A living hydromechanical state of the subsurface** — water table depth, soil moisture, and
-near-surface stiffness (Vs) — at the ~90 m space and time scales that downstream **flood, landslide,
-and liquefaction** models need, over the Pacific Northwest. It is built from high-resolution static
-layers, assimilated ground sensors and satellites, a **closed pixel-wise water budget**, and
-ambient-noise **dv/v** assimilation, integrated with the [GAIA HazLab](https://gaia-hazlab.github.io)
-ecosystem. Outputs feed the Sanger liquefaction GLM (valleys/basins) and the LandLab landslide chain
-(mountain slopes).
+This research project develops a **hydromechanical state of the subsurface** — water table
+depth, soil moisture and near-surface stiffness (Vs) — for Pacific Northwest **flood,
+landslide and liquefaction** studies. The common state grid is approximately 90 m;
+observations retain their measurement footprints and each hazard requires its own spatial
+and temporal support. Static layers, deterministic model components and calibration examples
+are implemented. Conserved storage accounting, probabilistic assimilation cycles and
+independent forecast/hazard validation remain active work. The demos do not establish a
+validated end-to-end hazard twin.
+
+**Current work:** follow the [operational plan](docs/soil-twin-operational-plan.md).
+The two audited queue fixes are accepted. Scoped science and software changes proceed
+through interactive agents and human PR review while automation commissioning runs in
+parallel; the current queue is not approved for live execution.
 
 ## Published pages
 
@@ -179,7 +185,7 @@ with GAIA four-part provenance (source, measurement, resolution, uncertainty).
 │   ├── intermediate-staging-plan.md ← pre-gaia-cli staging + soil-hydromechanics scope
 │   ├── assumptions.md               ← severity-tagged assumptions register
 │   ├── limitations.md               ← known limitations
-│   └── gaia-automation.md           ← unattended gaia-agent issue queue: PR → Copilot review → merge
+│   └── gaia-automation.md           ← current manual-work policy and legacy queue reference
 │
 ├── scripts/
 │   ├── gaia_bootstrap.sh            ← one-time remote-server setup (pixi, gh, claude, quarto)
@@ -230,9 +236,9 @@ Notes:
   that can push to it — copy one over, or add a fresh deploy key under repo → Settings → Deploy keys.
 - Sanity-check before doing anything real: `ssh -T git@github.com`, `gh auth status`, and
   `git -C "$REPO_DIR" push --dry-run origin main`.
-- This is also the prerequisite for the **unattended issue-queue automation** — see
-  [`docs/gaia-automation.md`](docs/gaia-automation.md) if you want the gaia agents resolving the
-  open-issue backlog on a schedule rather than interactively.
+- These tools also support the legacy issue queue, but installation does not commission it.
+  Follow the [operational plan](docs/soil-twin-operational-plan.md) before scheduling any
+  backlog execution; current work uses interactive agents and human review.
 
 ### 1. Environment
 
@@ -340,18 +346,19 @@ statistically downscaled to 90 m with a tracked uncertainty budget.
 
 | State variable | Static (fine) | Dynamic (coarse / observed) | Status |
 |---|---|---|---|
-| Groundwater level | HAND + SOLUS → RF baseline (90 m) | kriged monthly well anomalies; coupled pixel-wise water budget | **live** |
-| Soil moisture | SOLUS100 → Saxton-Rawls envelope (90 m) | precipitation & PET → T-M bucket (PRISM / TerraClimate, ~4 km); SNOTEL/USCRN anchors, SMAP/MERRA-2 checks | **live** |
-| Near-surface stiffness (Vs) | Vs30 Wald-Allen slope proxy (90 m) + SOLUS | ambient-noise dv/v, depth-separated into soil moisture + relative water table | **live (MVP)** — real multi-year waveform run staged (#30) |
+| Groundwater level | HAND + SOLUS → RF baseline (90 m) | kriged monthly well anomalies; coupled water-budget implementation | Implemented baseline; conserved storage and operational uncertainty acceptance remain open |
+| Soil moisture | SOLUS100 → Saxton-Rawls envelope (90 m) | precipitation & PET → T-M bucket; sensor/comparison pathways | Implemented model/demo; independent validation remains open |
+| Near-surface stiffness (Vs) | Static Vs30/Vs priors and soil properties | ambient-noise dv/v and hydromechanical operator prototypes | Prototype components; identifiability and operational validation remain open |
 
-The three coupled through a **closed pixel-wise water budget** (`src/models/water_budget.py`:
-recharge, capillary rise, ET, saturation-excess runoff, TOPMODEL lateral flow) and a **petrophysical
-bridge** (`src/models/dvv.py`: pore-pressure ↔ dv/v poroelastic, dv/v ↔ partial-saturation/suction).
-A modular **K_sat / transmissivity registry** (`src/models/soil_hydraulics.py`) keeps our hydrology
-and the LandLab Factor-of-Safety on one pedotransfer, and `src/io/landlab_export.py` exports the
-dynamic hydrological state (`water_table__depth`, `soil_moisture__saturation_fraction`, recharge) as
-LandLab-ready fields. See the report's **Scientific & Data Grounds** and **Downstream: LandLab
-coupling** sections.
+The coupling implementation uses `src/models/water_budget.py` (recharge, capillary rise,
+ET, runoff and lateral flow) and hydromechanical operators in `src/models/dvv.py`.
+Storage conservation and the pressure/velocity coefficient convention remain under repair;
+the existence of these components does not establish a closed or validated coupled budget.
+`src/models/soil_hydraulics.py` supplies hydraulic-property methods, while
+`src/io/landlab_export.py` exports named hydrological arrays. The native Landlab
+`LandslideProbability` component does not consume `water_table__depth` or
+`soil_moisture__saturation_fraction`; a physically defined, versioned adapter remains to
+be implemented and validated. See the [source-interface audit](docs/reviews/soil-twin-audit-followup-2026-09-10.md).
 
 **Run the soil-moisture + 90 m coupled demo** (needs `baseline` and `terrain` outputs first):
 
@@ -554,7 +561,9 @@ envelope as a covariate. Everything downstream (soil moisture 90 m, LandLab expo
   `pathlib` (no `os.path`), logging (no `print`).
 - **Tests**: each module has a standalone test (`tests/test_<module>.py`) that also runs as
   `pixi run python -m tests.test_<module>`. Add one with your change.
-- **Citations**: every DOI in `docs/references.bib` is Crossref-verified — never add an unverified DOI.
+- **Citations**: match bibliography metadata to primary records and record unavailable evidence
+  explicitly. DOI resolution alone does not verify authorship or scientific support; the
+  remaining integrity work is tracked in #25 and the [bibliography review](docs/reviews/2026-09-10-followup/bibliography/bibliography-review.md).
 - **PRs**: small and focused; the chapter docs (`docs/twin/`) and this README are the
   source of truth for the approach — update them when the physics/data/interface changes.
 
@@ -563,14 +572,14 @@ See the report's **Scientific & Data Grounds** for the equations each seam imple
 
 ## Key Documents
 
+- [`docs/soil-twin-operational-plan.md`](docs/soil-twin-operational-plan.md) — Current accepted
+  work order, review/iteration protocol, human decisions and automation commissioning criteria
 - [`docs/assumptions.md`](docs/assumptions.md) — All simplifying assumptions with severity ratings
 - [`docs/limitations.md`](docs/limitations.md) — Known limitations, updated continuously
 - [`data/raw/MANIFEST.md`](data/raw/MANIFEST.md) — Registry of all raw datasets with provenance
-- [`docs/gaia-automation.md`](docs/gaia-automation.md) — Running the gaia agents unattended on a
-  remote server: priority-grouped issue queue → PR → arbitration → Copilot review → auditor gate →
-  merge, kept in sync with GitHub. Includes how to run it safely (start with
-  `GAIA_MAX_BATCHES=1`), how to stop it (kill the *loop*, not the agent), and how to monitor
-  it live or via the published run dashboards
+- [`docs/gaia-automation.md`](docs/gaia-automation.md) — Current manual-work policy and the legacy
+  remote runner reference. Launch examples describe the implementation under repair;
+  limiting batch size does not disable its merge path
 - [`docs/postmortem/2026-08-18-gaia-run.md`](docs/postmortem/2026-08-18-gaia-run.md) — Post-mortem
   of the 2026-08-17/18 queue run that lost nine pushed branches to one bad `gh` flag; the
   recovery procedure, and the guardrails added because of it

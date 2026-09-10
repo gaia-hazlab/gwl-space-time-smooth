@@ -1,0 +1,36 @@
+{
+  "entry_count": 107,
+  "doi_count": 98,
+  "changed_entries": {
+    "shi2026agroseismology": [
+      "author"
+    ],
+    "jasechko2023rapid": [
+      "number"
+    ],
+    "mckee1993spi": [
+      "number",
+      "volume"
+    ],
+    "ramcharan2018soil": [
+      "author"
+    ],
+    "degraaf2015global": [
+      "author"
+    ],
+    "wadnr2016landslidemapping": [
+      "year"
+    ],
+    "zhu2015geospatial": [
+      "author"
+    ],
+    "cook2009floodmapping": [
+      "author"
+    ]
+  },
+  "unchanged_entries": 99,
+  "all_named_author_sequences_match_saved_primary_records": true,
+  "all_keys_order_and_dois_preserved": true,
+  "text_outside_eight_entries_byte_identical": true,
+  "bibliography_sha256": "5c4d6fcbb16c3297b3b110546dfcb6efed9bad4987360100af490ae77098f720"
+}

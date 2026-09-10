@@ -1,0 +1,15 @@
+{
+  "accepted_commit": "98d2c366e91c72d4a21da57fbd9617d0ef0f7e98",
+  "prior_verification": "../2026-09-10-followup/automation/manifest.json",
+  "all_tested_sources_byte_identical": true,
+  "sources": {
+    "scripts/gaia_run_queue.sh": true,
+    "scripts/gaia_group_issues.py": true,
+    "scripts/gaia-launch/gaia_panel.py": true,
+    "scripts/gaia-launch/gaia_plan.py": true,
+    "src/models/water_budget.py": true,
+    "docs/reviews/2026-09-10-audit/automation-main-repros.py": true,
+    "docs/reviews/2026-09-10-audit/reproduce_capillary_mass.py": true
+  },
+  "tests": "36 automation tests and focused production-function probes were already recorded against these same source bytes. No unnecessary test rerun performed for documentation/bibliography-only changes."
+}
