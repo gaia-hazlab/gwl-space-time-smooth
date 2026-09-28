@@ -157,6 +157,31 @@ the real problem is **attribution** across three timescales.
 (operator-split); disturbances are **patchy fields at native scale** reprojected through the existing
 forward-operator data plane. The timescale + footprint separation is what makes attribution possible.
 
+### Rainier sub-domain: products from the rainier3d atlas — *proposed*
+
+The rainier3d atlas (Denolle-Lab/mt-rainier-virtual-3d-model, release `products-v1.0.0`) is a static model of a 70 × 75 km box that lies inside the v0.4 grid. It supplies:
+- event observations: S24 landslides, the S29 December 2025 atmospheric river with MRMS rainfall and seismic virtual gauges;
+- static structure: canopy, ice, terrain, EM alteration;
+- GNSS seasonal loading.
+
+Its edifice-load stress is not soil-scale and is not used.
+
+These slices do not go ahead of the P0 contracts (#187, #198) or the hydrology pilot (#189 → #188). The S24 catalogue also feeds #124.
+
+Record: [docs/reviews/2026-09-28-rainier3d-leverage/](docs/reviews/2026-09-28-rainier3d-leverage/README.md).
+
+| order | issue | what | blocked by |
+|---|---|---|---|
+| 1 | [#223](../../issues/223) | R1 adapter: release assets → 90 m EPSG:5070 | – |
+| 2 | [#228](../../issues/228) R6d, R6b | Landslide density on altered rock; clay vs water classifier (EM + magnetics). Existing data only | #223 |
+| 3 | [#228](../../issues/228) R6c | Lahar-cap class in the lowland; well residuals on vs off the cap | #223 |
+| 4 | [#224](../../issues/224) | R2 discharge hindcast, December 2025 atmospheric river | #223 |
+| 5 | [#227](../../issues/227) | R5 glacier mask and ice melt | #223 |
+| 6 | [#224](../../issues/224) | R2 landslide ROC/AUC, January 2009 storm | #128 |
+| 7 | [#225](../../issues/225) | R3 canopy interception store | S1a/S1b on main |
+| 8 | [#226](../../issues/226) | R4 GNSS elastic-loading operator | #187, #189 |
+| 9 | [#228](../../issues/228) R6a | Split `volcanic_deep` into fresh and altered edifice | twin-hydrogeologist review; R6b/R6d outcomes |
+
 ---
 
 ## Open physics debts (blocking the water table)
