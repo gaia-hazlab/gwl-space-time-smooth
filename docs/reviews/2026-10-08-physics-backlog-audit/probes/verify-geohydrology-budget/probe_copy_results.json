@@ -1,0 +1,174 @@
+{
+ "A_one_dry_month_created_mm": 22.50000238418579,
+ "A_cap_rise_mm": 22.5,
+ "B_daily300_dry_legacy": {
+  "d0_m": [
+   0.3,
+   0.5,
+   1.0,
+   1.5,
+   1.99,
+   3.0
+  ],
+  "created_mm": [
+   209.82,
+   187.597,
+   128.288,
+   65.335,
+   1.325,
+   0.0
+  ],
+  "sum_cap_mm": [
+   209.82,
+   187.597,
+   128.288,
+   65.335,
+   1.325,
+   0.0
+  ]
+ },
+ "C_wet_year_HAND_branch": {
+  "ridge": {
+   "P": 1268.9297339967177,
+   "runoff": 0.0,
+   "interflow": 271.27459716796875,
+   "baseflow": 1071.646728515625,
+   "aet": 657.5282592773438,
+   "recharge": 339.09326171875,
+   "cap": 0.0,
+   "created_mm": 3.371735260770947e-05,
+   "wt_end_m": 17.441844940185547,
+   "wt_min_m": 15.007877349853516,
+   "BFI": 0.7979966402053833
+  },
+  "midslope": {
+   "P": 1268.9297339967177,
+   "runoff": 0.0,
+   "interflow": 203.45596313476562,
+   "baseflow": 994.9462890625,
+   "aet": 657.5282592773438,
+   "recharge": 406.91192626953125,
+   "cap": 0.0,
+   "created_mm": 9.299937346440856e-06,
+   "wt_end_m": 5.960114479064941,
+   "wt_min_m": 3.9922573566436768,
+   "BFI": 0.830227255821228
+  },
+  "toe": {
+   "P": 1268.9297339967177,
+   "runoff": 0.0,
+   "interflow": 86.87614440917969,
+   "baseflow": 843.262451171875,
+   "aet": 663.8399047851562,
+   "recharge": 542.9758911132812,
+   "cap": 25.795843926025555,
+   "created_mm": 25.795843490615198,
+   "wt_end_m": 2.500955104827881,
+   "wt_min_m": 1.2793657779693604,
+   "BFI": 0.9065987467765808
+  },
+  "valley_hand_eq_d0": {
+   "P": 1268.9297339967177,
+   "runoff": 966.1748046875,
+   "interflow": 4.949963569641113,
+   "baseflow": 0.0,
+   "aet": 520.312744140625,
+   "recharge": 247.49818420410156,
+   "cap": 290.0060563981533,
+   "created_mm": 290.0060542206859,
+   "wt_end_m": -0.024993926286697388,
+   "wt_min_m": -0.024993926286697388,
+   "BFI": 0.0
+  },
+  "valley_hand0": {
+   "P": 1268.9297339967177,
+   "runoff": 1074.7774658203125,
+   "interflow": 0.0,
+   "baseflow": 0.0,
+   "aet": 512.7294921875,
+   "recharge": 158.31179809570312,
+   "cap": 296.8890733420849,
+   "created_mm": 296.88907196834884,
+   "wt_end_m": -0.02770598605275154,
+   "wt_min_m": -0.02770598605275154,
+   "BFI": 0.0
+  },
+  "terrace_hand_lt_d0": {
+   "P": 1268.9297339967177,
+   "runoff": 0.0,
+   "interflow": 23.475688934326172,
+   "baseflow": 0.0,
+   "aet": 657.5282592773438,
+   "recharge": 586.8921508789062,
+   "cap": 0.0,
+   "created_mm": 5.267547135190398e-05,
+   "wt_end_m": 4.043692588806152,
+   "wt_min_m": 4.043692588806152,
+   "BFI": 0.0
+  }
+ },
+ "D_zero_forcing_10yr_monthly": {
+  "valley_HAND0": {
+   "wt_depth_start": 0.4781428575515747,
+   "wt_depth_end": -4.901706218719482,
+   "created_mm": 1629.7010552883146,
+   "sum_cap": 1629.7011089324951,
+   "sum_recharge": 1620.5118408203125,
+   "sum_baseflow": 0.0
+  },
+  "hillcell_HAND5": {
+   "wt_depth_end": 4.998959541320801,
+   "created_mm": 36.879207806661725,
+   "sum_cap": 36.87923055887222,
+   "sum_baseflow": 1386.567138671875
+  },
+  "legacy": {
+   "wt_depth_end": 0.30352258682250977,
+   "created_mm": 1405.7659316062927,
+   "sum_cap": 1405.7659425735474
+  }
+ },
+ "E_valley_HAND1_d0_2_three_wet_years": {
+  "wt_start": 2.0,
+  "wt_end": 0.0002214447595179081,
+  "wt_min": 0.0002214447595179081,
+  "baseflow": 0.0,
+  "recharge": 599.93359375,
+  "runoff": 2621.58740234375,
+  "created_mm": 860.2888767328941,
+  "frac_days_table_above_surface": 0.0
+ },
+ "F_accumulate_runoff_in_out_mm": [
+  100.0,
+  154.99999999450003
+ ],
+ "G_total_water_bucket": {
+  "S0": 280.0,
+  "P": 600.0,
+  "S1": 449.99998807907104,
+  "note": "no runoff/drainage flux returned; P-(S1-S0) mm leaves unlabelled",
+  "unlabelled_loss_mm": 430.00001192092896
+ },
+ "H_snow_initial_state": {
+  "melt_over_10_warm_days_mm": 0.0,
+  "note": "a 10-day forecast launched on 1 April over a 1.5 m SWE pack at 8 C melts 0 mm: SWE is initialised to zero and never passed in or out"
+ },
+ "I_VSA_deficit_mm": {
+  "0.5": 150.0,
+  "1.0": 300.0,
+  "2.0": 600.0,
+  "5.0": 1500.0
+ },
+ "J_tau_days_vs_head0": {
+  "0.5": 50.0,
+  "2": 200.0,
+  "5": 500.0,
+  "20": 2000.0,
+  "60": 6000.0
+ },
+ "J_note": "linear sink: equilibrium head above drainage = head0 * Rbar/Rref; timescale = Sy*head0/Rref",
+ "K_flat_median_slope": {
+  "2.0": 0.32101194809091654,
+  "20.0": 0.8254128881293612
+ }
+}
