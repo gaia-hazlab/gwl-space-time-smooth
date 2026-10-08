@@ -84,21 +84,61 @@ def milestone_rank(milestone):
 # stays held back for as long as #187 does too, without needing to list
 # #187 again under #192.
 BLOCKED_BY = {
-    187: [186, 52, 89, 137, 171, 172],   # canonical contract needs corrected UQ, theta, water/timestep fixes
-    189: [187],                          # operational obs records need the canonical contract
-    188: [154, 187, 189],                # cycling DA needs scale, contract, and obs records
-    192: [188],                          # B/Q/R diagnosis needs a running cycling DA to diagnose
-    194: [192],                          # withheld-sensor value-added needs calibrated B/Q/R
-    191: [188],                          # ensemble forecast needs the DA posterior it initializes from
-    190: [187],                          # probabilistic mechanical memory needs the canonical contract
-    193: [191],                          # joint hazard handoff needs stable member identity from #191
-    195: [191, 193, 194],                # release-gate validation needs forecast, hazard, and DA value-added
-    # Opus 2026-07-21 strategy review: new issues #199-#205 (see docs/reviews/opus-...).
-    203: [187],                           # Earth2Studio wrapper needs the canonical (E2S-shaped) contract
-    205: [194],                           # regime-switching tau is a diagnostic-gated follow-on of #194
-    200: [187, 191],                      # flood source-term export needs the member contract + ensemble members
-    201: [200],                           # routing pilot needs the source-term export contract
-    202: [201],                           # gauge-hydrograph validation needs a routed hydrograph
+    # Audited table, 2026-10-08 physics and backlog audit (docs/reviews/2026-10-08-physics-backlog-audit/,
+    # approved by the PI). Leaf issues only -- never an epic, which only a human closes.
+    # 232 water ledger, 233 valley sink, 234 snow state, 235 recorders+holdouts, 236 cal/val harness,
+    # 237 gauge flux operator, 247 kernel sanity, 260 liquefaction decision, 263 lapse rate,
+    # 265 hydrologic-core design record, 268 v0.4 static rebuild, 270 value-of-information gate.
+    187: [52],                                # schema draft; release gates are in the issue body
+    188: [187, 189, 155, 156, 232, 233],
+    189: [187, 9],
+    192: [188],
+    194: [192],
+    191: [188],
+    190: [187, 121, 198],
+    193: [187],
+    195: [191, 194],
+    203: [187, 188, 191],
+    205: [194],
+    172: [232, 265],
+    131: [172],
+    173: [172],
+    174: [172, 265],
+    175: [232, 233],
+    137: [172, 173, 174, 175, 131, 100, 89, 235, 236],
+    89: [70],
+    100: [70, 234],
+    130: [172, 174],
+    133: [130, 174],
+    176: [172, 131, 198],
+    198: [172, 187, 247],
+    45: [198],
+    50: [198],
+    30: [198],
+    162: [188, 169],
+    123: [162, 169],
+    121: [124],
+    122: [134],
+    132: [134],
+    226: [187, 189, 100, 172],
+    223: [268],
+    224: [223, 128],
+    225: [172],
+    227: [223, 232, 234, 263],
+    129: [128],
+    141: [260, 270],
+    142: [137, 9],
+    82: [81],
+    83: [81],
+    84: [81],
+    86: [81, 84],
+    200: [187],
+    201: [232, 237],
+    202: [201],
+    99: [100],
+    47: [21, 9],
+    7: [186],
+    6: [235],
 }
 
 
@@ -106,10 +146,32 @@ def slug(text):
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40]
 
 
+# Issues carrying any of these labels are human-held: never dispatched, even when selected
+# explicitly with GAIA_ONLY_ISSUES. Releasing the hold means removing the label.
+HOLD_LABELS = {"needs-human-decision"}
+
+_BLOCKED_LINE = re.compile(r"^\s*\**Blocked by\**:?\**\s*(.*)$", re.IGNORECASE | re.MULTILINE)
+
+
+def body_blockers(body):
+    """Issue numbers named on 'Blocked by:' lines of the CURRENT scope of an issue body.
+
+    Text after the first '<details>' is the archived original body and is ignored, so a
+    superseded dependency there cannot hold an issue. Combined with BLOCKED_BY (union).
+    """
+    if not body:
+        return []
+    current = body.split("<details>", 1)[0]
+    found = []
+    for line in _BLOCKED_LINE.findall(current):
+        found += [int(n) for n in re.findall(r"#(\d+)", line)]
+    return sorted(set(found))
+
+
 def fetch_issues():
     raw = subprocess.check_output([
         "gh", "issue", "list", "--state", "open", "--limit", "500",
-        "--json", "number,title,labels,milestone",
+        "--json", "number,title,labels,milestone,body",
     ])
     return json.loads(raw)
 
@@ -177,8 +239,14 @@ def main():
         labels = [l["name"] for l in issue["labels"]]
         if "epic" in labels:
             continue
+        held = sorted(HOLD_LABELS.intersection(labels))
+        if held:
+            print(f"holding back #{issue['number']} ({issue['title']}): labelled {', '.join(held)}",
+                  file=sys.stderr)
+            continue
 
-        blockers = [b for b in BLOCKED_BY.get(issue["number"], []) if b in open_numbers]
+        declared = set(BLOCKED_BY.get(issue["number"], [])) | set(body_blockers(issue.get("body")))
+        blockers = sorted(b for b in declared if b in open_numbers and b != issue["number"])
         if blockers:
             print(
                 f"holding back #{issue['number']} ({issue['title']}): "
@@ -209,6 +277,9 @@ def main():
 
     batches = []
     for key, members in groups.items():
+        # Oldest issue first within a group: `gh issue list` returns newest first, which
+        # used to put follow-on issues ahead of the foundations they build on.
+        members.sort(key=lambda m: m["number"])
         p0 = [m for m in members if m["priority"] == "P0"]
         rest = [m for m in members if m["priority"] != "P0"]
         for tier_name, tier_members in (("p0", p0), ("rest", rest)):
