@@ -2,8 +2,8 @@
 import importlib.util
 import io
 import json
+import os
 import pathlib
-import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -45,6 +45,12 @@ class Queue(unittest.TestCase):
     def test_needs_human_decision_is_held(self):
         batches, err = run([issue(10, ["P1", "needs-human-decision"], "M"), issue(11, ["P1"], "M")])
         self.assertEqual(batches, [[11]])
+        self.assertIn("#10", err)
+
+    def test_hold_survives_explicit_selection(self):
+        with mock.patch.dict(os.environ, {"GAIA_ONLY_ISSUES": "10"}):
+            batches, err = run([issue(10, ["P1", "needs-human-decision"], "M"), issue(11, ["P1"], "M")])
+        self.assertEqual(batches, [])
         self.assertIn("#10", err)
 
     def test_body_blocker_holds_until_closed(self):
