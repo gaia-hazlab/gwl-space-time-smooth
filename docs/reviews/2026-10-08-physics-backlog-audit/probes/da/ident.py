@@ -1,3 +1,6 @@
+# #169 probe: damage/healing temporal-basis identifiability (da-estimator family).
+# NOT the groundwater Jacobian probe cited in lenses/da-physics-coupling.md section 6;
+# that script shared this filename and was lost (2026-10-09, Codex review of PR #229, C5).
 import numpy as np
 for T in [1,2,3,5,10]:
   for t0frac in [0.0, 0.5]:

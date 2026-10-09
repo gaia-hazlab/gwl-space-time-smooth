@@ -84,8 +84,8 @@ Required order, encoded as BLOCKED_BY or as a typed registry: ledger-harness gap
   - It is in batch 6, the first water-budget batch, before #172 restructures the same loop. That means rework and conflicts.
   - It bundles an unrelated dv/v calibration (SIGMA0/G_REF) that needs data.
   - It has no acceptance criterion.
-  - #198 depends on it (roadmap review line 43, dependency review line 27), but that is not in BLOCKED_BY.
-- proposed edit: Move SIGMA0/G_REF calibration to the dv/v family. Acceptance: same final theta reached by wetting vs drying gives different drainage; ledger passes; invert_dvv theta equals budget theta on a closed loop. Add BLOCKED_BY 176:[172] and 198:[187,176].
+  - #198 depends on it (roadmap review line 43, dependency review line 27), but that is not in BLOCKED_BY. **Correction 2026-10-09 (C2; Codex review of PR #229, see `../2026-10-09-pr229-codex-response.md`).** Only the hysteretic mode (198b) depends on #176.
+- proposed edit: Move SIGMA0/G_REF calibration to the dv/v family. Acceptance: same final theta reached by wetting vs drying gives different drainage; ledger passes; invert_dvv theta equals budget theta on a closed loop. ~~Add BLOCKED_BY 176:[172] and 198:[187,176].~~ **Correction 2026-10-09 (C2; Codex review of PR #229, see `../2026-10-09-pr229-codex-response.md`).** This edge ran opposite to README §9.4 (176 blocked by 198); together they form a cycle. Canonical: split #198 into 198a (non-hysteretic operator), 198b (hysteretic mode) and 198c (DA through the operator). 176:[172, 131, 198a]; 198b:[176, 198a]; 198a does not wait on hysteresis.
 
 ## #177 Minor fixes (groundwater / vadose review)
 - verdict: **split** (verifier upheld); agent_ready: False; missing blockers: []

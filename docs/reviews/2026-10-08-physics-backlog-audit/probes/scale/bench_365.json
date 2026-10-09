@@ -16,10 +16,11 @@
   "rain_mm": 1759.5081300418433,
   "wall_s": 0.01031769800465554,
   "s_per_column_day": 2.826766576617956e-05,
-  "ok": "Richards step failed at the minimum time step",
-  "mb_err_mm": NaN,
-  "runoff_mm": NaN,
-  "bottom_mm": NaN
+  "mb_err_mm": null,
+  "runoff_mm": null,
+  "bottom_mm": null,
+  "failure_reason": "Richards step failed at the minimum time step",
+  "ok": false
  },
  "150m_fixedWT10m": {
   "nlayers": 52,

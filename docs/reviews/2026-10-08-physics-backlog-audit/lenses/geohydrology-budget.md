@@ -55,7 +55,9 @@ So the comment at :264 ("valley floors cannot rise at all") is false. The #177 m
 - In the synthetic year, the ridge cell receives 339 mm of recharge but discharges 1072 mm of baseflow. It loses ~732 mm of groundwater storage (table −2.44 m), and Q = 1343 mm > P − AET = 611 mm. Midslope is −588 mm and toe −300 mm.
 - The comment at :87 says ~1.6 mm/day, but the value at :88 is 3.0.
 
-Modelled BFI is therefore largely a readout of R_ref and of storage depletion. The equilibrium head above drainage is head0·R̄/R_ref, which is unstable unless mean recharge is exactly 3 mm/day everywhere.
+Modelled BFI is therefore largely a readout of R_ref and of storage depletion. The equilibrium head above drainage is head0·R̄/R_ref~~, which is unstable unless mean recharge is exactly 3 mm/day everywhere~~.
+
+> **Correction 2026-10-09 (C4; Codex review of PR #229, see `../2026-10-09-pr229-codex-response.md`).** The linear reservoir has a stable equilibrium at head0·R̄/R_ref for any positive R̄ (rerun: R̄ = 1, 3, 5 mm/d settle at 3.33, 10.0, 16.7 m for head0 = 10 m). The ridge discharge in excess of P − AET is the reservoir relaxing from an initial state above that equilibrium; it is accounted for by ΔS and is not a mass leak. It is an initial-state/spin-up and R_ref calibration problem, diagnosed and accepted separately from the capillary debit (a true leak) and the missing valley outlet (a drainage defect).
 
 **Other leaks and inconsistencies:**
 

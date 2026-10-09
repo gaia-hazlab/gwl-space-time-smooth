@@ -121,6 +121,8 @@ There is also a conflict between documents. The roadmap says dv/v "enters #188 �
 
 Analytically, the head equation is h ← h + R/S_y − [HAND − d0 + h]₊·(R_ref/S_y)/head0 (water_budget.py:266, :195-196, :271-272). It is invariant under (S_y, R, R_ref) → c·(S_y, R, R_ref), apart from the saturation-excess term S_y·wt (:230), which is inactive on deep tables. Baseflow = S_y·drop (:278) scales by c. So heads identify only R/S_y and R_ref/S_y, and an absolute flux or storage observation is needed to set the scale.
 
+> **Correction 2026-10-09 (C5; Codex review of PR #229, see `../2026-10-09-pr229-codex-response.md`).** The condition numbers in this table are **unreproduced**. The groundwater Jacobian script was written to `wf/da/ident.py` and later overwritten by the da-estimator auditor's #169 healing-basis probe of the same name; the archived `probes/da/ident.py` is that #169 probe. The verifier's `probes/verify-da-physics-coupling/sub.py` reads the lost file and fails. The analytic scaling argument above stands on its own; do not use the numbers below as issue gates until a pinned probe recomputes them.
+
 I computed finite-difference Jacobians of `coupled_water_budget` over two years of synthetic seasonal forcing (ident.py), with respect to log S_y, log R_ref, a log precipitation multiplier and log K_a:
 
 | Observable | Condition number | Notes |

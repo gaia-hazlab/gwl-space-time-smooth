@@ -361,10 +361,11 @@
   "title": "P2: Re-derive the bucket at daily/hourly resolution; populate beta4/TFN for atmospheric rivers",
   "family": "water-budget-core",
   "verdict": "defer",
-  "final_verdict": "rewrite-then-defer",
+  "final_verdict": "defer",
   "verifier_upheld": false,
   "agent_ready": false,
-  "missing_blockers": []
+  "missing_blockers": [],
+  "final_verdict_note": "rewrite the body before deferring"
  },
  {
   "number": 58,
@@ -437,13 +438,14 @@
   "title": "Forward forcing: GraphCast/ACE2 QPF via earth2studio -> 90 m downscaler -> antecedent ensemble",
   "family": "forecast-interop-software-docs",
   "verdict": "close-superseded",
-  "final_verdict": "rewrite (repurpose #71 in place as the meteorological member-source / FuXi-ensemble issue, BLOCKED_BY 187 and 136)",
+  "final_verdict": "rewrite",
   "verifier_upheld": false,
   "agent_ready": false,
   "missing_blockers": [
    187,
    136
-  ]
+  ],
+  "final_verdict_note": "repurpose #71 in place as the meteorological member-source / FuXi-ensemble issue, BLOCKED_BY 187 and 136"
  },
  {
   "number": 72,
@@ -576,12 +578,14 @@
   "title": "D8: Snow is the water-table clock \u2014 calibrate the snow module and verify the April peak emerges",
   "family": "water-budget-core",
   "verdict": "rewrite",
-  "final_verdict": "rewrite (blocker should be #70, not #137)",
+  "final_verdict": "rewrite",
   "verifier_upheld": false,
   "agent_ready": false,
   "missing_blockers": [
-   137
-  ]
+   70
+  ],
+  "final_verdict_note": "blocker should be #70, not #137",
+  "correction_2026_10_09": "missing_blockers was [137], contradicting final_verdict; with 137:[...,100] that formed a cycle"
  },
  {
   "number": 109,
@@ -1352,9 +1356,9 @@
   "verifier_upheld": true,
   "agent_ready": false,
   "missing_blockers": [
-   187,
-   176
-  ]
+   187
+  ],
+  "correction_2026_10_09": "removed 176: the basic operator (198a) must not wait on hysteresis. Only the hysteretic mode (198b) is blocked by #176, and #176 is blocked by 198a"
  },
  {
   "number": 199,

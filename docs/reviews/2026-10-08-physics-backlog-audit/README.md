@@ -2,6 +2,8 @@
 
 > **Archive note.** Internal record for the team and for future AI agents (GAIA). Nothing here changed GitHub issues or code. `lenses/` holds the five physics assessments with adversarial verdicts, `issues/` the eight issue-family audits with proposed new issues, `issue_verdicts.json` one verdict per open issue (2026-10-07 snapshot), `probes/` the scripts behind the numbers, and `queue_sim.jsonl` / `queue_held.txt` the GAIA queue simulation on origin/main 435445f. Re-verify against current main before acting.
 
+> **Corrections, 2026-10-09.** Codex reviewed this archive at `ad6fb25` (`../2026-10-09-codex-pr229-review.md`). All seven findings were verified and are folded in below, marked **[Corrected 2026-10-09, Cn]**, with the original text struck through where it changed a recommendation. The finding-by-finding verification, the probe census, and the live-issue edits these corrections imply are in `../2026-10-09-pr229-codex-response.md`. Where this README and that response disagree, the response governs.
+
 **Date:** 2026-10-08. **Written for:** Marine Denolle and the GAIA hazard-lab team.
 **Code audited:** `gaia-hazlab/gwl-space-time-smooth` origin/main `435445f`. The local checkout on Marine's laptop is behind origin/main and was not used for code claims.
 **Prototype audited:** `Denolle-Lab/mt-rainier-digital-model` (rainier3d) main `d61305c`, including the critical-zone module added on 2026-10-03 (`6ad0fe7`) and the paper `docs/paper/rainier3d_paper.md`.
@@ -12,8 +14,8 @@
 
 ## 1. Bottom line
 
-1. **The physics direction is right, but the water model it rests on does not conserve water.** The reviews agree on the target: a storage-based state at 90 m, observations at native support, a cycling ensemble, and hazards at their own scale. The model underneath is one root-zone bucket plus one linear-reservoir head per 90 m cell, with no store between them and no exchange between cells. Three independent probes show it creates and destroys water (section 3).
-2. **Fix the hydrologic core as one designed topology, not as a dozen patches.** Issues #131, #172, #173, #174, #175, #130, #133, #137 and #176 all edit the same ~100-line loop, and each adds a piece of the same missing vadose, perched and lateral storage. GAIA would hand them to different agents in different batches.
+1. **The physics direction is right, but the water model it rests on does not conserve water.** The reviews agree on the target: a storage-based state at 90 m, observations at native support, a cycling ensemble, and hazards at their own scale. The model underneath is one root-zone bucket plus one linear-reservoir head per 90 m cell, with no store between them and no exchange between cells. ~~Three independent probes show it creates and destroys water (section 3).~~ **[Corrected 2026-10-09, C4]** The probes show one water-creating leak (capillary rise credited to the root zone with no groundwater debit), one water-deleting clip, a missing valley outlet, and ridge storage relaxing from an initial state above its equilibrium. Only the first two violate conservation; the others are drainage, spin-up and calibration defects with their own acceptance tests (section 3.1).
+2. **Fix the hydrologic core as one designed topology, not as a dozen patches.** **[Corrected 2026-10-09, C1]** The minimum is one shared state of explicit water stores with depth bounds and conservative, capacity-limited transfers (section 3.4). Full-flow solvers are optional benchmarks, not foundation gates. Issues #131, #172, #173, #174, #175, #130, #133, #137 and #176 all edit the same ~100-line loop, and each adds a piece of the same missing vadose, perched and lateral storage. GAIA would hand them to different agents in different batches.
 3. **Start from rainier3d for the hydromechanics, not for the water budget.** rainier3d is a static digital model. Its new critical-zone column has the right hydromechanical structure: effective stress from overburden, Lu–Godt–Wu suction stress, Hertz–Mindlin/soft-sand, Gassmann–Brie, and disba kernels on a layered profile. That makes it the natural reference operator for P0 #198. Its 1D Richards solver is a good oracle but cannot be the regional cycling model. The Rainier box is a good hydromechanics pilot and a poor water-budget closure pilot.
 4. **The backlog is not ready for unattended agents.** Only 5 of 132 issues survive as written, and only 19 are executable by an agent today. The GAIA grouper on main ignores human holds, blocks the whole DA chain on an epic that only a human can close, and dispatches the Rainier, hazard and dv/v issues before their own prerequisites. The September runner fixes that the team accepted (A2 "revise is not approve", AUTO-06 hold filter) were never merged to main.
 
@@ -38,15 +40,17 @@
 
 ### 3.1 Verified defects (probes in `probes/`)
 
-| Defect | Evidence | Size in probes |
-|---|---|---|
-| Capillary rise is credited to the root zone and never debited from head | `water_budget.py:217-219` vs `:266` | Residual equals −Σ capillary rise exactly: −43 to −102 mm per 300 days on shallow-table cells. Every other branch closes to ≤5×10⁻⁵ mm |
-| No groundwater sink where HAND ≤ d0 (valley fill, terraces) | `:193-196` | Zero forcing for 10 yr: table rises to 4.9 m **above** ground, creating 1,630 mm. Wet year: 290–297 mm/yr created (~23% of P), BFI = 0 |
-| Constant R_ref = 3 mm/d makes baseflow a prescribed drain | `:88`, `:188-197` | Ridge cell: 339 mm recharge, 1,072 mm baseflow, Q > P − AET. 20-yr drift: hillslope 15 → 33.5 m, hollow 3 → 12.8 m, e-folding ~12 yr |
-| Non-conservative clip of S | `:251` | Silent sink at wet states |
-| Root-zone pores counted twice in the saturation-excess deficit | `:230` vs `:235-236` | VSA almost never fires: deficit 1,500 mm at wt = 5 m |
-| Daily and monthly modes disagree | #89 | 4.7× in drainage |
-| Root-zone θ cannot reach saturation | drainage before recording (`:247-253`) | Peak θ 0.39 against θ_sat 0.45 in a 200 mm atmospheric-river probe |
+| Defect | Diagnosis **[Corrected 2026-10-09, C4]** | Evidence | Size in probes |
+|---|---|---|---|
+| Capillary rise is credited to the root zone and never debited from head | **Missing transfer debit: a true leak** | `water_budget.py:217-219` vs `:266` | Residual equals −Σ capillary rise exactly: −43 to −102 mm per 300 days on shallow-table cells. Every other branch closes to ≤5×10⁻⁵ mm. Rerun 2026-10-09: zero forcing, 30 d, wt0 1.2 m gives 9.55 mm credited with an identical water-table path whether capillary rise is on or off. A repair exists as commit `1f93f15` on the unpushed local branch `work/storage-conservation-2026-09-10` |
+| No groundwater sink where HAND ≤ d0 (valley fill, terraces) | **Missing outlet: a drainage defect, not a creation term** | `:193-196` | Zero forcing for 10 yr: table rises to 4.9 m **above** ground, ~~creating 1,630 mm~~; the water is created by capillary rise cycled through drainage and recharge, and the missing outlet lets it accumulate. Wet year: ~~290–297 mm/yr created (~23% of P)~~, BFI = 0. Rerun 2026-10-09 (HAND 0 and 0.5 m, d0 0.5 m, P 1,269 mm, daily): with capillary rise on, the residual is +278.0 mm = Σ capillary rise 278.4 mm; with it off, the residual is 0.0 mm and the table still reaches the surface with zero baseflow. Terrace: 587 mm of recharge stored in one year with no exit |
+| Constant R_ref = 3 mm/d sets baseflow at the initial state | **Initial-state/spin-up bias and calibration; not a leak** | `:88`, `:188-197` | Ridge cell: 339 mm recharge, 1,072 mm baseflow, Q > P − AET, balanced by a 732 mm storage loss. The linear reservoir has a stable equilibrium at head0·R̄/R_ref for any R̄ > 0; the 20-yr drift (hillslope 15 → 33.5 m, hollow 3 → 12.8 m, e-folding ~12 yr) is relaxation toward it |
+| Non-conservative clip of S | **Bound enforced by deleting water: a true leak** | `:251` | Silent sink at wet states |
+| Root-zone pores counted twice in the saturation-excess deficit | Process error in the runoff partition | `:230` vs `:235-236` | VSA almost never fires: deficit 1,500 mm at wt = 5 m |
+| Daily and monthly modes disagree | Numerical consistency | #89 | 4.7× in drainage |
+| Root-zone θ cannot reach saturation | Operator ordering | drainage before recording (`:247-253`) | Peak θ 0.39 against θ_sat 0.45 in a 200 mm atmospheric-river probe |
+
+Check the complete identity, storage change included, before calling a residual a leak. A missing process can reduce skill against gauges without violating conservation.
 
 The D7 calibration (S_y = 0.30, K_a = 2, R_ref = 3) was fitted with all of these active. It must be redone after the fixes.
 
@@ -55,7 +59,7 @@ The D7 calibration (S_y = 0.30, K_a = 2, R_ref = 3) was fitted with all of these
 `notebooks/calibrate_fluxes.py` fits K_a, R_ref and S_y on a 5×4×6 grid against BFI, Q/P, amplitude and peak month. It uses domain means over every sixth cell and one 10-month window (Sep 2025–Jun 2026) with no spin-up and no ΔS term. Every number in the book's "closed against observations" table (`docs/twin/03a-physics-hydrology.qmd:216-222`) is therefore a calibration target. Further problems:
 
 - S_y = 0.30 exceeds the Saxton–Rawls drainable porosity of loam (0.18) and clay loam (0.12). It is implausible for till uplands, where S_y ≈ 0.02–0.1.
-- Heads alone identify only R/S_y and R_ref/S_y. Jacobian condition numbers are 1.8–4.4×10⁴ for heads alone and 14–17 once discharge is added. θ carries no information about groundwater parameters wherever the table is deeper than z_r + 1 m.
+- Heads alone identify only R/S_y and R_ref/S_y (analytic scaling of the head equation; this stands). ~~Jacobian condition numbers are 1.8–4.4×10⁴ for heads alone and 14–17 once discharge is added.~~ **[Corrected 2026-10-09, C5]** Those condition numbers are unreproduced: the groundwater Jacobian script was overwritten before archiving, and `probes/da/ident.py` is an unrelated #169 probe. Do not use them as gates. θ carries no information about groundwater parameters wherever the table is deeper than z_r + 1 m.
 
 ### 3.3 Budget-term inventory for the Cascades–Puget domain
 
@@ -82,12 +86,10 @@ Hydrothermal inflow at Rainier is real but likely negligible in volume. It is us
 
 ### 3.4 What "closure" must mean
 
-**Level 1: per-column, per-step ledger.** State is water-equivalent storage:
+**Level 1: per-column, per-step ledger.** State is water-equivalent storage. **[Corrected 2026-10-09, C1]** Minimum: snow and canopy where applicable, root zone, deeper vadose storage, groundwater, and a transit or stream store if delayed outflow needs one, each with documented depth bounds and the physical volume it represents so nothing is counted twice. Add ice, perched and confined stores when the pilot observations or boundary conditions require them. ~~x = [ice, SWE, canopy, ponded, root zone, vadose transit, perched, unconfined aquifer, confined aquifer, channel]~~
 
-x = [ice, SWE, canopy, ponded, root zone, vadose transit, perched, unconfined aquifer, confined aquifer, channel]
-
-Every internal transfer is debited and credited. ΔΣx equals boundary fluxes plus logged DA increments. Gates:
-- residual ≤ 10⁻⁶ mm per step, accumulated in float64;
+Every internal transfer is debited from its donor and credited to its receiver by the same volume, limited by available water and receiver capacity. Recharge is internal when groundwater is in the domain. Forecast steps conserve: ΔΣx equals the reported boundary fluxes (rain, snowmelt, canopy and soil evaporation, transpiration, outlet discharge, boundary exchanges). Analysis steps are separate: a DA increment changes the estimated inventory, not a measured flux. Report it per store and reconcile the net correction over the evaluation window against uncertain rainfall, initial storage or boundary fluxes. Logging increments alone does not establish closure, and an analysis need not preserve the previous total when observations justify changing it. Gates:
+- ~~residual ≤ 10⁻⁶ mm per step, accumulated in float64;~~ **[Corrected 2026-10-09, C1]** initial and final inventories, every boundary flux, internal-transfer cancellation, bounds and cumulative error, with a tolerance derived from the arithmetic actually used: near machine precision for a float64 internal ledger, but no tighter than the quantisation of float32 outputs (the spacing is 6×10⁻⁵ mm at 1,000 mm) when the check is computed from saved fields;
 - a zero-forcing run creates nothing in any branch (legacy, HAND, valley, terrace, wt < 0, θ at bounds);
 - timestep refinement converges, or the monthly path is retired;
 - bounds are enforced by flux limiting, never by deleting water.
@@ -111,6 +113,8 @@ PRISM uncertainty in orographic terrain is roughly 10–30%, so ±10–15% annua
 
 ## 4. Target hydrologic model
 
+> **[Corrected 2026-10-09, C1]** **Required for the first implementation:** the shared store state and transfer rules of section 3.4, conservative reservoir or conductance closures for drainage and for a valley outlet, simple conservative routing to gauges, and observation operators at native support. Everything below the per-column list (2D Boussinesq, confined leakance, Muskingum–Cunge) is advisory scope, to be added when a measured deficiency or a consuming model requires it. Conservation does not need them; predictive skill may.
+
 **Per 90 m column:**
 1. glacier ice/firn (mask);
 2. SWE as a carried state, with rain-on-snow and liquid retention;
@@ -121,7 +125,7 @@ PRISM uncertainty in orographic terrain is roughly 10–30%, so ±10–15% annua
 7. perched/interflow store on the soil–bedrock or till contact, routed cell to cell.
 
 **On a hydrogeologic grid** (90 m for the shallow unconfined layer, 270 m–1 km for deep units):
-- unconfined aquifer with 2D Boussinesq flow;
+- unconfined aquifer (advisory: 2D Boussinesq flow; first implementation: a calibrated reservoir with a conductance outlet);
 - till leakance to a confined layer;
 - seepage-face exfiltration;
 - river-conductance exchange with NHDPlus reaches, in both directions;
@@ -166,7 +170,7 @@ Choosing among these is a human decision. Agents should not invent lateral groun
 - codameter band kernels are not normalised and have negative lobes, e.g. the 0.71 Hz band sums to −0.16 (hydromechanics family auditor);
 - the deep aggregate averages the posterior down to 6 km and then divides by K_SAT, which is not a head metric (`dvv.py:327-370`).
 
-Kernels must be computed per observed band on a realistic layered Vs0(z). Bands from roughly 4 to 40 Hz, from permanent stations, nodes and DAS, give the vadose and shallow-saturated sensitivity. rainier3d's synthetic gives half-sensitivity at 8.5–12 m at 10 Hz and 4–5 m at 40 Hz. The paper (~l.513) and `critical_zone.md:210` disagree on the storm amplitude, so do not adopt either number as an acceptance threshold until that is resolved.
+Kernels must be computed per observed band on a realistic layered Vs0(z). ~~Bands from roughly 4 to 40 Hz, from permanent stations, nodes and DAS, give the vadose and shallow-saturated sensitivity.~~ **[Corrected 2026-10-09, C3]** The archived probe's kernel grid starts at 5 m, so its "top-1 m" perturbation has no nodes and returns 0.000% in every band (rerun 2026-10-09). That is a representation defect, not zero sensitivity. Evaluate site-specific kernels for the bands actually observed on a grid that resolves the top metres, then assess forward sensitivity, noise and which state combinations are recoverable before prescribing acquisition. No universal frequency threshold follows from this probe, and sensitivity alone does not make individual layers resolvable. rainier3d's synthetic gives half-sensitivity at 8.5–12 m at 10 Hz and 4–5 m at 40 Hz. The paper (~l.513) and `critical_zone.md:210` disagree on the storm amplitude, so do not adopt either number as an acceptance threshold until that is resolved.
 
 **Decision on #198.** Port rainier3d's column *equations and discretisation* as the single reference forward operator. That means σ′(z) from column weight plus suction stress, the soft-sand/Hertz–Mindlin frame, Gassmann–Brie fluid substitution, disba kernels frozen at Vs0(z), and harmonic Vs30. Port it as a dependency-light twin module evaluated at station and footprint columns, not by importing the rainier3d package. Changes needed first:
 1. **Drive it with the twin state.** Use θ(z) or ψ(z) and head from the multi-store model, not hydrostatic equilibrium with a static water table. Fan 2017 tables more than 100 m deep under ridges make the near surface artificially dry.
@@ -223,8 +227,8 @@ Cost does not rule out regional Richards. Physics and identifiability do. A 38�
 
 **Recommended three-tier architecture:**
 1. **Static tier.** A 90 m critical-zone medium that sets store capacities.
-2. **Oracle tier.** Fixed Richards at every assimilated sensor column, serving as the depth operator shared by dv/v (#198) and factor of safety (#128). Also run it on a hydrologic-response-unit library of about 10³ classes (soil class × regolith depth × slope × HAND × cover × elevation band).
-3. **Cycling tier.** Mass-conserving stores per cell, with transfer parameters fitted to the oracle and regionalised against held-out gauges and wells. Lateral flow comes from a hillslope store everywhere on steep ground and an explicit 2D Dupuit layer where convergence matters, such as Landlab `GroundwaterDupuitPercolator`. Hillslope drainage times range from about 6 to 350 days, so lateral flow cannot be deferred.
+2. **Oracle tier.** **[Corrected 2026-10-09, C1]** Optional. ~~Fixed Richards at every assimilated sensor column~~ A fixed Richards column is a benchmark where a measured deficiency calls for it, not a prerequisite. The depth operator shared by dv/v (#198) and factor of safety (#128) is the documented depth mapping from the shared stores (section 4). Also run it on a hydrologic-response-unit library of about 10³ classes (soil class × regolith depth × slope × HAND × cover × elevation band).
+3. **Cycling tier.** Mass-conserving stores per cell, with transfer parameters fitted to the oracle and regionalised against held-out gauges and wells. Lateral flow comes from a hillslope store everywhere on steep ground and an explicit 2D Dupuit layer where convergence matters, such as Landlab `GroundwaterDupuitPercolator`. Hillslope drainage times range from about 6 to 350 days, so delayed outflow needs a store. **[Corrected 2026-10-09, C1]** A conservative hillslope reservoir with an outlet closure meets that; the explicit Dupuit layer is a later refinement.
 
 **Pilots: no single domain does both.**
 - **Budget-closure pilot first.** Use a rain-dominated lowland gauged basin with dense wells. Candidates are Newaukum Creek (12108500, 79 km², inside the twin grid) or Clarks Creek; *verify* geology and the sensor inventory. USGS returns zero continuous groundwater recorders in the boxes checked, so continuous records must come from the new ingest issue, Washington Ecology or county networks. A possible Osceola lahar cap on the Enumclaw plateau is both a confound and an opportunity for #228's lahar-cap slice.
@@ -234,7 +238,7 @@ Cost does not rule out regional Richards. Physics and identifiability do. A 38�
 
 ## 7. Data assimilation consistency
 
-The DA designs (#187, #188, #192, #194) are good textbook DA, but they sit on a model whose own leak (−43 to −102 mm per 300 days) is the size of a 1σ head increment (150 mm at S_y = 0.30). A DA-increment ledger cannot separate model leakage from correction. **#172 and the valley fix are hard prerequisites for #188, not just for release.**
+The DA designs (#187, #188, #192, #194) are good textbook DA, but they sit on a model whose own leak (−43 to −102 mm per 300 days) is the size of a 1σ head increment (150 mm at S_y = 0.30). A DA-increment ledger cannot separate model leakage from correction. **[Corrected 2026-10-09, C1]** Runnable assimilation depends on the repaired model and the observation operators it actually uses, not on every physics issue. **#172 and the valley fix are hard prerequisites for #188, not just for release.**
 
 What #187 should state:
 - **Storage vs head.** With fixed per-cell S_y the two are equivalent. Storage matters for the mm ledger, for uncertain S_y, and once a vadose store exists.
@@ -334,7 +338,7 @@ Agent-ready today: 19. The full table is in `issue_verdicts.json`. Issues judged
 - whole-system water ledger and conservation harness;
 - valley HAND < d0 sink and seepage face;
 - SWE as a carried state, with rain-on-snow;
-- lateral groundwater, two-way stream exchange and pumping, behind a design decision;
+- lateral groundwater, two-way stream exchange and pumping, behind a design decision (advisory scope, C1; a conservative outlet closure comes first);
 - calibration and validation harness: basin masks, model-hydrograph BFI, held-out manifest;
 - continuous groundwater-recorder ingest;
 - multi-year R_ref drift and spin-up test;
@@ -343,13 +347,13 @@ Agent-ready today: 19. The full table is in `issue_verdicts.json`. Issues judged
 **GWL and DA:**
 - Stage-3 DTW sign inversion (P0);
 - per-domain CV mechanics with no duplicate folds;
-- full/block R with Cholesky;
+- full/block R with Cholesky (test against the analytic posterior B·r/(r+N·B); redundant observations by deduplication, not Cholesky; C7);
 - OU τ estimated per state and domain;
 - temporally correlated observation error;
-- OSSE hygiene: a nature run through the #198 operator.
+- OSSE hygiene: a nature run through the #198 operator (acceptance does not require a non-zero innovation mean; C6).
 
 **Rainier and hydromechanics:**
-- port and fix the Richards oracle;
+- port and fix the Richards oracle (optional benchmark, C1);
 - 90 m critical-zone static build and HRU library;
 - pilot-selection decision record;
 - v0.4 static rebuild before #223;
@@ -357,7 +361,7 @@ Agent-ready today: 19. The full table is in `issue_verdicts.json`. Issues judged
 - merge the leverage review with a staleness note;
 - kernel normalisation;
 - non-hydrologic dv/v confounders: temperature, snow and atmospheric loading, tides;
-- band-observability requirement for vadose dv/v.
+- ~~band-observability requirement for vadose dv/v~~ site-specific band-sensitivity and resolution assessment on a shallow-resolving kernel grid (C3).
 
 **Hazards:**
 - deterministic discharge-hindcast pilot decoupled from #191;
@@ -381,6 +385,8 @@ Agent-ready today: 19. The full table is in `issue_verdicts.json`. Issues judged
 
 "L" is the new ledger issue, "V" the valley-sink issue, "SWE" the snow-state issue, and "G" the v0.4 static rebuild.
 
+> **[Corrected 2026-10-09, C2]** This table and `issues/water-budget-core.md` gave #176 and #198 opposite directions, and `issue_verdicts.json` gave #100 a blocker of #137 while 137 is blocked by 100. Each pair is a cycle. Canonical resolution: split #198 into 198a (non-hysteretic operator), 198b (hysteretic mode) and 198c (DA through the operator); #176 needs 198a only, and 198b needs #176. #100 is blocked by #70, not #137. The live table is in `scripts/gaia_group_issues.py` on PR #272 using real issue numbers (L = #232, V = #233, SWE = #234, G = #268); check it against this one before dispatch.
+
 ```
 187: [186, 52, 89, 137, 172, L]      # drop epic 171
 188: [187, 189, 172, V, 89, 186]
@@ -389,12 +395,14 @@ Agent-ready today: 19. The full table is in `issue_verdicts.json`. Issues judged
 172: [L]
 175: [L, V]
 137: [172, 173, 174, 175, 131, 100, 89]
-89, 100: [70]                         # verifier: #100 blocks on #70, not #137
+89, 100: [70]                         # verifier: #100 blocks on #70, not #137 (C2: JSON now agrees)
 130: [172, 174]
 133: [130, 174]
-176: [172, 131, 198]
-198: [172, 187]
-45, 50, 30, 85, 165: [198]
+176: [172, 131, 198a]                 # C2: basic operator only
+198a: [172, 187]                      # non-hysteretic operator; never waits on #176
+198b: [176, 198a]                     # hysteretic mode
+198c: [187, 188, 164, 165, 198a]      # DA through the operator
+45, 50, 30, 85, 165: [198a]
 162: [188, 169]                       # #161 folded into #188
 226: [187, 189, 100]
 223: [G]
@@ -439,6 +447,7 @@ Agent-ready today: 19. The full table is in `issue_verdicts.json`. Issues judged
 
 ## 11. Caveats
 
+- **[Corrected 2026-10-09, C5, C8]** Probe census 2026-10-09 (twin at `435445f`, rainier3d at `d61305c`): 28 of the 29 archived probes execute; `verify-da-physics-coupling/sub.py` fails because the groundwater Jacobian script it reads was never archived. `probes/scale/bench_365.json` now writes `null` plus `failure_reason` instead of `NaN`, and `issue_verdicts.json` carries machine-readable `final_verdict` values with explanations in `final_verdict_note`.
 - Probes use synthetic forcing and uniform soils, so magnitudes scale with real forcing. The mechanisms follow directly from the code.
 - The domain fraction of cells with HAND ≤ d0 has not been computed; the domain rasters were not available. It is likely large on Puget valley fill.
 - Compiled and GPU costs, the Zhu et al. coefficients, DHSVM and ParFlow details, Link et al. 2004 and the Newaukum inventory are marked *verify*.

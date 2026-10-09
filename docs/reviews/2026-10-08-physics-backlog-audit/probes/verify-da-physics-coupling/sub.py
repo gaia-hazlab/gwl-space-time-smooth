@@ -1,3 +1,6 @@
+# BROKEN (2026-10-09, Codex review of PR #229, C5): reads ../wf/da/ident.py, the groundwater
+# Jacobian probe, which was overwritten in the scratch tree and never archived. Raises
+# FileNotFoundError. The condition numbers it reproduced are therefore unreproduced.
 import sys, numpy as np, itertools
 sys.path.insert(0,'.')
 exec(open('../wf/da/ident.py').read().split("for cname")[0])

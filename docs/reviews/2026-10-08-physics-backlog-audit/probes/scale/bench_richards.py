@@ -40,12 +40,12 @@ for name,(base,free) in {"30m_fixedWT10m":(30,False),"30m_free":(30,True),"150m_
     t=time.perf_counter()
     try:
         H,tot=RI.run(c,h0,r,3600.0,[0.1,900],1e-4,100,24)
-        ok=True
+        ok=True; reason=None
     except RuntimeError as e:
-        ok=str(e); tot={}
+        ok=False; reason=str(e); tot={}
     dt=time.perf_counter()-t
+    mm=lambda k: 1000*float(tot[k]) if k in tot else None  # null, not NaN, when unavailable
     out[name]=dict(nlayers=len(c.z), days=days, rain_mm=float(r.sum()*3600*1000), wall_s=dt,
-                   s_per_column_day=dt/days, ok=ok,
-                   mb_err_mm=1000*tot.get("mass_balance_error",np.nan),
-                   runoff_mm=1000*tot.get("runoff",np.nan), bottom_mm=1000*tot.get("bottom",np.nan))
-print(json.dumps(out, indent=1))
+                   s_per_column_day=dt/days, ok=ok, failure_reason=reason,
+                   mb_err_mm=mm("mass_balance_error"), runoff_mm=mm("runoff"), bottom_mm=mm("bottom"))
+print(json.dumps(out, indent=1, allow_nan=False))
