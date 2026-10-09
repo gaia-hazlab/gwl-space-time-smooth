@@ -1,0 +1,36 @@
+{
+ "30m_fixedWT10m": {
+  "nlayers": 38,
+  "days": 365,
+  "rain_mm": 1759.5081300418433,
+  "wall_s": 10.154812323045917,
+  "s_per_column_day": 0.027821403624783334,
+  "ok": true,
+  "mb_err_mm": 0.007167196953261623,
+  "runoff_mm": 0.0,
+  "bottom_mm": 699.3854762315854
+ },
+ "30m_free": {
+  "nlayers": 38,
+  "days": 365,
+  "rain_mm": 1759.5081300418433,
+  "wall_s": 0.01031769800465554,
+  "s_per_column_day": 2.826766576617956e-05,
+  "mb_err_mm": null,
+  "runoff_mm": null,
+  "bottom_mm": null,
+  "failure_reason": "Richards step failed at the minimum time step",
+  "ok": false
+ },
+ "150m_fixedWT10m": {
+  "nlayers": 52,
+  "days": 365,
+  "rain_mm": 1759.5081300418433,
+  "wall_s": 11.181429772055708,
+  "s_per_column_day": 0.030634054170015638,
+  "ok": true,
+  "mb_err_mm": 0.7422795994664888,
+  "runoff_mm": 0.0,
+  "bottom_mm": 249.3840760513844
+ }
+}
