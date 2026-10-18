@@ -76,6 +76,12 @@ Each parameter is pinned by a **different** observation — `S_y` ← amplitude,
 2. **The first calibration objective omitted the amplitude**, so `specific_yield` was unconstrained,
    drifted to the grid edge, and gave a 5.4 m seasonal swing. Fluxes right, storage wrong.
 
+**What this closure is, read 2026-10-18:** a three-parameter store-model fit. The six mountain
+gauge basins that set BFI and Q/P contain **zero** NWIS wells; only Newaukum Creek (21) and Clarks
+Creek (16) have any (count in the MODFLOW plan, section 2). The amplitude match therefore compares a
+domain-wide model with lowland wells outside most of the calibration basins. Superseded as the
+groundwater model by MODFLOW 6; kept as a skill baseline.
+
 **Honest residuals:** the fitted `Ka = 2` is *below* the 10–100 literature range for forest-soil
 anisotropy (flagged in code). And the peak is one month **late** — note the direction: an unsaturated
 travel-time lag (#87) would make it **worse**, which independently confirms #87 was correctly demoted.
@@ -83,6 +89,28 @@ travel-time lag (#87) would make it **worse**, which independently confirms #87 
 ---
 
 ## The plan, in order
+
+### Groundwater core: MODFLOW 6 ← **NEXT** (decided 2026-10-18)
+
+The PI replaced the water-balance store model with MODFLOW 6 below the root zone. The record is
+[`docs/reviews/2026-10-18-modflow-groundwater-core/plan.md`](docs/reviews/2026-10-18-modflow-groundwater-core/plan.md)
+(design record = issue #265; review round 1 in the same folder). It supersedes the 2026-10-08
+decision to keep the light store model as the DA model.
+
+| | |
+|---|---|
+| Components | 90 m land-surface model (snow, canopy, root zone) over MODFLOW 6 GWF + UZF + SFR, one ledger |
+| Partition | MF6 top at the root base; drainage down, seepage and groundwater ET up |
+| Grid | DIS cells of k × 90 m nested in the ledger grid; k from a convergence study |
+| Layers | hydrostratigraphic units; geometry uncertainty as realizations |
+| Watersheds | one GWF model per watershed, GWF–GWF exchanges where aquifers cross divides |
+| Time | daily stress periods on the PRISM day, WY2001 onward |
+| DA | PEST++ IES for parameters; ensemble filter through modflowapi for states; one role per well-year |
+| Pilot | Enumclaw plateau around Newaukum Creek (12108500), pending #269 |
+
+Milestones: *Groundwater model: MODFLOW 6 hydrogeologic core* (A), *Groundwater model: scale-out to
+the western-Cascades watersheds* (B); DA issues stay in *Applied math*. Superseded bucket issues
+carry the `superseded` label and are held by the queue.
 
 ### v0.4 — Domain extension: western Cascades ([milestone](../../milestone/3)) — **DONE**
 
@@ -119,7 +147,7 @@ the one least able to constrain the parameter that matters. Calibrating there wo
 | D8 | [#100](../../issues/100) Snow clock | ✅ Calibrated on **30 SNOTEL SWE stations**. Objective had to be **melt-out timing, not RMSE** — RMSE picked a melt factor so slow the pack lingered to June and pushed melt to May. |
 | D7 | [#98](../../issues/98) Flux calibration | ✅ **Closes #88 and #90.** BFI 0.52/0.47, Q/P 0.71, amplitude 1.02/1.06 m. |
 
-### v0.5 — Eastern Cascades: Stehekin ([milestone](../../milestone/4)) ← **NEXT**
+### v0.5 — Eastern Cascades: Stehekin ([milestone](../../milestone/4)) ← after the MODFLOW pilot
 
 Deliberately separate: **not a bigger bbox, different hydrology.** East of the crest it is
 rain-shadowed and **snowmelt-dominated** (spring/summer peak, not the western autumn/winter rain
@@ -160,6 +188,9 @@ forward-operator data plane. The timescale + footprint separation is what makes 
 ---
 
 ## Open physics debts (blocking the water table)
+
+*As of 2026-10-18 the groundwater items below are superseded by the MODFLOW 6 core (#89 included);
+the table is kept as history.*
 
 | issue | what | status |
 |---|---|---|
@@ -203,6 +234,10 @@ forward-operator data plane. The timescale + footprint separation is what makes 
     **melt-out timing** recovered the April peak.
 
 ---
+
+12. **A calibration gauge with no wells cannot pin a water table.** The six mountain gauge basins
+    contain zero NWIS wells. Count the observations inside the control volume before claiming a
+    state is constrained.
 
 ## Compute
 
