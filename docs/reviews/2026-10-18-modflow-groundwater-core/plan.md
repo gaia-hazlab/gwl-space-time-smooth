@@ -92,7 +92,7 @@ base, booked in the ledger like seepage. A 1-D valley column with the table cros
 base, run under options A and B against the Richards reference (#267), checks head continuity,
 D (within 0.1 m) and the upward flux. Upland stormflow that moves laterally in colluvium inside
 the root zone is an LSM process (#174), not MODFLOW. This is the same soil-zone-over-UZF split
-that GSFLOW uses (reference pending verification, §8).
+that GSFLOW uses (Markstrom et al. 2008, doi:10.3133/tm6D1).
 
 **Option A (benchmark variant):** MF6 top = land surface, UZF owns the whole unsaturated
 column including root-zone ET, and the LSM keeps only snow and canopy. One ledger, simpler
@@ -123,8 +123,11 @@ Holocene alluvium / Vashon recessional outwash; Vashon till (aquitard, perched w
 Vashon advance outwash; pre-Vashon fine-grained units; older coarse units; bedrock. Uplands:
 colluvium, weathered bedrock, fractured bedrock with K decreasing with depth. Absent units are
 vertical pass-through cells (MF6 `IDOMAIN = -1`). Mapped lahar deposits (Osceola/Electron) are
-their own unit (#264). Sources: published Puget Sound framework surfaces (MF-02), WA Ecology
-well reports (MF-03), DNR geology (#21). Geometry uncertainty (surface elevations, till
+their own unit (#264). Sources: the 13-layer framework of USGS SIR 2024-5026 (Welch et al. 2024;
+model by Long et al. 2024, MODFLOW-NWT, 500 ft cells, King and Pierce counties) inside its
+footprint (MF-21), the regional Puget Sound framework (Vaccaro et al. 1998) outside it (MF-02),
+WA Ecology well reports (MF-03; locations accurate only to the section, about 1.6 km), DNR
+geology (#21). Geometry uncertainty (surface elevations, till
 continuity) enters as framework realizations conditioned on the logs (MF-18), not only as K
 perturbations. Perched water above the till or the lahar cap uses NPF `VARIABLECV DEWATERED`
 with `PERCHED` (#130). Glacial sediments reach several hundred metres in southwestern King
@@ -253,8 +256,10 @@ layering; the Osceola lahar cap (#264) makes most plateau wells semiconfined, a 
 of layer-aware operators. With 11 wells of ≥12 months the calibration is thin, so MF-03 adds
 static levels at well completion as steady-state targets, and MF-10 runs a wells-blind control
 (calibrate on the gauge alone, score the wells). Alternative: Clarks
-Creek (12102078, 16 wells), spring-fed from the Puyallup valley wall. A published USGS model in
-the pilot area, if one exists, is the benchmark and the starting framework (§8).
+Creek (12102078, 16 wells), spring-fed from the Puyallup valley wall. Benchmark and starting
+framework: the USGS southeast Puget Sound model (SIR 2024-5026, archive doi:10.5066/P9LU1PMQ),
+if MF-21 shows its footprint covers the pilot. No USGS model specific to Newaukum Creek or the
+Enumclaw plateau was found.
 
 The Rainier hydromechanics sub-box stays second: no heads there, so it is the test of whether
 gauges + dv/v + GNSS constrain basin storage without wells (MF-14).
@@ -286,6 +291,9 @@ gauges + dv/v + GNSS constrain basin storage without wells (MF-14).
 | MF-18 | Hydrostratigraphic framework realizations (geometry uncertainty) | A | P1 | MF-02, MF-03 |
 | MF-19 | Lakes and reservoirs: LAK package with stage observations | B | P1 | MF-13 |
 | MF-20 | ParFlow-CLM benchmark on the pilot (HydroFrame CONUS2 subset) | A | P2, needs-human-decision | MF-08 |
+| MF-21 | Ingest the USGS SE Puget Sound model (SIR 2024-5026), convert to MF6, rerun as benchmark | A | P1 | MF-01 |
+
+**Issue numbers (created 2026-10-18):** MF-00 = #274 · MF-01 = #275 · MF-02 = #276 · MF-03 = #277 · MF-04 = #278 · MF-05 = #279 · MF-06 = #280 · MF-07 = #281 · MF-08 = #282 · MF-09 = #283 · MF-10 = #284 · MF-11 = #285 · MF-12 = #286 · MF-13 = #287 · MF-14 = #288 · MF-15 = #289 · MF-16 = #290 · MF-17 = #291 · MF-18 = #292 · MF-19 = #293 · MF-20 = #294 · MF-21 = #295.
 
 Milestone A = "Groundwater model: MODFLOW 6 hydrogeologic core". Milestone B = "Groundwater
 model: scale-out to the western-Cascades watersheds".
@@ -371,13 +379,42 @@ that central point is superseded. Adopted from it:
 | A domain-wide steady-state IES at 270 m as an early water-table prior | recorded as an alternative ordering; this plan validates the pilot first and runs the domain-wide steady state as the first step of MF-13 |
 | ACE2 / HiRO-ACE scenario forcing and the possible ACE2-precipitation correction in `fetch_earth2studio.py` | out of scope here; belongs with #71 |
 
-## 9. References (verification pending)
+## 9. References
 
-To be filled from Crossref-verified records only; anything unverified is marked so and kept out
-of `docs/references.bib`. Items: MODFLOW 6 GWF (Langevin et al. 2017), UZF and SFR documentation,
-FloPy (Bakker et al. 2016), MODFLOW 6 BMI / modflowapi, PEST++ v5 and IES, pyEMU, GSFLOW
-(Markstrom et al. 2008), Vaccaro et al. 1998 Puget Sound framework, any USGS model in the pilot
-area, Haitjema & Mitchell-Bruker 2005 (already in `docs/references.bib`).
+DOIs resolved on the Crossref API or the doi.org handle API on 2026-10-18 by a verification
+agent; not yet added to `docs/references.bib` (each addition must pass
+`pixi run check-dois-metadata`).
+
+| Item | DOI |
+|---|---|
+| MODFLOW 6 GWF, Langevin et al. 2017, TM 6-A55 (also documents UZF and SFR) | 10.3133/tm6A55 |
+| MODFLOW 6 IMS, Hughes et al. 2017, TM 6-A57 | 10.3133/tm6A57 |
+| UZF1, Niswonger et al. 2006, TM 6-A19 | 10.3133/tm6A19 |
+| SFR2, Niswonger & Prudic 2005, TM 6-A13 | 10.3133/tm6A13 |
+| FloPy, Bakker et al. 2016, Groundwater | 10.1111/gwat.12413 |
+| FloPy workflows, Hughes et al., Groundwater | 10.1111/gwat.13327 |
+| MODFLOW API, Hughes et al. 2022, Environ. Model. Softw. | 10.1016/j.envsoft.2021.105257 |
+| MODFLOW as a configurable multi-model hydrologic simulator, Langevin et al., Groundwater | 10.1111/gwat.13351 |
+| PEST++ v5, White et al. 2020, TM 7-C26 (pestpp-da does sequential cycles) | 10.3133/tm7C26 |
+| Iterative ensemble smoother, White 2018, Environ. Model. Softw. | 10.1016/j.envsoft.2018.06.009 |
+| pyEMU, White, Fienen & Doherty 2016, Environ. Model. Softw. | 10.1016/j.envsoft.2016.08.017 |
+| GSFLOW, Markstrom et al. 2008, TM 6-D1 | 10.3133/tm6D1 |
+| SFRmaker, Leaf et al. 2021, Groundwater | 10.1111/gwat.13095 |
+| Puget Sound aquifer framework, Vaccaro, Hansen & Jones 1998, PP 1424-D | 10.3133/pp1424D |
+| SE Puget Sound framework, Welch et al. 2024, SIR 2024-5026 ch. A–C | 10.3133/sir20245026v1 |
+| SE Puget Sound model, Long et al. 2024, SIR 2024-5026 ch. D–E; archive | 10.3133/sir20245026v2; 10.5066/P9LU1PMQ |
+| Puyallup framework, Welch et al. 2015 | 10.3133/sir20155068 |
+| Chambers–Clover Creek model, Johnson et al. 2011 | 10.3133/sir20115086 |
+| Ambient-noise groundwater tracking, Clements & Denolle 2018, GRL | 10.1029/2018GL077706 |
+| GNSS loading, Washington and Oregon, Fu, Argus & Landerer 2015, JGR | 10.1002/2014JB011415 |
+| Heads and flows in PEST++ IES, White et al. 2020, Front. Earth Sci. | 10.3389/feart.2020.00050 |
+| Haitjema & Mitchell-Bruker 2005 | already in `docs/references.bib` |
+
+Tooling facts from the same check: conda-forge `modflow6` 6.8.1 is a serial build (parallel
+needs the extended PETSc/MPI build, compiled on Hyak); pyEMU on conda-forge is stale at 1.4.0
+(PyPI 1.7.0); modflowapi returns heads as a read-only copy, writes go through xmipy. No
+precedent was found for assimilating GRACE or SMAP directly into a MODFLOW model; the closest
+are land-surface and integrated-model studies.
 
 ## 10. Questions for the reviewers
 
