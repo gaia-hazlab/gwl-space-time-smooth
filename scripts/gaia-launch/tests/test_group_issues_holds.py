@@ -41,6 +41,17 @@ class BodyBlockers(unittest.TestCase):
         self.assertEqual(gg.body_blockers(None), [])
 
 
+class Cycles(unittest.TestCase):
+    def test_acyclic(self):
+        self.assertEqual(gg.dependency_cycles({1: [2], 2: [3], 3: []}), [])
+
+    def test_two_cycle_and_self_free(self):
+        self.assertEqual(gg.dependency_cycles({5: [6], 6: [5], 7: [5]}), [[5, 6]])
+
+    def test_blocker_outside_graph_is_ignored(self):
+        self.assertEqual(gg.dependency_cycles({1: [99]}), [])
+
+
 class Queue(unittest.TestCase):
     def test_needs_human_decision_is_held(self):
         batches, err = run([issue(10, ["P1", "needs-human-decision"], "M"), issue(11, ["P1"], "M")])
@@ -58,6 +69,29 @@ class Queue(unittest.TestCase):
         self.assertEqual(batches, [[20]])
         batches, _ = run([issue(21, ["P1"], "M", "Blocked by: #20.")])  # 20 closed
         self.assertEqual(batches, [[21]])
+
+    def test_compute_and_superseded_are_held(self):
+        batches, err = run([issue(30, ["P1", "needs-compute"], "M"), issue(31, ["P1", "superseded"], "M"),
+                            issue(32, ["P1"], "M")])
+        self.assertEqual(batches, [[32]])
+        self.assertIn("#30", err)
+        self.assertIn("#31", err)
+
+    def test_cycle_is_reported_and_held(self):
+        batches, err = run([issue(40, ["P1"], "M", "Blocked by: #42."), issue(41, ["P1"], "M", "Blocked by: #40."),
+                            issue(42, ["P1"], "M", "Blocked by: #41."), issue(43, ["P1"], "M")])
+        self.assertEqual(batches, [[43]])
+        self.assertIn("dependency cycle", err)
+        self.assertIn("#40 -> #42 -> #41 -> #40", err)
+
+    def test_cycle_through_unselected_issue_is_still_reported(self):
+        with mock.patch.dict(os.environ, {"GAIA_ONLY_ISSUES": "50"}):
+            batches, err = run([issue(50, ["P1"], "M", "Blocked by: #51."), issue(51, ["P1"], "M", "Blocked by: #50.")])
+        self.assertEqual(batches, [])
+        self.assertIn("dependency cycle", err)
+
+    def test_table_is_empty_bodies_are_the_list(self):
+        self.assertEqual(gg.BLOCKED_BY, {})
 
     def test_oldest_first_within_group(self):
         batches, _ = run([issue(175, ["P1"], "M"), issue(172, ["P1"], "M"), issue(173, ["P1"], "M")])

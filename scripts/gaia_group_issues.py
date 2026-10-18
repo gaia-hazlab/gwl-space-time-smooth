@@ -16,14 +16,14 @@ priority) member, P0 first.
 
 Issues labeled "epic" are trackers, never work items, and are excluded.
 
-Cross-issue dependencies (BLOCKED_BY, below) come from the probabilistic
-nowcast/forecast dependency graph in
-docs/probabilistic-nowcast-forecast-roadmap.md. An issue with an open
-blocker is held out of this run's batches entirely -- it never gets
-chunked alongside ready work, regardless of milestone/topic grouping --
-so the automated queue can't dispatch e.g. #188 (cycling DA) before #187
-(the canonical contract it's built on) merely because grouping put them
-in the same milestone batch. Held-back issues are logged to stderr, not
+Cross-issue dependencies come from the issue bodies: every "Blocked by:" line in
+the current scope of a body (text above the first <details>, which holds archived
+scope). Issue bodies are the single dependency list; BLOCKED_BY below is an empty
+override hook kept for emergencies, so the scheduler, the issue prose and any review
+record cannot drift apart. An issue with an open blocker is held out of this run's
+batches entirely -- it never gets chunked alongside ready work, regardless of
+milestone/topic grouping. Issues on a dependency cycle are reported, since a cycle
+holds all of its members forever. Held-back issues are logged to stderr, not
 silently dropped.
 
 Emits one JSON object per line (JSONL) to stdout:
@@ -40,7 +40,7 @@ MAX_BATCH = 4
 PRIORITY_RANK = {"P0": 0, "P1": 1, "P2": 2}
 
 TOPIC_LABEL_PRIORITY = [
-    "dv-v", "water-budget", "geotech", "landlab", "stage-3", "stage-2",
+    "modflow", "dv-v", "water-budget", "geotech", "landlab", "stage-3", "stage-2",
     "stage-1", "hydrogeology", "soil-reanalysis", "atmospheric",
     "uncertainty", "validation", "peer-review", "documentation", "bug",
     "enhancement",
@@ -56,7 +56,8 @@ TOPIC_LABEL_PRIORITY = [
 # (or which have no milestone -- topic/solo batches) sort after all listed milestones.
 MILESTONE_ORDER = [
     "Software: CI, tests, reproducibility, scale",
-    "Water budget: vadose-zone physics & calibration",
+    "Groundwater model: MODFLOW 6 hydrogeologic core",
+    "Water budget: land surface and root zone (feeds MODFLOW 6)",
     "Applied math: DA estimator correctness",
     "v0.2 — Hydrogeologic realism",
     "v0.3 — Vs30 densification (SVM → 90 m, obs-anchored)",
@@ -66,6 +67,7 @@ MILESTONE_ORDER = [
     "v0.7 — Probabilistic nowcast and ensemble forecast",
     "Hazard: LandLab landslide handoff",
     "Hazard: Sanger-Maurer liquefaction framework",
+    "Groundwater model: scale-out to the western-Cascades watersheds",
     "Hazard: flood / inundation handoff",
 ]
 
@@ -78,68 +80,12 @@ def milestone_rank(milestone):
     """Position in MILESTONE_ORDER; unlisted/None sorts after all listed milestones."""
     return _MILESTONE_RANK.get(milestone, len(MILESTONE_ORDER))
 
-# Direct blockers only (not transitively expanded) -- an issue is held back
-# if ANY of its listed blockers is still open. Transitive blocking falls
-# out naturally: #188 blocks on #187, and #192 blocks on #188, so #192
-# stays held back for as long as #187 does too, without needing to list
-# #187 again under #192.
-BLOCKED_BY = {
-    # Audited table, 2026-10-08 physics and backlog audit (docs/reviews/2026-10-08-physics-backlog-audit/,
-    # approved by the PI). Leaf issues only -- never an epic, which only a human closes.
-    # 232 water ledger, 233 valley sink, 234 snow state, 235 recorders+holdouts, 236 cal/val harness,
-    # 237 gauge flux operator, 247 kernel sanity, 260 liquefaction decision, 263 lapse rate,
-    # 265 hydrologic-core design record, 268 v0.4 static rebuild, 270 value-of-information gate.
-    187: [52],                                # schema draft; release gates are in the issue body
-    188: [187, 189, 155, 156, 232, 233],
-    189: [187, 9],
-    192: [188],
-    194: [192],
-    191: [188],
-    190: [187, 121, 198],
-    193: [187],
-    195: [191, 194],
-    203: [187, 188, 191],
-    205: [194],
-    172: [232, 265],
-    131: [172],
-    173: [172],
-    174: [172, 265],
-    175: [232, 233],
-    137: [172, 173, 174, 175, 131, 100, 89, 235, 236],
-    89: [70],
-    100: [70, 234],
-    130: [172, 174],
-    133: [130, 174],
-    176: [172, 131, 198],
-    198: [172, 187, 247],
-    45: [198],
-    50: [198],
-    30: [198],
-    162: [188, 169],
-    123: [162, 169],
-    121: [124],
-    122: [134],
-    132: [134],
-    226: [187, 189, 100, 172],
-    223: [268],
-    224: [223, 128],
-    225: [172],
-    227: [223, 232, 234, 263],
-    129: [128],
-    141: [260, 270],
-    142: [137, 9],
-    82: [81],
-    83: [81],
-    84: [81],
-    86: [81, 84],
-    200: [187],
-    201: [232, 237],
-    202: [201],
-    99: [100],
-    47: [21, 9],
-    7: [186],
-    6: [235],
-}
+# Emergency override only. Issue bodies are the dependency list ("Blocked by:" lines,
+# see body_blockers); entries here are unioned with them. The 2026-10-08 audited table
+# that used to live here was diffed against the bodies on 2026-10-18 and matched except
+# #191 -> #188, which was written into #191's body before the table was emptied
+# (docs/reviews/2026-10-18-modflow-groundwater-core/plan.md, section 6.4).
+BLOCKED_BY = {}
 
 
 def slug(text):
@@ -148,7 +94,10 @@ def slug(text):
 
 # Issues carrying any of these labels are human-held: never dispatched, even when selected
 # explicitly with GAIA_ONLY_ISSUES. Releasing the hold means removing the label.
-HOLD_LABELS = {"needs-human-decision"}
+# needs-compute: a production run (ensemble, multi-hour model) that a human launches on
+# Hyak, not an agent session. superseded: replaced by another issue and awaiting the PI's
+# decision to close; it must never be worked, and must not be anybody's blocker.
+HOLD_LABELS = {"needs-human-decision", "needs-compute", "superseded"}
 
 _BLOCKED_LINE = re.compile(r"^\s*\**Blocked by\**:?\**\s*(.*)$", re.IGNORECASE | re.MULTILINE)
 
@@ -166,6 +115,39 @@ def body_blockers(body):
     for line in _BLOCKED_LINE.findall(current):
         found += [int(n) for n in re.findall(r"#(\d+)", line)]
     return sorted(set(found))
+
+
+def dependency_cycles(edges):
+    """Cycles in {issue: [blockers]} restricted to open issues, each as a list of numbers.
+
+    Iterative DFS with an explicit stack, so a long chain cannot hit the recursion limit.
+    Each cycle is reported once, rotated to start at its smallest member.
+    """
+    color, cycles, seen = {}, [], set()
+    for root in sorted(edges):
+        if color.get(root):
+            continue
+        stack, path = [(root, iter(sorted(edges.get(root, ()))))], [root]
+        color[root] = 1
+        while stack:
+            node, it = stack[-1]
+            nxt = next(it, None)
+            if nxt is None:
+                color[node] = 2
+                stack.pop()
+                path.pop()
+            elif color.get(nxt) == 1:
+                cyc = path[path.index(nxt):]
+                k = cyc.index(min(cyc))
+                cyc = tuple(cyc[k:] + cyc[:k])
+                if cyc not in seen:
+                    seen.add(cyc)
+                    cycles.append(list(cyc))
+            elif not color.get(nxt) and nxt in edges:
+                color[nxt] = 1
+                stack.append((nxt, iter(sorted(edges.get(nxt, ())))))
+                path.append(nxt)
+    return cycles
 
 
 def fetch_issues():
@@ -218,6 +200,7 @@ def main():
     # and silently disable the hold-back guard -- the exact class of quiet degradation
     # this repo keeps having to design against.
     open_numbers = {issue["number"] for issue in issues}
+    all_issues = list(issues)
 
     only = only_issues()
     if only is not None:
@@ -232,6 +215,15 @@ def main():
         else:
             print("GAIA_ONLY_ISSUES: restricting this run to "
                   + ", ".join("#" + str(i["number"]) for i in issues), file=sys.stderr)
+
+    # Judged on every open issue, like blockers: a cycle through an unselected issue still
+    # holds the selected one.
+    edges = {i["number"]: sorted((set(BLOCKED_BY.get(i["number"], [])) | set(body_blockers(i.get("body"))))
+                                 & open_numbers - {i["number"]})
+             for i in all_issues}
+    for cyc in dependency_cycles(edges):
+        print("dependency cycle (every member is held until it is broken): "
+              + " -> ".join("#" + str(n) for n in cyc + cyc[:1]), file=sys.stderr)
 
     groups = {}
 
