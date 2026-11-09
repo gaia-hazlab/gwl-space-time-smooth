@@ -1,17 +1,17 @@
 # Tracker: soil-state validation ladder
 
-Regenerated 2026-11-09 14:09Z by `scripts/review_tracker.py` from GitHub. Outcome and evidence columns come from `outcomes.json` (hand-maintained by the PR that completes a row); state, blockers and dates come from GitHub. Record: `README.md` in this folder; epic: gaia-hazlab/gwl-space-time-smooth#296.
+Regenerated 2026-11-09 14:11Z by `scripts/review_tracker.py` from GitHub. Outcome and evidence columns come from `outcomes.json` (hand-maintained by the PR that completes a row); state, blockers and dates come from GitHub. Record: `README.md` in this folder; epic: gaia-hazlab/gwl-space-time-smooth#296.
 
 ## Ladder
 
 | key | issue | type | batch | blocked by | state | outcome | evidence | date |
 |---|---|---|---|---|---|---|---|---|
 | R0 | gwl-space-time-smooth#296 | epic | 0 | none | open |  |  | 2026-11-09 |
-| L1 | gwl-space-time-smooth#297 | experiment | 0 | none | open | fail (defect confirmed): +0.2464 mm/d created at DTW 1.5 m, 79.3 mm/yr; valley cell without sink reaches the surface on day 158 from rain alone | results/l1_closed_column.json; tests/test_ledger_legacy.py (xfail strict on combined conservation) | 2026-11-09 |
-| L2 | gwl-space-time-smooth#298 | experiment | 0 | none | open | fail (defect confirmed): segmented snow run loses 50 of 150 mm melt; no state argument; theta_ref post-step; centring leakage -0.30 m; two snow models differ on 60 of 120 days | results/l2_reinitialisation.json; tests/test_forecast_restart_legacy.py (xfail strict on segmented equivalence) | 2026-11-09 |
-| U1 | gwl-space-time-smooth#299 | experiment | 0 | none | open | sensitivity recorded: P(min DTW over 1.8 km < 1 m) 0.08-0.55 coherent vs 0.75-0.99 independent across 18 configurations | results/u1_dependence_sensitivity.json; tests/test_dependence_sensitivity.py | 2026-11-09 |
-| C1 | gwl-space-time-smooth#300 | experiment | 0 | none | open | confirmed: Landlab 2.10.1 LandslideProbability lists none of the exported fields; failure probability monotone in recharge mean (0.0071 at 20 mm/d to 0.0279 at 60 mm/d, then saturated); outputs bit-identical under x0.5 and x2 of exported DTW, saturation and recharge-rate fields | results/c1_landlab_causal.json; tests/test_landlab_consumer.py (skips without landlab) | 2026-11-09 |
-| P1 | gwl-space-time-smooth#301 | experiment | 0 | none | open | measured 34.5 ns per cell-step (one member); 400^2 tile 2.18 s; 800^2 refused by preflight; domain member-year projected 56 s; full history 113 GB if allocated | results/p1_bounded_performance.json | 2026-11-09 |
+| L1 | gwl-space-time-smooth#297 | experiment | 0 | none | PR | fail (defect confirmed): +0.2464 mm/d created at DTW 1.5 m, 79.3 mm/yr; valley cell without sink reaches the surface on day 158 from rain alone | results/l1_closed_column.json; tests/test_ledger_legacy.py (xfail strict on combined conservation) | 2026-11-09 |
+| L2 | gwl-space-time-smooth#298 | experiment | 0 | none | PR | fail (defect confirmed): segmented snow run loses 50 of 150 mm melt; no state argument; theta_ref post-step; centring leakage -0.30 m; two snow models differ on 60 of 120 days | results/l2_reinitialisation.json; tests/test_forecast_restart_legacy.py (xfail strict on segmented equivalence) | 2026-11-09 |
+| U1 | gwl-space-time-smooth#299 | experiment | 0 | none | PR | sensitivity recorded: P(min DTW over 1.8 km < 1 m) 0.08-0.55 coherent vs 0.75-0.99 independent across 18 configurations | results/u1_dependence_sensitivity.json; tests/test_dependence_sensitivity.py | 2026-11-09 |
+| C1 | gwl-space-time-smooth#300 | experiment | 0 | none | PR | confirmed: Landlab 2.10.1 LandslideProbability lists none of the exported fields; failure probability monotone in recharge mean (0.0071 at 20 mm/d to 0.0279 at 60 mm/d, then saturated); outputs bit-identical under x0.5 and x2 of exported DTW, saturation and recharge-rate fields | results/c1_landlab_causal.json; tests/test_landlab_consumer.py (skips without landlab) | 2026-11-09 |
+| P1 | gwl-space-time-smooth#301 | experiment | 0 | none | PR | measured 34.5 ns per cell-step (one member); 400^2 tile 2.18 s; 800^2 refused by preflight; domain member-year projected 56 s; full history 113 GB if allocated | results/p1_bounded_performance.json | 2026-11-09 |
 | H1 | hydrostate#1 | experiment | 0 | none | open |  |  | 2026-11-09 |
 | H2 | hydrostate#2 | docs | 0 | none | open |  |  | 2026-11-09 |
 | M1 | mechanicalstate#1 | experiment | 0 | none | open |  |  | 2026-11-09 |
