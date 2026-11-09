@@ -1,0 +1,430 @@
+{
+ "issue": "gaia-hazlab/gwl-space-time-smooth#297",
+ "scope": "legacy store model diagnostic; not an MF6 acceptance test",
+ "commit": "be670b253f9f94891f5853b87dba562861c9bbc3",
+ "source_sha256": "4889732934b673671df914f37a196b905e04cd23ba4db90316b09e841396129e",
+ "parameters": {
+  "theta_wp": 0.1,
+  "theta_fc": 0.28,
+  "theta_sat": 0.45,
+  "root_depth_m": 1.0,
+  "specific_yield": 0.3,
+  "cap_max_mm_per_month": 30.0,
+  "cap_fringe_m": 1.0,
+  "init": "wp"
+ },
+ "float32_rounding_bound_mm": 2.9802322387695312e-05,
+ "analytic_expectation_mm_day1": {
+  "dtw_0.5": 0.7392348918868971,
+  "dtw_1.5": 0.24641163062896568,
+  "dtw_2.5": 0.0
+ },
+ "cases": [
+  {
+   "name": "primary_nonoverlap_dtw1.5",
+   "dtw0_m": 1.5,
+   "days": 1,
+   "hand_m": null,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 0.24641454219818115,
+     "residual_sum_mm": 0.24641454219818115,
+     "cap_rise_sum_mm": 0.24641163647174835,
+     "soil_change_mm": 0.24641454219818115,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 1.5,
+     "wt_depth_min_m": 1.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 1.5,
+     "wt_depth_min_m": 1.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  },
+  {
+   "name": "primary_nonoverlap_dtw1.5_365d",
+   "dtw0_m": 1.5,
+   "days": 365,
+   "hand_m": null,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 0.24641454219818115,
+     "residual_sum_mm": 79.33808267116547,
+     "cap_rise_sum_mm": 79.33807720243931,
+     "soil_change_mm": 79.33808267116547,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 1.5,
+     "wt_depth_min_m": 1.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 1.5,
+     "wt_depth_min_m": 1.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  },
+  {
+   "name": "overlap_dtw0.5",
+   "dtw0_m": 0.5,
+   "days": 1,
+   "hand_m": null,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 0.7392331957817078,
+     "residual_sum_mm": 0.7392331957817078,
+     "cap_rise_sum_mm": 0.7392348647117615,
+     "soil_change_mm": 0.7392331957817078,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 0.5,
+     "wt_depth_min_m": 0.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 0.5,
+     "wt_depth_min_m": 0.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  },
+  {
+   "name": "overlap_dtw0.5_365d",
+   "dtw0_m": 0.5,
+   "days": 365,
+   "hand_m": null,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 0.7392331957817078,
+     "residual_sum_mm": 188.46154974206001,
+     "cap_rise_sum_mm": 188.46155327558517,
+     "soil_change_mm": 180.5597484111786,
+     "aquifer_change_mm": 7.421815395355225,
+     "recharge_sum_mm": 7.901805050671101,
+     "baseflow_sum_mm": 0.4799859355262015,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 0.4752606153488159,
+     "wt_depth_min_m": 0.4752606153488159,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 0.5,
+     "wt_depth_min_m": 0.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  },
+  {
+   "name": "negative_control_dtw2.5",
+   "dtw0_m": 2.5,
+   "days": 1,
+   "hand_m": null,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 2.5,
+     "wt_depth_min_m": 2.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 2.5,
+     "wt_depth_min_m": 2.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  },
+  {
+   "name": "negative_control_dtw2.5_365d",
+   "dtw0_m": 2.5,
+   "days": 365,
+   "hand_m": null,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 2.5,
+     "wt_depth_min_m": 2.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 2.5,
+     "wt_depth_min_m": 2.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  },
+  {
+   "name": "valley_hand0_rain5_365d",
+   "dtw0_m": 2.0,
+   "days": 365,
+   "liquid_mm_day": 5.0,
+   "hand_m": 0.0,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": -3.2782554626464844e-06,
+     "residual_sum_mm": 126.82115375995635,
+     "cap_rise_sum_mm": 126.82116655027494,
+     "soil_change_mm": 180.73477745056152,
+     "aquifer_change_mm": 709.1160982847214,
+     "recharge_sum_mm": 709.1160999536514,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 1061.9702780246735,
+     "wt_depth_final_m": -0.3637203276157379,
+     "wt_depth_min_m": -0.3637203276157379,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": 153
+    },
+    "capillary_off": {
+     "residual_day1_mm": -3.2782554626464844e-06,
+     "residual_sum_mm": 1.4305114675039476e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 180.0000011920929,
+     "aquifer_change_mm": 607.7074706554413,
+     "recharge_sum_mm": 607.7074704886433,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 1037.2925295829773,
+     "wt_depth_final_m": -0.025691568851470947,
+     "wt_depth_min_m": -0.025691568851470947,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": 158
+    }
+   }
+  },
+  {
+   "name": "valley_hand0_norain_365d_dtw2.0",
+   "dtw0_m": 2.0,
+   "days": 365,
+   "hand_m": 0.0,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 2.0,
+     "wt_depth_min_m": 2.0,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 2.0,
+     "wt_depth_min_m": 2.0,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  },
+  {
+   "name": "valley_hand0_norain_365d_dtw1.5",
+   "dtw0_m": 1.5,
+   "days": 365,
+   "hand_m": 0.0,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 0.24641454219818115,
+     "residual_sum_mm": 79.33808267116547,
+     "cap_rise_sum_mm": 79.33807720243931,
+     "soil_change_mm": 79.33808267116547,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 1.5,
+     "wt_depth_min_m": 1.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 1.5,
+     "wt_depth_min_m": 1.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  },
+  {
+   "name": "valley_hand0_norain_365d_dtw0.5",
+   "dtw0_m": 0.5,
+   "days": 365,
+   "hand_m": 0.0,
+   "rows": {
+    "capillary_on": {
+     "residual_day1_mm": 0.7392331957817078,
+     "residual_sum_mm": 188.464292883873,
+     "cap_rise_sum_mm": 188.46428591012955,
+     "soil_change_mm": 180.5602252483368,
+     "aquifer_change_mm": 7.904067635536194,
+     "recharge_sum_mm": 7.904067404568195,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 0.473653107881546,
+     "wt_depth_min_m": 0.473653107881546,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    },
+    "capillary_off": {
+     "residual_day1_mm": 1.4901161193847656e-06,
+     "residual_sum_mm": 1.4901161193847656e-06,
+     "cap_rise_sum_mm": 0.0,
+     "soil_change_mm": 1.4901161193847656e-06,
+     "aquifer_change_mm": 0.0,
+     "recharge_sum_mm": 0.0,
+     "baseflow_sum_mm": 0.0,
+     "aet_sum_mm": 0.0,
+     "runoff_sum_mm": 0.0,
+     "wt_depth_final_m": 0.5,
+     "wt_depth_min_m": 0.5,
+     "head_monotone_rise": true,
+     "first_day_table_at_surface": null
+    }
+   }
+  }
+ ],
+ "storage_bound": {
+  "valid_forcing_days_x_cells": 73000,
+  "pre_clip_excursions": 0,
+  "invalid_negative_rain_theta_min": 0.10000000149011612,
+  "note": "six days of -50 mm/d from field capacity (280 mm) would reach -20 mm; the clip at line 251 holds theta at the wilting point and raises nothing"
+ },
+ "timestep": {
+  "dt_1.0": {
+   "drainage_total_mm": 104.62326908111572,
+   "theta_final": 0.295376718044281
+  },
+  "dt_0.25": {
+   "drainage_total_mm": 101.27050596475601,
+   "theta_final": 0.29872947931289673
+  },
+  "relative_difference": -0.032046055775224125
+ },
+ "domain_context": {
+  "available": true,
+  "file": "data/processed/baseline_dtw_m.tif",
+  "cells_finite": 440011,
+  "fraction_dtw_below_3m": 0.009276289050857561,
+  "fraction_dtw_below_2m": 0.00536158452326117,
+  "note": "legacy baseline raster on disk (July 2026); DTW < root base + 2 m marks cells where option B's upward exchange matters"
+ }
+}
