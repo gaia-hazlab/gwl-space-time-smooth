@@ -1,0 +1,64 @@
+{
+ "issue": "gaia-hazlab/gwl-space-time-smooth#300",
+ "landlab_version": "2.10.1",
+ "python": "3.11.15",
+ "input_var_names": [
+  "soil__density",
+  "soil__internal_friction_angle",
+  "soil__maximum_total_cohesion",
+  "soil__minimum_total_cohesion",
+  "soil__mode_total_cohesion",
+  "soil__saturated_hydraulic_conductivity",
+  "soil__thickness",
+  "soil__transmissivity",
+  "topographic__slope",
+  "topographic__specific_contributing_area"
+ ],
+ "output_var_names": [
+  "landslide__probability_of_failure",
+  "soil__mean_relative_wetness",
+  "soil__probability_of_saturation"
+ ],
+ "exported_fields_among_inputs": [],
+ "positive_control": [
+  {
+   "recharge_mean_mm_day": 20.0,
+   "p_fail_core_mean": 0.007115384492163475,
+   "mean_rel_wetness": 0.5802111445370528
+  },
+  {
+   "recharge_mean_mm_day": 60.0,
+   "p_fail_core_mean": 0.02788461587176873,
+   "mean_rel_wetness": 0.6923076923076923
+  },
+  {
+   "recharge_mean_mm_day": 120.0,
+   "p_fail_core_mean": 0.02788461587176873,
+   "mean_rel_wetness": 0.6923076923076923
+  },
+  {
+   "recharge_mean_mm_day": 240.0,
+   "p_fail_core_mean": 0.02788461587176873,
+   "mean_rel_wetness": 0.6923076923076923
+  }
+ ],
+ "positive_control_monotone": true,
+ "causal_test_max_abs_difference": {
+  "scale_0.5": {
+   "landslide__probability_of_failure": 0.0,
+   "soil__probability_of_saturation": 0.0,
+   "soil__mean_relative_wetness": 0.0
+  },
+  "scale_2.0": {
+   "landslide__probability_of_failure": 0.0,
+   "soil__probability_of_saturation": 0.0,
+   "soil__mean_relative_wetness": 0.0
+  }
+ },
+ "outputs_invariant_to_exported_fields": true,
+ "layers": {
+  "file_readability": "landlab_export writes ESRI ASCII + manifest; parsed by tests/test_landlab_export.py",
+  "executable_api_coupling": "component instantiated here; consumes recharge distribution, T or Ksat, slope, area, cohesion, density, thickness, friction angle",
+  "scientific_validation": "none here; needs an inventory (#224, #129)"
+ }
+}

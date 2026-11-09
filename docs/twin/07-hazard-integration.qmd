@@ -56,9 +56,12 @@ perched or transient saturated zone** on a hillslope, the **regional phreatic wa
 triggers a shallow failure while the twin's well network mostly sees the second. Collapsing them into
 one generic "GWL" would put the wrong pressure on the failure plane.
 
-The export contract is unchanged — LandLab's `LandslideProbability` takes `water_table__depth` and
-forms its own relative wetness — but the DTW we ship should be read as a *derived hydrologic input
-under stated assumptions*, not as the mechanical driver itself. #127/#128 own closing that gap.
+The export contract is unchanged, but the consumer named in the manifest does not read it: LandLab's
+`LandslideProbability` forms relative wetness from a sampled recharge distribution, transmissivity,
+contributing area and slope, and has no `water_table__depth` input (official source; executed in #300,
+where scaling the exported fields leaves its outputs bit-identical). The DTW we ship is therefore a
+*derived hydrologic input under stated assumptions* for the twin's own FS kernel (#128), not an input to
+the stock component. #127 owns the adapter decision.
 :::
 
 ## Liquefaction: seasonal-high depth to water, and Vs30 → NEHRP site-class probability
