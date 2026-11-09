@@ -1,0 +1,71 @@
+{
+ "issue": "gaia-hazlab/gwl-space-time-smooth#298",
+ "commit": "be670b253f9f94891f5853b87dba562861c9bbc3",
+ "sources_sha256": {
+  "forecast.py": "0e248afa3a6ab0cf126eae8ef186c9daef52b37593e0b628f7f393544b026ad3",
+  "water_budget.py": "4889732934b673671df914f37a196b905e04cd23ba4db90316b09e841396129e",
+  "hysteresis.py": "48a0ddf518aed71723017d228fc9c3560fabd01e20e24308e2129094fcf4fbf1",
+  "gwl_dynamic.py": "6bd5076937925221c564a7bec6f67d0a003b20b57a9b52fd1e8e1f023a1d837c",
+  "soil_moisture.py": "351bc62068e53117036a5faf0f428ab404a41767136ef3edd0341ca0f529fe6c"
+ },
+ "snow_restart": {
+  "melt_days_21_30_continuous_mm": 150.0,
+  "melt_days_21_30_segmented_mm": 100.0,
+  "swe_available_continuous_mm": 200.0,
+  "swe_available_segmented_mm": 100.0,
+  "melt_capacity_days_21_30_mm": 150.0,
+  "forecast_signature_has_state_argument": false,
+  "budget_signature_has_initial_arrays": false,
+  "budget_init_choices": "init in {'fc', anything else -> wp}; wt_depth0_m only; head anomaly starts at 0"
+ },
+ "theta_ref": {
+  "theta_initial_fc": 0.28,
+  "theta_after_step1": 0.29182735085487366,
+  "theta_ref_equals_post_step_state": true,
+  "dvv_high_step1_is_zero_by_construction": 0.0
+ },
+ "budget_segmented": {
+  "theta_day20_continuous": 0.29078996181488037,
+  "theta_day20_segmented": 0.290717750787735,
+  "wt_day20_continuous_m": 2.5917584896087646,
+  "wt_day20_segmented_m": 2.6153464317321777,
+  "note": "root storage cannot be handed over (init is a label), the legacy recession reference resets to the new wt_depth0"
+ },
+ "hysteresis_branch": {
+  "signature": "(theta_traj: 'ArrayLike', env: 'CouplingEnvelope', wetting_ratio: 'float' = 2.0, start: 'str' = 'drying') -> 'NDArray[np.float64]'",
+  "dvv_at_theta_0.40_continuous": -0.2559310403700025,
+  "dvv_at_theta_0.40_entered_mid_wetting": -0.1348600006595116,
+  "difference": -0.12107103971049094,
+  "note": "each call starts from theta[0] on the default branch; the reversal memory is not carried across calls"
+ },
+ "centring_leakage": {
+  "anomaly_at_issue_whole_window_m": 0.22499999999999964,
+  "anomaly_at_issue_frozen_baseline_m": 0.5250000000000004,
+  "leakage_shift_m": -0.3000000000000007,
+  "trend_m_per_year": 0.6
+ },
+ "two_snow_models": {
+  "callable": true,
+  "liquid_total_forecast_model_mm": 457.90775044451055,
+  "liquid_total_soil_moisture_model_mm": 509.622484177351,
+  "max_abs_daily_difference_mm": 8.61689474288779,
+  "days_with_different_liquid": 60,
+  "final_swe_soil_moisture_model_mm": 210.3775149861051,
+  "soil_moisture_signature": "(precip_mm, tmean_c, days_in_month, ddf=3.0, t_snow_hi=3.0, t_snow_lo=-1.0, t_melt=0.0)",
+  "forecast_params": {
+   "DDF": 3.0,
+   "T_SNOW_LO": 0.0,
+   "T_SNOW_HI": 4.0,
+   "T_MELT": 1.0
+  },
+  "soil_moisture_params": {
+   "DEFAULT_OM_PCT": 2.5,
+   "DEFAULT_ROOT_DEPTH_M": 1.0,
+   "TARGET_RES_M": 90.0,
+   "_DDF_MM_PER_C_DAY": 3.0,
+   "_T_MELT": 0.0,
+   "_T_SNOW_HI": 3.0,
+   "_T_SNOW_LO": -1.0
+  }
+ }
+}
