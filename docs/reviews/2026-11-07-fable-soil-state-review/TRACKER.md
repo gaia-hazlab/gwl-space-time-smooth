@@ -1,12 +1,12 @@
 # Tracker: soil-state validation ladder
 
-Regenerated 2026-11-09 14:11Z by `scripts/review_tracker.py` from GitHub. Outcome and evidence columns come from `outcomes.json` (hand-maintained by the PR that completes a row); state, blockers and dates come from GitHub. Record: `README.md` in this folder; epic: gaia-hazlab/gwl-space-time-smooth#296.
+Regenerated 2026-11-09 17:36Z by `scripts/review_tracker.py` from GitHub. Outcome and evidence columns come from `outcomes.json` (hand-maintained by the PR that completes a row); state, blockers and dates come from GitHub. Record: `README.md` in this folder; epic: gaia-hazlab/gwl-space-time-smooth#296.
 
 ## Ladder
 
 | key | issue | type | batch | blocked by | state | outcome | evidence | date |
 |---|---|---|---|---|---|---|---|---|
-| R0 | gwl-space-time-smooth#296 | epic | 0 | none | open |  |  | 2026-11-09 |
+| R0 | gwl-space-time-smooth#296 | epic | 0 | none | PR |  |  | 2026-11-09 |
 | L1 | gwl-space-time-smooth#297 | experiment | 0 | none | PR | fail (defect confirmed): +0.2464 mm/d created at DTW 1.5 m, 79.3 mm/yr; valley cell without sink reaches the surface on day 158 from rain alone | results/l1_closed_column.json; tests/test_ledger_legacy.py (xfail strict on combined conservation) | 2026-11-09 |
 | L2 | gwl-space-time-smooth#298 | experiment | 0 | none | PR | fail (defect confirmed): segmented snow run loses 50 of 150 mm melt; no state argument; theta_ref post-step; centring leakage -0.30 m; two snow models differ on 60 of 120 days | results/l2_reinitialisation.json; tests/test_forecast_restart_legacy.py (xfail strict on segmented equivalence) | 2026-11-09 |
 | U1 | gwl-space-time-smooth#299 | experiment | 0 | none | PR | sensitivity recorded: P(min DTW over 1.8 km < 1 m) 0.08-0.55 coherent vs 0.75-0.99 independent across 18 configurations | results/u1_dependence_sensitivity.json; tests/test_dependence_sensitivity.py | 2026-11-09 |
@@ -19,7 +19,7 @@ Regenerated 2026-11-09 14:11Z by `scripts/review_tracker.py` from GitHub. Outcom
 | X2 | gwl-space-time-smooth#303 | experiment | 1 | #275 | open |  |  | 2026-11-09 |
 | Q1 | gwl-space-time-smooth#307 | decision | 2 | #302 | held |  |  | 2026-11-09 |
 | Q2 | gwl-space-time-smooth#308 | decision | 2 | #303 | held |  |  | 2026-11-09 |
-| Q3 | gwl-space-time-smooth#309 | decision | 2 | #298 | held |  |  | 2026-11-09 |
+| Q3 | gwl-space-time-smooth#309 | decision | 2 | #298 | held | awaiting PI decision; draft record posted recommending option (a): forecast.liquid_input owns snow, coupled_water_budget owns the root zone, soil_moisture pair wrapped then deleted | issues/Q3-decision-draft.md; https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/309#issuecomment-6746956342 | 2026-11-09 |
 | Q4 | gwl-space-time-smooth#310 | decision | 2 | #302 | held |  |  | 2026-11-09 |
 | X3 | gwl-space-time-smooth#304 | experiment | 4 | #289 | open |  |  | 2026-11-09 |
 | B188 | gwl-space-time-smooth#306 | feature | 4 | #9, #188, #235, #285 | open |  |  | 2026-11-09 |
