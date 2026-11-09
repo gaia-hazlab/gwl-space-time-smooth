@@ -1,0 +1,386 @@
+{
+ "issue": "gaia-hazlab/gwl-space-time-smooth#299",
+ "scope": "synthetic Matern prior, linear point operator, no model error; sensitivity of a compound statistic to sampling dependence, not a calibration claim",
+ "commit": "be670b253f9f94891f5853b87dba562861c9bbc3",
+ "observability_sha256": "661dd36a40946de80d8596542069e92edd02bb85a219d0b849b8371309ad2ff7",
+ "setup": {
+  "cells": 200,
+  "dx_km": 0.09,
+  "sigma_prior_m": 0.5,
+  "wells": [
+   20,
+   60,
+   100,
+   140,
+   180
+  ],
+  "obs_dtw_m": 1.2,
+  "prior_dtw_m": 1.5,
+  "reach_cells": [
+   90,
+   109
+  ],
+  "thresholds_m": {
+   "min": 1.0,
+   "mean": 1.25
+  },
+  "draws": 10000,
+  "seed": 11
+ },
+ "repo_matern_cross_check_max_abs_diff": {
+  "L4.0_nu0.5": 3.3306690738754696e-16,
+  "L4.0_nu1.5": 5.551115123125783e-16,
+  "L4.0_nu2.5": 5.551115123125783e-16,
+  "L12.0_nu0.5": 5.551115123125783e-16,
+  "L12.0_nu1.5": 5.551115123125783e-16,
+  "L12.0_nu2.5": 6.661338147750939e-16,
+  "L24.0_nu0.5": 5.551115123125783e-16,
+  "L24.0_nu1.5": 5.551115123125783e-16,
+  "L24.0_nu2.5": 6.661338147750939e-16
+ },
+ "rows": [
+  {
+   "L_km": 4.0,
+   "nu": 0.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.5479,
+    "independent": 0.9881,
+    "se": 0.0010843611022164168,
+    "ratio_ind_over_coh": 1.8034312830808539
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.494,
+    "independent": 0.4808,
+    "se": 0.004999639987039067,
+    "ratio_ind_over_coh": 0.9732793522267207
+   },
+   "posterior_sigma_reach_mean_m": 0.30921363654824957,
+   "posterior_corr_reach_ends": 0.3155987022537991
+  },
+  {
+   "L_km": 4.0,
+   "nu": 0.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.4695,
+    "independent": 0.9894,
+    "se": 0.0010240917927607882,
+    "ratio_ind_over_coh": 2.1073482428115016
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.4184,
+    "independent": 0.2344,
+    "se": 0.0049329650312970996,
+    "ratio_ind_over_coh": 0.5602294455066922
+   },
+   "posterior_sigma_reach_mean_m": 0.37861372755534833,
+   "posterior_corr_reach_ends": 0.4716149504272811
+  },
+  {
+   "L_km": 4.0,
+   "nu": 1.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.292,
+    "independent": 0.977,
+    "se": 0.001499033021650958,
+    "ratio_ind_over_coh": 3.345890410958904
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.5146,
+    "independent": 0.571,
+    "se": 0.004949333288433908,
+    "ratio_ind_over_coh": 1.1095996890788962
+   },
+   "posterior_sigma_reach_mean_m": 0.25465285195678616,
+   "posterior_corr_reach_ends": 0.5632686593026387
+  },
+  {
+   "L_km": 4.0,
+   "nu": 1.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.3048,
+    "independent": 0.9858,
+    "se": 0.0011831466519413385,
+    "ratio_ind_over_coh": 3.234251968503937
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.4531,
+    "independent": 0.2822,
+    "se": 0.004977955303134008,
+    "ratio_ind_over_coh": 0.6228205694107262
+   },
+   "posterior_sigma_reach_mean_m": 0.34338412661267415,
+   "posterior_corr_reach_ends": 0.7101103376049833
+  },
+  {
+   "L_km": 4.0,
+   "nu": 2.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.2504,
+    "independent": 0.9715,
+    "se": 0.001663963641429703,
+    "ratio_ind_over_coh": 3.8797923322683707
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.5167,
+    "independent": 0.5789,
+    "se": 0.004937355466238987,
+    "ratio_ind_over_coh": 1.1203793303657827
+   },
+   "posterior_sigma_reach_mean_m": 0.24457698503227202,
+   "posterior_corr_reach_ends": 0.6858595703512722
+  },
+  {
+   "L_km": 4.0,
+   "nu": 2.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.2649,
+    "independent": 0.986,
+    "se": 0.0011749042514179618,
+    "ratio_ind_over_coh": 3.722159305398263
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.4433,
+    "independent": 0.2875,
+    "se": 0.004967747074882134,
+    "ratio_ind_over_coh": 0.648545003383713
+   },
+   "posterior_sigma_reach_mean_m": 0.3354689915512004,
+   "posterior_corr_reach_ends": 0.7851758826691634
+  },
+  {
+   "L_km": 12.0,
+   "nu": 0.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.4142,
+    "independent": 0.9788,
+    "se": 0.001440505466841414,
+    "ratio_ind_over_coh": 2.3631096088845966
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.5485,
+    "independent": 0.6803,
+    "se": 0.004663602791833798,
+    "ratio_ind_over_coh": 1.240291704649043
+   },
+   "posterior_sigma_reach_mean_m": 0.24200855189828832,
+   "posterior_corr_reach_ends": 0.5414323036534485
+  },
+  {
+   "L_km": 12.0,
+   "nu": 0.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.3777,
+    "independent": 0.9884,
+    "se": 0.0010707679487171836,
+    "ratio_ind_over_coh": 2.616891712999735
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.4793,
+    "independent": 0.3938,
+    "se": 0.004995713262388064,
+    "ratio_ind_over_coh": 0.8216148549968704
+   },
+   "posterior_sigma_reach_mean_m": 0.3137671054168711,
+   "posterior_corr_reach_ends": 0.6957803705094038
+  },
+  {
+   "L_km": 12.0,
+   "nu": 1.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.1707,
+    "independent": 0.9222,
+    "se": 0.002678566034280282,
+    "ratio_ind_over_coh": 5.402460456942004
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.587,
+    "independent": 0.8185,
+    "se": 0.0038543190059983357,
+    "ratio_ind_over_coh": 1.3943781942078366
+   },
+   "posterior_sigma_reach_mean_m": 0.18324888555853264,
+   "posterior_corr_reach_ends": 0.8931205341133513
+  },
+  {
+   "L_km": 12.0,
+   "nu": 1.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.2091,
+    "independent": 0.9729,
+    "se": 0.0016237484411077972,
+    "ratio_ind_over_coh": 4.652797704447632
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.4925,
+    "independent": 0.4739,
+    "se": 0.004999437468355815,
+    "ratio_ind_over_coh": 0.962233502538071
+   },
+   "posterior_sigma_reach_mean_m": 0.2633418002694825,
+   "posterior_corr_reach_ends": 0.9316543949036121
+  },
+  {
+   "L_km": 12.0,
+   "nu": 2.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.136,
+    "independent": 0.8955,
+    "se": 0.003059080744275967,
+    "ratio_ind_over_coh": 6.584558823529411
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.5856,
+    "independent": 0.8526,
+    "se": 0.0035450421718225015,
+    "ratio_ind_over_coh": 1.4559426229508197
+   },
+   "posterior_sigma_reach_mean_m": 0.17040915488338365,
+   "posterior_corr_reach_ends": 0.9387431068527161
+  },
+  {
+   "L_km": 12.0,
+   "nu": 2.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.1946,
+    "independent": 0.9702,
+    "se": 0.001700351728319763,
+    "ratio_ind_over_coh": 4.985611510791367
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.4986,
+    "independent": 0.4893,
+    "se": 0.004999980399961584,
+    "ratio_ind_over_coh": 0.9813477737665464
+   },
+   "posterior_sigma_reach_mean_m": 0.25222534434007604,
+   "posterior_corr_reach_ends": 0.9571819798951534
+  },
+  {
+   "L_km": 24.0,
+   "nu": 0.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.3197,
+    "independent": 0.9564,
+    "se": 0.002042034279829797,
+    "ratio_ind_over_coh": 2.99155458242102
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.5658,
+    "independent": 0.742,
+    "se": 0.004375339986789598,
+    "ratio_ind_over_coh": 1.311417462000707
+   },
+   "posterior_sigma_reach_mean_m": 0.20737072444952592,
+   "posterior_corr_reach_ends": 0.6598081741830929
+  },
+  {
+   "L_km": 24.0,
+   "nu": 0.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.3152,
+    "independent": 0.9795,
+    "se": 0.001417030345476058,
+    "ratio_ind_over_coh": 3.10755076142132
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.4915,
+    "independent": 0.4341,
+    "se": 0.00499927744779183,
+    "ratio_ind_over_coh": 0.8832146490335707
+   },
+   "posterior_sigma_reach_mean_m": 0.2785843717903843,
+   "posterior_corr_reach_ends": 0.7947042162307453
+  },
+  {
+   "L_km": 24.0,
+   "nu": 1.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.0956,
+    "independent": 0.8058,
+    "se": 0.003955835689206518,
+    "ratio_ind_over_coh": 8.428870292887028
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.5904,
+    "independent": 0.8517,
+    "se": 0.0035539711591401524,
+    "ratio_ind_over_coh": 1.4425813008130082
+   },
+   "posterior_sigma_reach_mean_m": 0.15181403702041163,
+   "posterior_corr_reach_ends": 0.9532416293534705
+  },
+  {
+   "L_km": 24.0,
+   "nu": 1.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.1591,
+    "independent": 0.9517,
+    "se": 0.0021439941697681923,
+    "ratio_ind_over_coh": 5.981772470144564
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.4938,
+    "independent": 0.4705,
+    "se": 0.004999615585222528,
+    "ratio_ind_over_coh": 0.952814904819765
+   },
+   "posterior_sigma_reach_mean_m": 0.23370459121851153,
+   "posterior_corr_reach_ends": 0.9739715254139396
+  },
+  {
+   "L_km": 24.0,
+   "nu": 2.5,
+   "R_m2": 0.1,
+   "P_min_reach_below_1m": {
+    "coherent": 0.0814,
+    "independent": 0.7513,
+    "se": 0.004322595400913669,
+    "ratio_ind_over_coh": 9.22972972972973
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.5897,
+    "independent": 0.8551,
+    "se": 0.0035199998579545427,
+    "ratio_ind_over_coh": 1.4500593522129896
+   },
+   "posterior_sigma_reach_mean_m": 0.14434828075709003,
+   "posterior_corr_reach_ends": 0.9705106078134151
+  },
+  {
+   "L_km": 24.0,
+   "nu": 2.5,
+   "R_m2": 0.3,
+   "P_min_reach_below_1m": {
+    "coherent": 0.1525,
+    "independent": 0.9377,
+    "se": 0.0024169962763728047,
+    "ratio_ind_over_coh": 6.1488524590163935
+   },
+   "P_mean_reach_below_1.25m": {
+    "coherent": 0.5007,
+    "independent": 0.4707,
+    "se": 0.004999995099997599,
+    "ratio_ind_over_coh": 0.9400838825644098
+   },
+   "posterior_sigma_reach_mean_m": 0.2281438907263814,
+   "posterior_corr_reach_ends": 0.9837308113801494
+  }
+ ],
+ "production_path_note": "src/models/observability.py:151-153 states the matrix-free path yields only diag(C_post): no samples and no cross-cell covariance; the coherent column above is therefore unavailable at domain scale today"
+}
