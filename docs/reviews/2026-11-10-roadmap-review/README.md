@@ -359,3 +359,20 @@ of which new: #331, #332, #337, #344, #350.
   #130 as a blocker and #264 as advisory only, because #264's chain runs through the Rainier adapter #223.
 - Held for the PI by label on creation: #333, #341, #336, #338, #342, #346, #321, #328, #330.
 - Not done: `ROADMAP.md` is unchanged (its "Act" row gains wildfire only if #349 passes); no PR was opened for this branch.
+
+## 8. Follow-up of 2026-11-11
+
+- **Correction to sections 1, 2 and 5.** Merging PR #272 does not by itself release the 44 issues
+  that carry "Blocked by: none (beyond the queue-guard PR, #231)". Their blocker is issue #231
+  being open, and PR #272 refers to it without closing it: its body lists what is "Still open in
+  #231" (the September runner fixes and defaulting to `Refs`). The release needs PR #272 merged
+  and then #231 closed by the PI, or its remaining scope split into a new issue first.
+- **PR #272 not merged by this session.** The `protect-main` ruleset requires an approving review;
+  the repository owner is its bypass actor (PRs #217 to #221 were merged that way). The session's
+  permission layer refused the bypass merge, so the merge is left to the PI. State read today:
+  checks `test` and `check-dois` pass, 0 commits behind `main`, both Copilot comments answered by
+  commit `618fea9`. Use a merge commit and keep the branch, because PR #273 is based on it.
+- **Design record #265 restated** (`issues/RESTATE-265-design-record.md`; before and after in
+  `issues/amendments/`): section A is what approval fixes, section B lists 15 questions that stay
+  open with the test or decision that settles each, section C lists what was added since
+  2026-10-18. The `needs-human-decision` label is untouched.
