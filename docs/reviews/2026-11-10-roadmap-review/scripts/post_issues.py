@@ -43,7 +43,7 @@ def parse(path):
     labels = [l for l in LABELS if re.search(r"(?<![\w-])" + re.escape(l) + r"(?![\w-])", lab_txt)]
     if "P1 (proposed" in lab_txt:
         labels = [l for l in labels if l != "P2"]
-    notes = [s.strip() for s in re.split(r"(?<=\.)\s", head) if s.strip() and not s.startswith(("Milestone", "Labels", "Proposed new milestone"))]
+    notes = [s.strip() for s in re.split(r"(?<=\.)\s", head) if s.strip() and not s.strip().startswith(("Milestone", "Labels", "Proposed new milestone"))]
     body = "\n".join(lines[head_end:]).strip()
     return key, title, ms, labels, notes, body
 

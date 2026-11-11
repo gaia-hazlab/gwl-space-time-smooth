@@ -304,3 +304,58 @@ NEW-W2, NEW-U2, NEW-E2.
 - The Earthnote map was not rendered; I read its repository and confirmed the bucket answers.
 - Closed issues and merged PRs were not audited.
 - The hydrostate and mechanicalstate repositories were not re-read.
+
+## 7. Posted to GitHub on 2026-11-11 (PI instruction: amend, push, post)
+
+Done by `scripts/post_issues.py`; every body as posted is in `issues/posted/`, every amended issue
+before and after in `issues/amendments/`. Verified afterwards: 226 open issues (194 + 32), none
+closed, no label removed, and the queue grouper reports no dependency cycle
+(`snapshot/grouper_stderr_after_posting.txt`). The grouper now lists 32 issues as runnable,
+of which new: #331, #332, #337, #344, #350.
+
+- New milestone "Hazard: wildfire handoff".
+- 32 new issues, #319 (epic) to #350. Draft key to issue number:
+
+| Draft | Issue |
+|---|---|
+| NEW-R0 | #319 |
+| NEW-C1 | #320 |
+| NEW-C2 | #321 |
+| NEW-D1 | #322 |
+| NEW-D2 | #323 |
+| NEW-D3 | #324 |
+| NEW-D4 | #325 |
+| NEW-D5 | #326 |
+| NEW-D6 | #327 |
+| NEW-E1 | #328 |
+| NEW-E2 | #329 |
+| NEW-E3 | #330 |
+| NEW-F1 | #331 |
+| NEW-F2 | #332 |
+| NEW-F3 | #333 |
+| NEW-F4 | #334 |
+| NEW-I1 | #335 |
+| NEW-M1 | #336 |
+| NEW-M2 | #337 |
+| NEW-M3 | #338 |
+| NEW-N1 | #339 |
+| NEW-N2 | #340 |
+| NEW-P1 | #341 |
+| NEW-S1 | #342 |
+| NEW-S2 | #343 |
+| NEW-U1 | #344 |
+| NEW-U2 | #345 |
+| NEW-U3 | #346 |
+| NEW-W0 | #347 |
+| NEW-W1 | #348 |
+| NEW-W2 | #349 |
+| NEW-W3 | #350 |
+
+- 45 existing issues amended with a dated header; 13 of them also had their `Blocked by:` line
+  changed in place (#289, #188, #191, #194, #241, #242, #243, #255, #269, #284, #271, #234 and the
+  split of #306 into #327), with the previous line quoted in the header.
+- Two departures from `issues/AMENDMENTS.md`, both to avoid lengthening the pilot's path: #276 keeps
+  `Blocked by: none.` with an ordering note instead of taking #295 as a hard blocker; #284 takes
+  #130 as a blocker and #264 as advisory only, because #264's chain runs through the Rainier adapter #223.
+- Held for the PI by label on creation: #333, #341, #336, #338, #342, #346, #321, #328, #330.
+- Not done: `ROADMAP.md` is unchanged (its "Act" row gains wildfire only if #349 passes); no PR was opened for this branch.

@@ -1,0 +1,177 @@
+holding back #349 (Wildfire: does the soil-water state add skill over atmospheric fire-danger indices?): blocked by open #70, #331, #348
+holding back #348 (Wildfire: soil-water export contract (root-zone deficit, percentile, melt-out date)): blocked by open #52, #309, #335
+holding back #346 (Decision-threshold and compound-hazard probabilities from shared members): labelled needs-human-decision
+holding back #345 (Change-of-support operators with their variance, and a support stamp on every product): blocked by open #187, #283
+holding back #343 (Upland regolith and colluvium thickness with provenance per cell): blocked by open #21, #277
+holding back #342 (One 3-D structural model: geotechnical parameters per hydrostratigraphic unit): labelled needs-human-decision
+holding back #341 (Event-mode pressure-head column for storm-time slope stability (claim or non-claim)): labelled needs-human-decision
+holding back #340 (Flood: does the twin's antecedent soil state add skill over the National Water Model?): labelled needs-compute
+holding back #339 (Flood: National Water Model / National Water Prediction Service adapter (baseline and optional back end)): blocked by open #278
+holding back #338 (Design record: one-way hydromechanical coupling and its validity bound): labelled needs-human-decision
+holding back #336 (Pore pressure u(z,t) and effective stress sigma'(z,t) as a hazard state product): labelled needs-human-decision
+holding back #335 (One versioned hazard-facing output schema for all four consumers): blocked by open #187
+holding back #334 (Forecast forcing beyond precipitation: Tmax/Tmin, wind, humidity, freezing level, to 90 m): blocked by open #244, #263, #333
+holding back #333 (Decision: forecast forcing sources by lead range (HRRR; ACE2 + Stage IV downscaler), and the baseline each is scored against): labelled needs-human-decision
+holding back #330 (Keep an event recorder running for every atmospheric river (decision and ownership)): labelled needs-human-decision
+holding back #329 (Consequence labels for hazard validation from reported incidents, with reporting bias stated): blocked by open #256, #328
+holding back #328 (Ingest the Earthnote event record as a forcing-verification and consequence data source): labelled needs-human-decision
+holding back #327 (Cycling ensemble nowcast, multi-sensor slice (split from #306 c)): blocked by open #30, #164, #198, #237, #239, #290, #306, #324
+holding back #326 (SNOTEL snow-water-equivalent observation operator and error model): blocked by open #188, #234
+holding back #325 (Reanalysis product from an ensemble smoother (retrospective states for hazard consumers)): labelled needs-compute
+holding back #324 (Admission contract for proxies and satellite data before they enter the filter): blocked by open #189, #235, #239
+holding back #323 (Complete the error budget of the forecast step: additive head error, boundary error, land-surface parameters): blocked by open #188, #285, #292, #309
+holding back #322 (Production estimator specification and a scale test that the fixture cannot pass by accident): blocked by open #188, #283
+holding back #321 (Scoping decision: is a learned emulator of the soil-state model needed, and of which part): labelled needs-human-decision
+holding back #320 (Compute and latency budget for the cycling ensemble (measured, not projected)): blocked by open #282, #289
+holding back #312 (Human review of the soil-state validation ladder): labelled needs-human-decision
+holding back #311 (Decision: products generated with the sign-inverted Stage-3 DTW (withdraw, regenerate or relabel)): labelled needs-human-decision
+holding back #310 (Decision: Hydrostate's role (reference column and library versus selectable regional backend)): labelled needs-human-decision
+holding back #309 (Decision: one snow model and one root-zone bucket as single owners): labelled needs-human-decision
+holding back #308 (Decision: cycling operation mode (pause/resume versus cold restart) for the MODFLOW ensemble): labelled needs-human-decision
+holding back #307 (Decision: internal capillary replenishment and residual-PET allocation under partition option B): labelled needs-human-decision
+holding back #306 (Cycling ensemble nowcast on the pilot (wells only) and multi-sensor (slices b, c of #188)): blocked by open #9, #188, #235, #285
+holding back #305 (Multi-event, issue-time-frozen evaluation manifest (N >= 10 atmospheric-river events, blocked design)): blocked by open #235
+holding back #304 (Constrained, reconciled analysis update versus clip-and-book on the single-column fixture): blocked by open #289
+holding back #303 (UZF restart memory: pause/resume versus cold restart on the MF6 fixture): blocked by open #275
+holding back #302 (Option A versus B root-zone/MODFLOW column test against a Richards reference): blocked by open #275
+holding back #295 (Ingest the USGS SE Puget Sound model (SIR 2024-5026), convert to MODFLOW 6, rerun as benchmark): blocked by open #275
+holding back #294 (ParFlow-CLM benchmark on the pilot from the HydroFrame CONUS2 subset): labelled needs-human-decision
+holding back #293 (Lakes and reservoirs in the regional model: LAK package with stage observations): blocked by open #287
+holding back #292 (Hydrostratigraphic framework realizations: geometry uncertainty conditioned on well logs): blocked by open #276, #277
+holding back #291 (Scoping: is poroelastic deformation (InSAR, GNSS vertical) observable in Puget aquifers?): blocked by open #282
+holding back #290 (Soil-moisture observation operators: probes (depth), SMAP (footprint), NISAR (200 m)): blocked by open #52
+holding back #289 (MODFLOW 6 ensemble runner over modflowapi: pause, update, resume between stress periods): blocked by open #155, #275, #280, #308
+holding back #288 (Regional history match; constraining mountain basins that have no wells): labelled needs-compute
+holding back #287 (Multi-model MODFLOW 6 simulation for all watersheds, joined by GWF-GWF exchanges): blocked by open #283, #286
+holding back #286 (Held-out validation of the calibrated pilot (wells, recorders, gauge) vs the baselines): blocked by open #236, #285
+holding back #285 (Production history match of the pilot on Hyak (PEST++ IES)): labelled needs-compute
+holding back #284 (PEST++ IES history-matching setup for the pilot (pyEMU), with a fixture run): blocked by open #130, #235, #282
+holding back #283 (Grid resolution and layering convergence study for the pilot (90 / 180 / 270 m)): blocked by open #281
+holding back #282 (Transient pilot: daily stress periods, UZF, warm-up rule, multi-year hindcast): blocked by open #70, #234, #280, #281
+holding back #281 (Pilot MODFLOW 6 model builder and steady-state run): blocked by open #10, #265, #269, #275, #276, #278
+holding back #280 (Land-surface to MODFLOW exchange: exact block aggregation, drainage out, seepage back): blocked by open #232, #265, #275, #302, #307
+holding back #278 (SFR stream network from NHDPlus HR on the MODFLOW grid, with gauge reach mapping): blocked by open #275
+holding back #271 (90 m critical-zone static medium and hydrologic-response-unit (HRU) library for store capacities): blocked by open #267, #268, #309
+holding back #270 (Value-of-information gate: does the dynamic water table matter in the chosen liquefaction model?): blocked by open #143, #144, #260
+holding back #269 (Decision record: pilot groundwater model domain (Enumclaw plateau / Newaukum Creek) and benchmark): labelled needs-human-decision
+holding back #266 (Lateral groundwater and boundaries: 2-D Dupuit/Boussinesq aquifer, two-way river exchange, seepage face, coastal head, pumping): labelled superseded
+holding back #265 (Design record: MODFLOW 6 groundwater core, land-surface partition, grids, boundaries, DA contract): labelled needs-human-decision
+holding back #264 (R6c: lahar-cap hydrogeologic class (Osceola/Electron) with an aquifer-screened residual test): blocked by open #9, #21, #223
+holding back #261 (Seasonal-high DTW time-series product for hazard consumers (hindcast + scenario epoch)): blocked by open #286
+holding back #260 (Decision record: pin the liquefaction model, version and probability semantics): labelled needs-human-decision
+holding back #259 (Event-based validation of the liquefaction screen against observed ground failure (2001 Nisqually; 1949/1965)): blocked by open #141, #143
+holding back #258 (Extend #193 (joint hazard ensemble) and the probabilistic roadmap to the flood consumer): blocked by open #191
+holding back #257 (Channel-routing operator on NHDPlus HR (Muskingum-Cunge / t-route) with cell-to-reach volume conservation): blocked by open #278
+holding back #255 (Post-fire debris-flow probability via USGS Staley et al. (2017) M1 model (runoff-generated pathway)): blocked by open #350
+holding back #254 (LandLab adapter decision + pin landlab dependency + fix the false API claim in 07-hazard-integration.qmd:59): labelled needs-human-decision
+holding back #253 (Landslide inventory ingest + frozen holdout protocol (rainier3d S24, WA DNR lidar inventory), incl. curated shallow-landslide target set): blocked by open #223
+holding back #252 (Deep-seated landslide stability: explicit non-claim or limit-equilibrium/3-D pathway (Scoops3D) separate from infinite slope): blocked by open #128, #130
+holding back #251 (Vadose-zone dv/v observability: which bands and sensors (e.g. 4-40 Hz, nodes/DAS) sense the vadose column, from kernels on a layered Vs0(z)): blocked by open #247
+holding back #250 (Implement soil_mechanics.estimate_mechanics as a product over the #198 operator): blocked by open #198
+holding back #249 (OSSE hygiene: twin dv/v must be generated from an independent nature run through the #198 operator, not from the forecast prior): blocked by open #198
+holding back #248 (Non-hydrologic dv/v confounders in the observation operator: temperature, snow/atmospheric loading, tides): blocked by open #198
+holding back #243 (Forecast-mode PET and lead-0 hindcast-to-forecast continuity): blocked by open #333
+holding back #242 (Mass-conserving orographic precipitation downscaler (FuXi 0.25 deg -> 90 m)): blocked by open #333
+holding back #241 (Meteorological ensemble member source: construction, reforecast calibration, and dependence preservation): blocked by open #187, #333
+holding back #240 (Terrain-anisotropic prior: estimability study before any backend (spun out of #163)): blocked by open #153
+holding back #239 (Temporally correlated observation error in the cycling filter (dv/v Cd, satellite retrieval bias)): blocked by open #188
+holding back #238 (Estimate the OU τ per state and per domain from residual autocovariance, with uncertainty): blocked by open #153
+holding back #237 (Gauge observation operator on MODFLOW SFR reach outflow (event and seasonal discharge)): blocked by open #278
+holding back #236 (Calibration/validation harness on MODFLOW outputs: basin SFR flux, model-hydrograph BFI, layer-aware wells): blocked by open #9, #275
+holding back #234 (Snowpack as a carried state (SWE initial condition) + rain-on-snow / liquid retention): blocked by open #263
+holding back #233 (P0 bug: valley-floor cells (HAND <= d0) have no groundwater sink and saturate to the surface): labelled superseded
+holding back #227 (R5: glacier mask and degree-day ice melt (IceBoost v2)): blocked by open #223, #232, #234, #263
+holding back #226 (R4: GNSS elastic-loading observation operator for total water storage): blocked by open #187, #189, #282
+holding back #225 (Canopy interception store (domain-wide LAI; rainier3d as in-box check)): blocked by open #232
+holding back #224 (R2: event hindcasts on the Rainier box (Dec 2025 AR, Jan 2009 storm + S24 landslides)): blocked by open #128, #223
+holding back #223 (R1: rainier3d sub-domain adapter (release assets → 90 m EPSG:5070)): blocked by open #268
+holding back #205 (Diagnostic-gated regime-switching τ for the OU temporal model (wet/dry-conditional; follow-on of #194)): blocked by open #194
+holding back #203 (Earth2Studio model-structure & assimilation compatibility (Prognostic/Diagnostic wrapper + member/lead_time contract)): blocked by open #187, #188, #191
+holding back #202 (Flood: validate routed discharge against USGS gauge hydrographs (reuse D7 BFI/Q–P calibration, #98)): blocked by open #201
+holding back #201 (Flood: select and pilot a routing component (LandLab OverlandFlow/FlowAccumulator vs external HAND inundation)): blocked by open #232, #237
+holding back #200 (Flood: soil-state source-term export contract (runoff/interflow/baseflow + uncertainty, member-preserving)): blocked by open #187
+holding back #198 (P0: Use one depth-resolved hydromechanical operator for forward prediction and inversion): blocked by open #187, #247
+holding back #195 (P1: Calibrate and validate probabilistic nowcasts and forecasts by lead time and native support): blocked by open #191, #194
+holding back #194 (P1: Quantify nowcast uncertainty reduction and value added with withheld sensors): blocked by open #192, #306
+holding back #193 (P2: Propagate joint hydrologic, parameter, forcing, and mechanical ensembles into hazards): blocked by open #187
+holding back #192 (P1: Estimate and diagnose prior, process, and observation-error covariance (B/Q/R)): blocked by open #188
+holding back #191 (P1: Make SoilStateForecast ensemble-native and initialize it from the DA posterior): blocked by open #187, #306, #333
+holding back #190 (P2: Make mechanical damage, disturbance, and healing states probabilistic and conditionable): blocked by open #121, #187, #198
+holding back #189 (P1: Operationalize ground-sensor observation records, operators, QC, and holdouts): blocked by open #9, #187
+holding back #188 (Cycling localized ensemble nowcast on MODFLOW 6 + land surface: exact case and OSSE fixture (pilot and multi-sensor in #306)): blocked by open #187, #289, #304
+holding back #187 (P0: Define the canonical probabilistic state, parameter, forcing, and observation contract): blocked by open #52, #265
+holding back #186 (P0: Back-transform Stage-3 kriging predictive variance before combining uncertainty): labelled needs-human-decision
+holding back #177 (Minor fixes (groundwater / vadose review)): labelled superseded
+holding back #176 (Route hysteresis into the soil-water DYNAMICS, not only the dv/v observable): blocked by open #198, #232
+holding back #175 (Baseflow sink: break the near-circular BFI anchor; nonlinear recession): labelled superseded
+holding back #174 (Upland root-zone lateral flow in colluvium over bedrock (land-surface model)): blocked by open #232
+holding back #173 (Saturation-excess runoff: no one-step fill to the water table; stop double-counting root-zone space): labelled superseded
+holding back #172 (Explicit deep unsaturated (vadose) store between root zone and water table, with moving-boundary effective specific yield): labelled superseded
+holding back #170 (Minor fixes (DA review)): blocked by open #231
+holding back #169 (Attribution identifiability precondition (rank-deficiency)): blocked by open #231
+holding back #168 (Coda footprint operator bias into R; 3-D (not separable 2-D) kernel): blocked by open #231
+holding back #166 (effective_observability is not a covariance diagonal — label or derive it): blocked by open #231
+holding back #164 (Diagonal R for dv/v double-counts correlated coda errors): blocked by open #231
+holding back #163 (Record barrier-mask approximation status in prior/analysis metadata): labelled needs-human-decision
+holding back #162 (Static BLUE -> augmented space-time estimator (so attribution can run)): labelled needs-human-decision
+holding back #156 (Fetcher + assimilation tests (fixture-backed)): blocked by open #231
+holding back #155 (RNG determinism: single seeded generator + per-frame streams): blocked by open #231
+holding back #153 (Reproducible from a clean checkout: pinned data snapshot + fixtures): blocked by open #231
+holding back #149 (Minor fixes (liquefaction review)): blocked by open #231
+holding back #148 (Wald-Allen Vs30 proxy is near-degenerate on flat liquefiable ground — document and guard): blocked by open #231
+holding back #146 (Future: depth-resolved triggering (CPT/SPT + Vs(z) critical layer + CSR/CRR)): labelled needs-human-decision
+holding back #145 (Firewall the coseismic dv/v damage/healing state from liquefaction TRIGGERING (category error)): blocked by open #231
+holding back #144 (Per-cell Vs30 sigma field so P(NEHRP class) is not decorative): blocked by open #231
+holding back #143 (Ingest USGS ShakeMap ground motion (PGA / PGV / Mw) with epistemic uncertainty): blocked by open #231
+holding back #142 (Seasonal-high depth-to-water in liquefiable units: sub-1.5 m accuracy, uncertainty, non-TOPMODEL prior): blocked by open #9, #286
+holding back #141 (MVP: geospatial liquefaction GLM driven by the dynamic seasonal-high water table + scenario ShakeMap PGV): blocked by open #260, #270
+holding back #140 (Reframe Vs30 as site amplification / class, NOT a liquefaction triggering variable): blocked by open #231
+holding back #138 (Minor fixes (LandLab / landslide review)): blocked by open #231
+holding back #137 (Defensible specific yield + held-out water-budget validation (shared foundation)): labelled superseded
+holding back #136 (Run the FuXi forecast engine and orographically bias-correct it): labelled needs-human-decision
+holding back #135 (<=10 m slope + explicit cut-slope layer for shallow failures): labelled needs-human-decision
+holding back #134 (Root cohesion, colluvium thickness, and post-fire (Ks/cohesion) states for landslides): blocked by open #231
+holding back #133 (Downslope-convergent interflow delivered as positive pore pressure, not a stream sink): blocked by open #130, #174
+holding back #132 (Sub-daily rainfall intensity for Hortonian / post-fire triggering): blocked by open #134
+holding back #131 (Vadose transit lag: recharge must not teleport to the water table): labelled superseded
+holding back #130 (Perched water above a low-K cap (Vashon till or Osceola lahar) as a MODFLOW layer): blocked by open #235, #282
+holding back #129 (Run LandLab LandslideProbability end-to-end on a pilot corridor and score vs a landslide inventory): labelled needs-human-decision
+holding back #128 (Infinite-slope FS kernel + named pore-pressure closures (shallow only)): blocked by open #231
+holding back #124 (Disturbance event catalog on the data plane (ShakeMap, fire, landslide, liquefaction)): blocked by open #231
+holding back #123 (dv/v attribution: augment the BLUE to separate hydrology / damage / disturbance): blocked by open #162, #169
+holding back #122 (Surface-disturbance hydromechanics: wildfire, agricultural (tillage), landslide): blocked by open #134
+holding back #121 (Coseismic damage + log-linear healing as a carried dv/v state): blocked by open #124
+holding back #112 (Stream observation/forcing Zarr as earth2studio DataSources (time/variable adapter)): blocked by open #231
+holding back #109 (Surface-water extent (Sentinel-2 optical) as a distributed flux / variable-source-area constraint): blocked by open #231
+holding back #100 (D8: Snow is the water-table clock — calibrate the snow module and verify the April peak emerges): blocked by open #70, #234
+holding back #99 (S1: Stehekin — scope the eastern-Cascades extension (rain shadow + snowmelt regime)): blocked by open #100
+holding back #89 (Water budget: daily and monthly timesteps drain 4.7x differently — a monthly calibration cannot be used in daily mode): labelled superseded
+holding back #86 (Vs30 densification: mean-preserving block-constrained downscaling + block CV): labelled needs-human-decision
+holding back #84 (Vs30 densification: stratify Vs(z) profiles by surficial geology (glacial overconsolidation)): labelled needs-human-decision
+holding back #83 (Vs30 densification: two-layer travel-time model from soil thickness / depth-to-bedrock): labelled needs-human-decision
+holding back #82 (Assess SOLUS bulk density/SOC as Vs residual covariates): labelled needs-human-decision
+holding back #81 (Vs30 densification: source measured Vs profiles (the validation anchor — BLOCKER)): labelled needs-human-decision
+holding back #71 (Forward forcing: GraphCast/ACE2 QPF via earth2studio → 90 m precip downscaler → antecedent-state ensemble): blocked by open #231
+holding back #70 (Multi-year daily PRISM forcing record + spin-up protocol for the coupled budget): blocked by open #231
+holding back #65 (Publish the LandLab dynamic bundle as COG/Zarr + STAC provenance (s3://cresst)): blocked by open #231
+holding back #59 (P2: Event-based validation - one PNW atmospheric-river hindcast): blocked by open #231
+holding back #58 (P2: Penman-Monteith PET path (use AI-model radiation/humidity/wind)): labelled needs-human-decision
+holding back #57 (P2: Re-derive the bucket at daily/hourly resolution; populate beta4/TFN for atmospheric rivers): blocked by open #231
+holding back #50 (Saturated-branch parameters per hydrostratigraphic unit: effective stress with depth, head sampled, drained vs undrained loading): blocked by open #198
+holding back #49 (Drop the lowland USCRN assimilation claim (no in-domain stations)): blocked by open #231
+holding back #47 (P1: Report achieved per-domain valley-fill RMSE / bias / coverage (not just pooled 18.5 m)): blocked by open #9, #21
+holding back #45 (S_THETA on the depth-inverted shallow mean: compute what each band resolves as a kernel-weighted vadose-column integral): blocked by open #198
+holding back #40 (P0: Reconcile TerraClimate consistency r = 0.94 vs 0.98): blocked by open #231
+holding back #32 (GWL structural (method) members for the #187 contract): blocked by open #231
+holding back #31 (Data-informed / model-driven downscaler beyond the bilinear resampling baseline): blocked by open #231
+holding back #30 (Ingest real ambient-noise dv/v + calibrate coupling parameters (promote demo → operational)): labelled needs-human-decision
+holding back #29 (Native-scale calibration/validation vs SMAP, NISAR, NLDAS-v3, GRACE (upscale-then-compare)): blocked by open #231
+holding back #25 (Verify references.bib integrity (zero fabricated DOIs)): labelled needs-human-decision
+holding back #24 (Rename repository to gaia-soil-reanalysis): labelled needs-human-decision
+holding back #23 (Prototype Rung-2 TFN dynamics (linear reservoir, Pastas) behind climate_response): blocked by open #231
+holding back #22 (DataHub: confirm raw geology archive format (GeoParquet vector vs Zarr)): labelled needs-human-decision
+holding back #21 (Complete DNR lithology crosswalk + adopt local rasterizer (unblocks #14 / #2)): blocked by open #231
+holding back #9 (Well head observation operator: screened interval to MODFLOW layer weights, timestamped heads): blocked by open #276, #277
+holding back #7 (Stage 3 nugget = representativeness variance (stay-close-to-data knob)): blocked by open #186
+holding back #6 (Temporal validation at continuous recorders (phase, recession, aliasing)): blocked by open #235
+holding back #3 (Run + port per-domain gates to v0.4): blocked by open #231
