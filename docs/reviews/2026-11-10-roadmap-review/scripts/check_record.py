@@ -10,7 +10,7 @@ import json, pathlib, re, sys
 R = pathlib.Path(__file__).resolve().parents[1]
 ROOT = R.parents[2]
 open_n = {i["number"] for i in json.loads((R / "snapshot/open_issues.json").read_text())}
-KNOWN_NON_OPEN = {229, 272, 273, 313, 314, 315, 316, 317, 318, 222,      # pull requests
+KNOWN_NON_OPEN = {217, 221, 229, 272, 273, 313, 314, 315, 316, 317, 318, 222,      # pull requests
                   39, 55, 64, 87, 88, 90, 98, 137}                          # closed or superseded, cited as history
 _posted = R / "issues/posted.json"
 if _posted.exists():  # issues created by this review on 2026-11-11, after the snapshot
