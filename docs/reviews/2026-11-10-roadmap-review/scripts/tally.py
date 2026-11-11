@@ -1,5 +1,5 @@
 """Tally coverage.json verdicts per axis. Classes: covered (verdict is exactly 'covered'), no owner
-(verdict starts with 'no ' or says 'no acceptance'), owned-with-defect (everything else: blocked,
+(verdict starts with 'no ' or says 'no acceptance'), "owned, blocked or defective" (everything else: blocked,
 mis-sequenced, under-specified, untestable)."""
 import collections, json, pathlib
 rows = json.loads((pathlib.Path(__file__).resolve().parents[1] / "coverage.json").read_text())
