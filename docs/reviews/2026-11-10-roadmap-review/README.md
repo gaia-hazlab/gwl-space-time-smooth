@@ -55,7 +55,7 @@ and 28 are held for a human decision. Two actions by the PI release most of the 
 queue-guard PR #272 (its issue #231 is the only parsed blocker of 44 issues and sits upstream of
 100) and deciding the design record #265 (upstream of 52).
 
-Coverage of the 61 target requirements in [`coverage.csv`](coverage.csv), tallied by
+Coverage of the 61 target requirements in [`coverage.json`](coverage.json), tallied by
 `scripts/tally.py`:
 
 | Axis | Requirements | Covered | Owned, blocked or defective | No owner |
@@ -382,3 +382,5 @@ of which new: #331, #332, #337, #344, #350.
   26 owned but blocked or defective, 27 with no owner (was 9, 25, 27). The table in section 1 is updated.
 - `scripts/check_record.py` now also checks the posted bodies and the header this review prepended
   to each amended issue.
+- The coverage table is `coverage.json`, not CSV: the repository ignores `*.csv` as data and keeps
+  provenance as JSON (`.gitignore`), so the first version of the table never reached the PR.

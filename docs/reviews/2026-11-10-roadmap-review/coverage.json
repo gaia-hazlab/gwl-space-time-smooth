@@ -1,0 +1,551 @@
+[
+ {
+  "axis": "forcing",
+  "requirement": "precipitation hindcast daily",
+  "owning_issues": "#70",
+  "code_today": "src/data/fetch_prism_daily.py (PRISM 4 km)",
+  "held_or_blocked_by": "none",
+  "verdict": "covered",
+  "proposed": ""
+ },
+ {
+  "axis": "forcing",
+  "requirement": "temperature to 90 m",
+  "owning_issues": "#263",
+  "code_today": "raw 4 km PRISM tmean",
+  "held_or_blocked_by": "none",
+  "verdict": "covered",
+  "proposed": ""
+ },
+ {
+  "axis": "forcing",
+  "requirement": "wind hindcast",
+  "owning_issues": "#58 (deferred)",
+  "code_today": "none",
+  "held_or_blocked_by": "needs-human-decision",
+  "verdict": "no effective owner",
+  "proposed": "NEW-F1"
+ },
+ {
+  "axis": "forcing",
+  "requirement": "humidity and vapour-pressure deficit",
+  "owning_issues": "#58 (deferred)",
+  "code_today": "none",
+  "held_or_blocked_by": "needs-human-decision",
+  "verdict": "no effective owner",
+  "proposed": "NEW-F1"
+ },
+ {
+  "axis": "forcing",
+  "requirement": "shortwave and longwave radiation",
+  "owning_issues": "#58 (deferred)",
+  "code_today": "none",
+  "held_or_blocked_by": "needs-human-decision",
+  "verdict": "no effective owner",
+  "proposed": "NEW-F1"
+ },
+ {
+  "axis": "forcing",
+  "requirement": "sub-daily precipitation",
+  "owning_issues": "#132 (burned cells) #224 (comparison)",
+  "code_today": "none",
+  "held_or_blocked_by": "#132 blocked",
+  "verdict": "covered for one use only",
+  "proposed": "NEW-F2"
+ },
+ {
+  "axis": "forcing",
+  "requirement": "hindcast forcing uncertainty",
+  "owning_issues": "#70 #188",
+  "code_today": "two products and AR(1) perturbations",
+  "held_or_blocked_by": "none",
+  "verdict": "magnitude has no source",
+  "proposed": "NEW-F1 NEW-D2"
+ },
+ {
+  "axis": "forecast",
+  "requirement": "ensemble members from AI surrogates",
+  "owning_issues": "#241 #136 #71",
+  "code_today": "one deterministic FuXi run",
+  "held_or_blocked_by": "#136 needs-human-decision",
+  "verdict": "mis-sequenced",
+  "proposed": "NEW-F3"
+ },
+ {
+  "axis": "forecast",
+  "requirement": "forecast wind humidity freezing level",
+  "owning_issues": "#243 (PET only)",
+  "code_today": "precipitation and mean temperature only",
+  "held_or_blocked_by": "#136",
+  "verdict": "no owner",
+  "proposed": "NEW-F4"
+ },
+ {
+  "axis": "forecast",
+  "requirement": "downscaling of forecast precipitation",
+  "owning_issues": "#242",
+  "code_today": "none",
+  "held_or_blocked_by": "#136",
+  "verdict": "covered",
+  "proposed": "AMEND #242"
+ },
+ {
+  "axis": "forecast",
+  "requirement": "physics-ensemble baseline for AI members",
+  "owning_issues": "none",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-F3"
+ },
+ {
+  "axis": "forecast",
+  "requirement": "state-continuing ensemble forecast",
+  "owning_issues": "#191 #234 #298",
+  "code_today": "forecast reinitialises (2026-11-07 finding 3)",
+  "held_or_blocked_by": "#188 #265",
+  "verdict": "covered; missing blocker edges",
+  "proposed": "AMEND #191"
+ },
+ {
+  "axis": "physics",
+  "requirement": "groundwater flow and stream exchange",
+  "owning_issues": "#274 #281 #282 #278",
+  "code_today": "none (MODFLOW 6 not installed)",
+  "held_or_blocked_by": "#265 #269 #275",
+  "verdict": "covered; blocked",
+  "proposed": ""
+ },
+ {
+  "axis": "physics",
+  "requirement": "root-zone to groundwater interface",
+  "owning_issues": "#280 #302 #307",
+  "code_today": "legacy store model",
+  "held_or_blocked_by": "#307 needs-human-decision",
+  "verdict": "covered; blocked",
+  "proposed": ""
+ },
+ {
+  "axis": "physics",
+  "requirement": "snow",
+  "owning_issues": "#234 #100 #309",
+  "code_today": "degree-day; two models",
+  "held_or_blocked_by": "#309 needs-human-decision",
+  "verdict": "covered (degree-day only)",
+  "proposed": "AMEND #234"
+ },
+ {
+  "axis": "physics",
+  "requirement": "energy and thermal state (soil temperature frozen ground)",
+  "owning_issues": "none",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "record as non-claim or scope"
+ },
+ {
+  "axis": "physics",
+  "requirement": "unsaturated pore pressure and suction psi(z t)",
+  "owning_issues": "#267 (reference column) #294 (held)",
+  "code_today": "none in the regional model",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-P1 NEW-M2"
+ },
+ {
+  "axis": "physics",
+  "requirement": "perched water",
+  "owning_issues": "#130 #174",
+  "code_today": "none",
+  "held_or_blocked_by": "#282 #235",
+  "verdict": "split between two owners",
+  "proposed": "NEW-P1"
+ },
+ {
+  "axis": "physics",
+  "requirement": "hillslope scale <= 10 m",
+  "owning_issues": "#133 #135",
+  "code_today": "10 m slope averaged to 90 m",
+  "held_or_blocked_by": "#135 needs-human-decision",
+  "verdict": "steady and one-way only",
+  "proposed": "NEW-P1 NEW-U2"
+ },
+ {
+  "axis": "physics",
+  "requirement": "preferential flow",
+  "owning_issues": "none (superseded #131 only)",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "record as non-claim with the recorder-lag test"
+ },
+ {
+  "axis": "physics",
+  "requirement": "mountain basins without wells",
+  "owning_issues": "#288",
+  "code_today": "none",
+  "held_or_blocked_by": "needs-compute",
+  "verdict": "acceptance cannot fail",
+  "proposed": "AMEND #288"
+ },
+ {
+  "axis": "mechanics",
+  "requirement": "pore pressure and effective stress product",
+  "owning_issues": "#250",
+  "code_today": "NotImplementedError; constant 10 kPa",
+  "held_or_blocked_by": "#198 #187; P2",
+  "verdict": "owner mis-blocked",
+  "proposed": "NEW-M1"
+ },
+ {
+  "axis": "mechanics",
+  "requirement": "unsaturated strength",
+  "owning_issues": "#128 (title only)",
+  "code_today": "suction returned as zero",
+  "held_or_blocked_by": "none",
+  "verdict": "no acceptance",
+  "proposed": "NEW-M2"
+ },
+ {
+  "axis": "mechanics",
+  "requirement": "two-way coupling or a stated one-way bound",
+  "owning_issues": "none",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-M3"
+ },
+ {
+  "axis": "mechanics",
+  "requirement": "damage and disturbance states",
+  "owning_issues": "#121 #122 #190",
+  "code_today": "none",
+  "held_or_blocked_by": "P2",
+  "verdict": "covered (P2)",
+  "proposed": ""
+ },
+ {
+  "axis": "structure",
+  "requirement": "hydrostratigraphic layers and geometry uncertainty",
+  "owning_issues": "#276 #277 #292 #295",
+  "code_today": "none",
+  "held_or_blocked_by": "#275 for #295",
+  "verdict": "covered; mis-ordered",
+  "proposed": "AMEND #276"
+ },
+ {
+  "axis": "structure",
+  "requirement": "geotechnical parameters per unit",
+  "owning_issues": "none (#81-#86 paused; #146 held)",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-S1"
+ },
+ {
+  "axis": "structure",
+  "requirement": "upland regolith thickness",
+  "owning_issues": "#134 #271 #83",
+  "code_today": "SOLUS 2 m cap; depth-to-bedrock of unknown provenance",
+  "held_or_blocked_by": "",
+  "verdict": "no owner with provenance",
+  "proposed": "NEW-S2"
+ },
+ {
+  "axis": "da",
+  "requirement": "state and observation contract",
+  "owning_issues": "#187",
+  "code_today": "static BLUE",
+  "held_or_blocked_by": "#265 #52",
+  "verdict": "covered; blocked",
+  "proposed": ""
+ },
+ {
+  "axis": "da",
+  "requirement": "cycling filter fixture",
+  "owning_issues": "#188 #289 #304",
+  "code_today": "none",
+  "held_or_blocked_by": "#265 #307 (through #280)",
+  "verdict": "covered; hidden cycle",
+  "proposed": "AMEND #289 #188"
+ },
+ {
+  "axis": "da",
+  "requirement": "production estimator (N localization time convention)",
+  "owning_issues": "#188 #192 (partial)",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "under-specified",
+  "proposed": "NEW-D1"
+ },
+ {
+  "axis": "da",
+  "requirement": "model error and land-surface parameters in the ensemble",
+  "owning_issues": "#188 (forcing only)",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-D2"
+ },
+ {
+  "axis": "da",
+  "requirement": "parameter estimation separate from state",
+  "owning_issues": "#284 #285 #235",
+  "code_today": "none",
+  "held_or_blocked_by": "needs-compute",
+  "verdict": "covered; gauge in both loops",
+  "proposed": "AMEND #235 #284"
+ },
+ {
+  "axis": "da",
+  "requirement": "wells and recorders operator",
+  "owning_issues": "#9 #235",
+  "code_today": "legacy operator",
+  "held_or_blocked_by": "#276 #277",
+  "verdict": "covered",
+  "proposed": ""
+ },
+ {
+  "axis": "da",
+  "requirement": "stream gauge operator",
+  "owning_issues": "#237",
+  "code_today": "none",
+  "held_or_blocked_by": "#278",
+  "verdict": "covered",
+  "proposed": ""
+ },
+ {
+  "axis": "da",
+  "requirement": "soil-moisture probes SMAP NISAR operators",
+  "owning_issues": "#290 #197",
+  "code_today": "validation code only",
+  "held_or_blocked_by": "#52",
+  "verdict": "covered",
+  "proposed": ""
+ },
+ {
+  "axis": "da",
+  "requirement": "SNOTEL SWE operator",
+  "owning_issues": "none",
+  "code_today": "validation only",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-D5"
+ },
+ {
+  "axis": "da",
+  "requirement": "Sentinel-1 GNSS-IR InSAR",
+  "owning_issues": "#291 (go/no-go) #109 (static mask)",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner past scoping",
+  "proposed": "NEW-D3"
+ },
+ {
+  "axis": "da",
+  "requirement": "dv/v operator and error",
+  "owning_issues": "#198 #247 #164 #168 #239 #248 #249",
+  "code_today": "legacy operator",
+  "held_or_blocked_by": "#187 #30",
+  "verdict": "covered",
+  "proposed": ""
+ },
+ {
+  "axis": "da",
+  "requirement": "proxy admission and bias observability",
+  "owning_issues": "per-stream pieces",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-D3"
+ },
+ {
+  "axis": "da",
+  "requirement": "retrospective reanalysis",
+  "owning_issues": "#162 (attribution only; held)",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-D4"
+ },
+ {
+  "axis": "uq",
+  "requirement": "ensemble scores in code",
+  "owning_issues": "none",
+  "code_today": "Gaussian closed forms only",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-U1"
+ },
+ {
+  "axis": "uq",
+  "requirement": "numeric pass thresholds for the hydrologic filter",
+  "owning_issues": "#192 #194 #195 #241 only",
+  "code_today": "",
+  "held_or_blocked_by": "",
+  "verdict": "dropped at the #188 rescope",
+  "proposed": "AMEND #188 #306 #286"
+ },
+ {
+  "axis": "uq",
+  "requirement": "geometry and structural uncertainty in members",
+  "owning_issues": "#292 #32 #294 #295",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "sampled but not wired",
+  "proposed": "NEW-D2"
+ },
+ {
+  "axis": "uq",
+  "requirement": "change of support and support stamp",
+  "owning_issues": "none",
+  "code_today": "quadrature stack with a 5.0 m constant",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-U2"
+ },
+ {
+  "axis": "uq",
+  "requirement": "decision and compound probabilities",
+  "owning_issues": "#193 #258 #191 (unnamed)",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-U3"
+ },
+ {
+  "axis": "uq",
+  "requirement": "multi-event verification",
+  "owning_issues": "#305 #195 #194",
+  "code_today": "none",
+  "held_or_blocked_by": "#235",
+  "verdict": "covered; one recorded event",
+  "proposed": "NEW-E1 NEW-E3"
+ },
+ {
+  "axis": "interop",
+  "requirement": "shared versioned output schema",
+  "owning_issues": "#187 (internal) #193 #65",
+  "code_today": "three unrelated formats",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-I1"
+ },
+ {
+  "axis": "interop",
+  "requirement": "shallow landslide (Landlab)",
+  "owning_issues": "#127 #128 #129 #254 #300",
+  "code_today": "2-D export without members",
+  "held_or_blocked_by": "#129 #254 needs-human-decision",
+  "verdict": "covered; consumer ignores exported depth (#300)",
+  "proposed": "NEW-M2 NEW-P1"
+ },
+ {
+  "axis": "interop",
+  "requirement": "deep-seated landslide",
+  "owning_issues": "#252",
+  "code_today": "none",
+  "held_or_blocked_by": "P2",
+  "verdict": "stale input pointer",
+  "proposed": "AMEND #252"
+ },
+ {
+  "axis": "interop",
+  "requirement": "post-fire debris flow",
+  "owning_issues": "#255 #134 #132 #122",
+  "code_today": "none",
+  "held_or_blocked_by": "#134",
+  "verdict": "fetcher missing",
+  "proposed": "NEW-W3"
+ },
+ {
+  "axis": "interop",
+  "requirement": "liquefaction",
+  "owning_issues": "#139 #141 #142 #260 #261 #270",
+  "code_today": "none",
+  "held_or_blocked_by": "#260 needs-human-decision; #285",
+  "verdict": "covered; two seasonal-high definitions",
+  "proposed": "NEW-U3"
+ },
+ {
+  "axis": "interop",
+  "requirement": "flood source terms and routing",
+  "owning_issues": "#199 #200 #201 #202 #257 #258",
+  "code_today": "exporter has no flux field",
+  "held_or_blocked_by": "#265 (through #187)",
+  "verdict": "covered",
+  "proposed": "NEW-I1"
+ },
+ {
+  "axis": "interop",
+  "requirement": "National Water Model baseline and back end",
+  "owning_issues": "#202 (one line)",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-N1 NEW-N2"
+ },
+ {
+  "axis": "interop",
+  "requirement": "wildfire susceptibility",
+  "owning_issues": "none",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-W0 NEW-W1 NEW-W2 NEW-W3"
+ },
+ {
+  "axis": "interop",
+  "requirement": "consequence labels from reported incidents",
+  "owning_issues": "none",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-E1 NEW-E2"
+ },
+ {
+  "axis": "compute",
+  "requirement": "cost of the cycling ensemble on the full domain",
+  "owning_issues": "#283 (projection) #301 (land surface)",
+  "code_today": "none",
+  "held_or_blocked_by": "#281",
+  "verdict": "projection only",
+  "proposed": "NEW-C1"
+ },
+ {
+  "axis": "compute",
+  "requirement": "latency target per product",
+  "owning_issues": "none",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-C1"
+ },
+ {
+  "axis": "compute",
+  "requirement": "parallel MODFLOW with many members",
+  "owning_issues": "#287 #289 (separate)",
+  "code_today": "serial conda-forge build",
+  "held_or_blocked_by": "",
+  "verdict": "not joined",
+  "proposed": "NEW-C1"
+ },
+ {
+  "axis": "compute",
+  "requirement": "emulator to afford large ensembles",
+  "owning_issues": "none",
+  "code_today": "none",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-C2"
+ },
+ {
+  "axis": "compute",
+  "requirement": "chunked storage of member products",
+  "owning_issues": "none",
+  "code_today": "chunks set and unused",
+  "held_or_blocked_by": "",
+  "verdict": "no owner",
+  "proposed": "NEW-I1"
+ }
+]

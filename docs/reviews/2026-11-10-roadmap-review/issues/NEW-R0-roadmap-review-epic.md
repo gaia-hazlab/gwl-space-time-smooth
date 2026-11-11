@@ -5,7 +5,7 @@ Milestone: Software: CI, tests, reproducibility, scale. Labels: epic, validation
 ## Purpose
 Track the additions and amendments from the 2026-11-10 roadmap review. Record:
 `docs/reviews/2026-11-10-roadmap-review/` on branch `review/roadmap-2026-11-10` (README = review;
-`coverage.csv` = 61 target requirements against the open issues; `reviewers/` = five specialist
+`coverage.json` = 61 target requirements against the open issues; `reviewers/` = five specialist
 rounds and the probe check; `issues/` = every body and amendment as posted).
 
 ## Children

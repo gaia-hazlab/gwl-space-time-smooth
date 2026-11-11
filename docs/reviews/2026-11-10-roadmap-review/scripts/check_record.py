@@ -1,6 +1,6 @@
 """Checks for the 2026-11-10 roadmap review record. Run from the repository root:
     python docs/reviews/2026-11-10-roadmap-review/scripts/check_record.py
-1. every #N cited in README.md, coverage.csv, issues/*.md, issues/posted/*.md and in the header this
+1. every #N cited in README.md, coverage.json, issues/*.md, issues/posted/*.md and in the header this
    review prepended to each file of issues/amendments/after/ is an open issue in the snapshot, or is
    listed in KNOWN_NON_OPEN (PRs, closed issues, other repos) ;
 2. every `path:line` citation points at an existing file with at least that many lines;
@@ -16,7 +16,7 @@ KNOWN_NON_OPEN = {217, 221, 229, 272, 273, 313, 314, 315, 316, 317, 318, 222, 35
 _posted = R / "issues/posted.json"
 if _posted.exists():  # issues created by this review on 2026-11-11, after the snapshot
     open_n |= set(json.loads(_posted.read_text()).values())
-files = [R / "README.md", R / "coverage.csv", *sorted((R / "issues").glob("*.md")),
+files = [R / "README.md", R / "coverage.json", *sorted((R / "issues").glob("*.md")),
          *sorted((R / "issues/posted").glob("*.md"))]
 # Amended bodies are third-party history below the header this review wrote: check that header only.
 HEADER_ONLY = sorted((R / "issues/amendments/after").glob("*.md"))
