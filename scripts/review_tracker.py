@@ -3,7 +3,7 @@
 
 Reads ``docs/reviews/2026-11-07-fable-soil-state-review/issues/ladder.json`` (ladder key ->
 issue number, written when the issues were created) and the static ladder table in this file,
-queries GitHub through ``gh api`` for state, labels, assignee, closing PR and the "Blocked by:"
+queries GitHub through ``gh api`` for state, labels, pull requests that say ``Refs #N`` and the "Blocked by:"
 line of each issue's current scope, and rewrites the state columns of ``TRACKER.md``. Outcome and
 evidence columns are hand-maintained in ``outcomes.json`` next to the tracker: this script never
 invents an outcome. ``--check`` exits non-zero if a ladder issue is missing or its blockers differ
@@ -72,8 +72,12 @@ def body_blockers(body: str | None) -> set[int]:
 def fetch(repo: str, number: int) -> dict:
     i = gh([f"repos/{repo}/issues/{number}"])
     prs = gh([f"repos/{repo}/issues/{number}/timeline", "--paginate", "-H", "Accept: application/vnd.github+json"])
-    linked = sorted({e["source"]["issue"]["number"] for e in prs
-                     if e.get("event") == "cross-referenced" and e.get("source", {}).get("issue", {}).get("pull_request")})
+    # A pull request works this issue only if it says "Refs #N" (the ladder's convention) in its
+    # title or body. A bare mention, as in a review record that cites many issues, is not work on it.
+    refs = re.compile(rf"\bRefs\s+(?:[\w./-]+)?#{number}\b", re.IGNORECASE)
+    linked = sorted({s["number"] for e in prs if e.get("event") == "cross-referenced"
+                     for s in [e.get("source", {}).get("issue", {})]
+                     if s.get("pull_request") and refs.search((s.get("title") or "") + "\n" + (s.get("body") or ""))})
     return {"state": i["state"], "labels": sorted(l["name"] for l in i["labels"]),
             "milestone": (i.get("milestone") or {}).get("title"), "blockers": sorted(body_blockers(i.get("body"))),
             "linked_prs": linked, "updated": i["updated_at"][:10], "title": i["title"]}
