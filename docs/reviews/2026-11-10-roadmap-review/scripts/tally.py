@@ -2,7 +2,8 @@
 (verdict starts with 'no ' or says 'no acceptance'), owned-with-defect (everything else: blocked,
 mis-sequenced, under-specified, untestable)."""
 import collections, csv, pathlib
-rows = list(csv.DictReader((pathlib.Path(__file__).resolve().parents[1] / "coverage.csv").open()))
+with (pathlib.Path(__file__).resolve().parents[1] / "coverage.csv").open(newline="") as fh:
+    rows = list(csv.DictReader(fh))
 def cls(v):
     v = v.lower()
     if v.startswith("no ") or "no acceptance" in v:
