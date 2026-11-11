@@ -90,6 +90,13 @@ class Queue(unittest.TestCase):
         self.assertEqual(batches, [])
         self.assertIn("dependency cycle", err)
 
+    def test_superseded_blocker_is_flagged_as_stale(self):
+        batches, err = run([issue(60, ["P1", "superseded"], "M"), issue(61, ["P1"], "M", "Blocked by: #60."),
+                            issue(62, ["P1"], "M", "Blocked by: #63."), issue(63, ["P1"], "M")])
+        self.assertEqual(batches, [[63]])
+        self.assertIn("stale blocker on #61: #60 labelled superseded", err)
+        self.assertNotIn("stale blocker on #62", err)
+
     def test_table_is_empty_bodies_are_the_list(self):
         self.assertEqual(gg.BLOCKED_BY, {})
 

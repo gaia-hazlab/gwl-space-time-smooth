@@ -201,6 +201,7 @@ def main():
     # this repo keeps having to design against.
     open_numbers = {issue["number"] for issue in issues}
     all_issues = list(issues)
+    superseded = {i["number"] for i in issues if "superseded" in [l["name"] for l in i["labels"]]}
 
     only = only_issues()
     if only is not None:
@@ -219,7 +220,7 @@ def main():
     # Judged on every open issue, like blockers: a cycle through an unselected issue still
     # holds the selected one.
     edges = {i["number"]: sorted((set(BLOCKED_BY.get(i["number"], [])) | set(body_blockers(i.get("body"))))
-                                 & open_numbers - {i["number"]})
+                                 & (open_numbers - {i["number"]}))
              for i in all_issues}
     for cyc in dependency_cycles(edges):
         print("dependency cycle (every member is held until it is broken): "
@@ -245,6 +246,13 @@ def main():
                 f"blocked by open {', '.join('#' + str(b) for b in blockers)}",
                 file=sys.stderr,
             )
+            dead = [b for b in blockers if b in superseded]
+            if dead:
+                # A superseded issue is held and only the PI closes it, so no queue work can
+                # ever release this dependent: the blocker line is stale and needs an edit.
+                print(f"stale blocker on #{issue['number']}: "
+                      f"{', '.join('#' + str(b) for b in dead)} labelled superseded",
+                      file=sys.stderr)
             continue
 
         milestone = issue["milestone"]["title"] if issue.get("milestone") else None

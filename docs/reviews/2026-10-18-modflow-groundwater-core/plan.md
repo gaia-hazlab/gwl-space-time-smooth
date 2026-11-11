@@ -6,6 +6,12 @@
 record in issue #265. **Revision 1** (same day) folds in review round 1
 (`plan-review-round1.md`: hydrogeologist and DA methodologist, both approve-with-edits).
 
+**Read with issue #265 as restated on 2026-11-11.** Two later reviews (epics #296 and #319) turned
+several statements of this plan into open questions, each with a deciding test or decision. Where
+this text asserts the MODFLOW top at the root base (option B), "UZF advanced but not updated", or
+a localization taper, section B of #265 governs. PR #272 was merged to `main` on 2026-11-11
+(merge commit `d054a4c`).
+
 ## 1. Decision this plan records
 
 On 2026-10-18 the PI asked to replace the water-balance closure model with MODFLOW groundwater
@@ -382,19 +388,19 @@ that central point is superseded. Adopted from it:
 ## 9. References
 
 DOIs resolved on the Crossref API or the doi.org handle API on 2026-10-18 by a verification
-agent; not yet added to `docs/references.bib` (each addition must pass
+agent, and again on 2026-11-11 with title, first author and year compared to this table; not yet added to `docs/references.bib` (each addition must pass
 `pixi run check-dois-metadata`).
 
 | Item | DOI |
 |---|---|
 | MODFLOW 6 GWF, Langevin et al. 2017, TM 6-A55 (also documents UZF and SFR) | 10.3133/tm6A55 |
-| MODFLOW 6 IMS, Hughes et al. 2017, TM 6-A57 | 10.3133/tm6A57 |
+| MODFLOW 6 framework (simulation, solution groups and the iterative model solution), Hughes et al. 2017, TM 6-A57 | 10.3133/tm6A57 |
 | UZF1, Niswonger et al. 2006, TM 6-A19 | 10.3133/tm6A19 |
 | SFR2, Niswonger & Prudic 2005, TM 6-A13 | 10.3133/tm6A13 |
 | FloPy, Bakker et al. 2016, Groundwater | 10.1111/gwat.12413 |
-| FloPy workflows, Hughes et al., Groundwater | 10.1111/gwat.13327 |
+| FloPy workflows, Hughes et al. 2023, Groundwater | 10.1111/gwat.13327 |
 | MODFLOW API, Hughes et al. 2022, Environ. Model. Softw. | 10.1016/j.envsoft.2021.105257 |
-| MODFLOW as a configurable multi-model hydrologic simulator, Langevin et al., Groundwater | 10.1111/gwat.13351 |
+| MODFLOW as a configurable multi-model hydrologic simulator, Langevin et al. 2023, Groundwater | 10.1111/gwat.13351 |
 | PEST++ v5, White et al. 2020, TM 7-C26 (pestpp-da does sequential cycles) | 10.3133/tm7C26 |
 | Iterative ensemble smoother, White 2018, Environ. Model. Softw. | 10.1016/j.envsoft.2018.06.009 |
 | pyEMU, White, Fienen & Doherty 2016, Environ. Model. Softw. | 10.1016/j.envsoft.2016.08.017 |
@@ -407,7 +413,7 @@ agent; not yet added to `docs/references.bib` (each addition must pass
 | Chambers–Clover Creek model, Johnson et al. 2011 | 10.3133/sir20115086 |
 | Ambient-noise groundwater tracking, Clements & Denolle 2018, GRL | 10.1029/2018GL077706 |
 | GNSS loading, Washington and Oregon, Fu, Argus & Landerer 2015, JGR | 10.1002/2014JB011415 |
-| Heads and flows in PEST++ IES, White et al. 2020, Front. Earth Sci. | 10.3389/feart.2020.00050 |
+| "Toward reproducible environmental modeling for decision support: a worked example" (PEST++ IES history matching on heads and flows), White et al. 2020, Front. Earth Sci. | 10.3389/feart.2020.00050 |
 | Haitjema & Mitchell-Bruker 2005 | already in `docs/references.bib` |
 
 Tooling facts from the same check: conda-forge `modflow6` 6.8.1 is a serial build (parallel
