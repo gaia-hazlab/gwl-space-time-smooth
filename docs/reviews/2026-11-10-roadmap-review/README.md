@@ -384,3 +384,18 @@ of which new: #331, #332, #337, #344, #350.
   to each amended issue.
 - The coverage table is `coverage.json`, not CSV: the repository ignores `*.csv` as data and keeps
   provenance as JSON (`.gitignore`), so the first version of the table never reached the PR.
+- **#231 split (PI instruction, 2026-11-11).** #231's body is narrowed to what PR #272 (head
+  `618fea9`) delivers and its previous scope archived (`issues/amendments/before|after/231.md`). The
+  remainder is two issues, posted outside `scripts/post_issues.py` with `gh issue create`:
+
+  | Draft | Issue | Content | Queue state, grouper run 2026-11-11 |
+  |---|---|---|---|
+  | NEW-Q1 | #352 | `PAUSED_MILESTONES`, epic-blocker rejection, tests on the shipped table, six table rows that differ from the issue bodies | held by open #231 |
+  | NEW-Q2 | #353 | runner proceeds only on `approve`; `Refs` instead of `Closes` | held by `needs-human-decision` |
+
+  Checked by running: PR #272's test file gives 6 of 6 on `618fea9` (its body says 5; one test was
+  added by the second commit). `scripts/gaia_run_queue.sh:579` on `origin/main` is still
+  `[ "$decision" != "block" ] && return 0`. On the 228 open issues (226 + 2) the grouper holds 51 by
+  label and 128 by blockers; 34 of the 128 have #231 as their only open blocker (33 without #352).
+  Read, not run: commit `98d2c36` and the audit text. #231 is still open; closing it is the PI's action
+  after PR #272 merges.
