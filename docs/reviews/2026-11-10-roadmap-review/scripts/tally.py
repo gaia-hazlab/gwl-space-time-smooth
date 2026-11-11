@@ -8,7 +8,7 @@ def cls(v):
     v = v.lower()
     if v.startswith("no ") or "no acceptance" in v:
         return "no owner"
-    return "covered" if v.startswith("covered") and ";" not in v and "(" not in v else "owned, blocked or defective"
+    return "covered" if v.strip() == "covered" else "owned, blocked or defective"
 c = collections.Counter((r["axis"], cls(r["verdict"])) for r in rows)
 K = ("covered", "owned, blocked or defective", "no owner")
 print("| Axis | Requirements | " + " | ".join(K) + " |\n|---|---|---|---|---|")

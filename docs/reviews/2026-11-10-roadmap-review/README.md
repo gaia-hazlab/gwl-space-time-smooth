@@ -60,7 +60,7 @@ Coverage of the 61 target requirements in [`coverage.csv`](coverage.csv), tallie
 
 | Axis | Requirements | Covered | Owned, blocked or defective | No owner |
 |---|---|---|---|---|
-| Forcing (hindcast) | 7 | 3 | 1 | 3 |
+| Forcing (hindcast) | 7 | 2 | 2 | 3 |
 | Forecast | 5 | 1 | 2 | 2 |
 | Physics | 9 | 0 | 6 | 3 |
 | Mechanics | 4 | 0 | 2 | 2 |
@@ -69,7 +69,7 @@ Coverage of the 61 target requirements in [`coverage.csv`](coverage.csv), tallie
 | Uncertainty | 6 | 0 | 3 | 3 |
 | Hazard interoperability | 9 | 1 | 4 | 4 |
 | Compute | 5 | 0 | 2 | 3 |
-| All | 61 | 9 | 25 | 27 |
+| All | 61 | 8 | 26 | 27 |
 
 "Covered" means an owning issue with a testable acceptance and no hold; it does not mean built.
 Zero of the 26 issues in the MF6 core milestone are closed.
@@ -376,3 +376,9 @@ of which new: #331, #332, #337, #344, #350.
   `issues/amendments/`): section A is what approval fixes, section B lists 15 questions that stay
   open with the test or decision that settles each, section C lists what was added since
   2026-10-18. The `needs-human-decision` label is untouched.
+- **Count corrected (Copilot review of PR #351).** `scripts/tally.py` classified any verdict beginning
+  with "covered" as covered, against its own docstring; "covered for one use only" (sub-daily
+  precipitation) was therefore counted as covered. With an exact match the tally is 8 covered,
+  26 owned but blocked or defective, 27 with no owner (was 9, 25, 27). The table in section 1 is updated.
+- `scripts/check_record.py` now also checks the posted bodies and the header this review prepended
+  to each amended issue.
