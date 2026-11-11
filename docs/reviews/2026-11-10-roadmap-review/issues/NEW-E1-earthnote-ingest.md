@@ -1,6 +1,6 @@
 # NEW-E1: Ingest the Earthnote event record as a forcing-verification and consequence data source
 
-Milestone: v0.7 Probabilistic nowcast and ensemble forecast. Labels: P1, validation, atmospheric.
+Milestone: v0.7 Probabilistic nowcast and ensemble forecast. Labels: P1, validation, atmospheric, needs-human-decision.
 Needs Maleen Kidiwela's agreement before any work starts.
 
 ## Purpose

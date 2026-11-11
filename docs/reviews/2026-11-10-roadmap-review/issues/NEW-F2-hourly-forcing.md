@@ -8,13 +8,15 @@ of concentration under a day need sub-daily input (#132, #199). MRMS appears in 
 as an event comparison (#132, #224).
 
 ## Deliverable
-`src/data/fetch_hourly_precip.py`: hourly radar-gauge precipitation on the domain for a stated
-period, plus an aggregation to the PRISM day.
+`src/data/fetch_hourly_precip.py`: hourly precipitation on the domain for a stated period from MRMS
+and from Stage IV (the training target of the ACE2 downscaler in NEW-F3), plus an aggregation to the PRISM day.
 
 ## Acceptance
 - Aggregation to the 12-12 UTC day conserves the hourly sum to 1e-6.
 - Daily difference from PRISM reported by elevation band and season as an inter-product
   difference, not validation; radar beam-blockage area in the Cascades mapped and masked.
+- Stage IV provenance in this region is documented (radar, gauge, or a climatology-based analysis) and its
+  independence from PRISM is stated; MRMS minus Stage IV is reported by elevation band.
 - Maximum 1 h and 6 h intensities per event of the #305 manifest are tabulated.
 
 ## Hard blockers

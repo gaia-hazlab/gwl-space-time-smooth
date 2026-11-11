@@ -1,6 +1,6 @@
 # NEW-M1 (amends #250): pore pressure u(z,t) and effective stress sigma'(z,t) as a hazard state product
 
-Milestone: Applied math: DA estimator correctness. Labels: geotech, P1 (proposed, from P2). PI decision needed on priority and blocker.
+Milestone: Applied math: DA estimator correctness. Labels: geotech, P1 (proposed, from P2), needs-human-decision. PI decision needed on priority and blocker.
 
 ## Purpose
 "Hydromechanical" has one P2 owner for its mechanical output (#250), blocked by the dv/v operator

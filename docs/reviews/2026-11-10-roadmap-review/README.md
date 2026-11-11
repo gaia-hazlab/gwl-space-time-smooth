@@ -127,7 +127,7 @@ cannot execute). Priority is mine.
 |---|---|---|---|---|---|
 | F1 | P0 | Wind, humidity, vapour-pressure deficit and radiation are not ingested; PET is Hargreaves-Samani from temperature | confirmed | `src/data/fetch_prism_daily.py:42-56`; #58 labels P2, `needs-human-decision`; #234 requires "a wind/turbulent DDF term" with no source | NEW-F1 (hindcast meteorology, P1, no blocker) |
 | F2 | P0 | The forecast is one deterministic run from one initial condition, daily, precipitation and mean temperature | confirmed | `src/data/fetch_earth2studio.py:149` `deterministic(...)`; `:156-157` daily resample; `:164` two variables | NEW-F3 decision, NEW-F4 |
-| F3 | P1 | Ensemble issues #241, #242, #243 wait on the GPU run #136; member count is "Fix N_members against the Tillicum H200 budget" | confirmed | blocker lines in the snapshot | NEW-F3: choose the member source; an operational ensemble needs no GPU here (reviewer, online) |
+| F3 | P1 | Ensemble issues #241, #242, #243 wait on the GPU run #136; member count is "Fix N_members against the Tillicum H200 budget" | confirmed | blocker lines in the snapshot | NEW-F3: sources by lead range (HRRR short range; ACE2 with the Stage IV downscaler beyond), which takes #136 off the path |
 | F4 | P1 | No physics-ensemble baseline; #195 scores against "climatology and persistence" | confirmed | #195 current scope | stopping rule in NEW-F3: AI source kept only if CRPSS against the physics ensemble >= 0 at leads 1 to 5 days |
 | F5 | P1 | Sub-daily forcing exists only for burned cells (#132) and as an event comparison (#224); the model step is daily | confirmed | zero hits for AORC, HRRR, Stage IV in 194 bodies | NEW-F2 |
 | F6 | P2 | Forecast temperature is not lapse-corrected (#263 is PRISM only); the rain/snow split is a fixed 0 to 4 degC ramp | confirmed | #263 scope; `src/models/forecast.py:58-60` | NEW-F4 |
@@ -254,7 +254,7 @@ iteration count of 4 is my placeholder, not a number from #285.
 
 ## 4. Proposed additions
 
-Thirty draft issues in [`issues/`](issues/), written to the accepted rulebook (Purpose,
+Thirty-two draft issues in [`issues/`](issues/), written to the accepted rulebook (Purpose,
 Deliverable, Inputs and conventions, Acceptance, Hard blockers, Advisory).
 
 | Group | Drafts | Runnable on posting |
@@ -262,7 +262,7 @@ Deliverable, Inputs and conventions, Acceptance, Hard blockers, Advisory).
 | Forcing | NEW-F1 hindcast meteorology; NEW-F2 hourly precipitation; NEW-F3 member-source decision; NEW-F4 forecast variables | F1, F2; F3 is a PI decision |
 | Physics | NEW-P1 event-mode pressure column (decision) | decision |
 | Mechanics and structure | NEW-M1 pore pressure and effective stress; NEW-M2 suction-stress closure; NEW-M3 one-way coupling record; NEW-S1 geotechnical parameters per unit; NEW-S2 regolith thickness | M2 |
-| Data assimilation | NEW-D1 production estimator; NEW-D2 model error; NEW-D3 proxy admission; NEW-D4 smoother reanalysis; NEW-D5 SWE operator | none (all wait on the filter chain) |
+| Data assimilation | NEW-D1 production estimator; NEW-D2 model error; NEW-D3 proxy admission; NEW-D4 smoother reanalysis; NEW-D5 SWE operator; NEW-D6 multi-sensor slice | none (all wait on the filter chain) |
 | Uncertainty | NEW-U1 scoring library; NEW-U2 change of support; NEW-U3 decision probabilities | U1 |
 | Interoperability | NEW-I1 output schema; NEW-N1 NWM adapter; NEW-N2 state-swap experiment | none |
 | Wildfire | NEW-W0 epic; NEW-W1 export; NEW-W2 value gate; NEW-W3 burn-severity fetcher | W3 |
@@ -286,7 +286,7 @@ NEW-W2, NEW-U2, NEW-E2.
 | 2 | Approve the design record #265 (with PR #273) | approve with option A/B left to #302, as the 2026-11-07 review set out | 52 downstream |
 | 3 | Is storm-time shallow-landslide triggering a claim? (NEW-P1) | yes, as an event-mode column at selected hollows; otherwise #127 says antecedent susceptibility only | landslide milestone scope |
 | 4 | Raise #250's pore-pressure part to P1 and unblock it from #198 (NEW-M1) | yes | every hazard consumer |
-| 5 | Forecast member source (NEW-F3) | an operational physics ensemble as the member source and baseline, an AI ensemble scored against it, FuXi kept as one deterministic member | #241, #242, #243, #191 without the GPU run |
+| 5 | Forecast sources by lead range (NEW-F3; PI direction 2026-11-11: HRRR, or ACE2 with Brandon Kerns's Stage IV downscaler) | HRRR for 0 to 48 h hourly; the ACE2 path for ensembles beyond that, once it is settled whether it runs as an initialised forecast or a scenario generator; an operational ensemble read as the baseline; FuXi kept as one deterministic member | #241, #242, #243, #191 without the GPU run |
 | 6 | Wildfire: accept the gated milestone (NEW-W0) | yes; let NEW-W2 decide whether it stays a claim | ROADMAP.md "Act" row |
 | 7 | Flood: adapter plus state-swap experiment (NEW-N1, NEW-N2) | yes | #199 scope |
 | 8 | One-way coupling as a recorded design decision (NEW-M3) | yes, with the soft-unit mask | mechanics scope |
