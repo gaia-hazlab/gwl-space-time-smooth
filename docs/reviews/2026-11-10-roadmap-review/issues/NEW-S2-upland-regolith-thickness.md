@@ -1,0 +1,20 @@
+# NEW-S2: Upland regolith and colluvium thickness with provenance per cell
+
+Milestone: Hazard: LandLab landslide handoff. Labels: landlab, hydrogeology, P1.
+
+## Purpose
+Slip depth, perched storage and plant-available water in the uplands rest on SOLUS (capped at
+2 m, #134) and a depth-to-bedrock layer of "unknown provenance" (#83). #276 checks its units only
+at wells, and the uplands have few.
+
+## Deliverable
+Colluvium and weathered-bedrock thickness at 90 m with a `source` code per cell and a sigma.
+
+## Acceptance
+- Of upland well logs (#277) showing bedrock deeper than 2 m, fewer than a stated fraction (set in
+  the PR from the log count before scoring) have product thickness <= 2 m.
+- Withheld logs: reported bias and RMSE by slope class; no tuning to them.
+- Cells where the product is a model, not an observation, are labelled as such.
+
+## Hard blockers
+Blocked by: #277, #21.

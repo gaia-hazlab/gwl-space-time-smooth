@@ -1,0 +1,33 @@
+# NEW-N1: Flood: National Water Model / National Water Prediction Service adapter (baseline and optional back end)
+
+Milestone: Hazard: flood / inundation handoff. Labels: P1, validation.
+
+## Purpose
+PI direction 2026-11-10: integrate the National Water Prediction Service, keep it modular. The
+National Water Model (NWM) behind it is the operational reference; #202 already asks for a
+comparison with its retrospective discharge. The twin's claimed addition is an antecedent soil
+state informed by wells, probes and proxies that NWM does not assimilate. That claim needs a
+statement of what NWM carries, from its documentation, and a test.
+
+## Deliverable
+`src/io/nwm_adapter.py` (the only module allowed to import NWM-specific names; a test greps for
+violations) and `docs/data-cards/nwm.md`:
+1. reader for NWM analysis, short-range and medium-range reach flow, and the retrospective, mapped
+   to the gauges and NHDPlus reaches of #278/#257;
+2. a data card stating, with the NOAA page and date for each line: land model, soil layers and
+   depth, groundwater representation, forcing per configuration, what is assimilated, forecast ranges;
+3. an interface `RoutingBackend` with two implementations: the twin's own routing (#257) and
+   "NWM discharge as given".
+
+## Acceptance
+- Baseline table: KGE, peak-timing error and peak-magnitude bias of NWM analysis and forecasts at
+  the #202 held-out gauges, by lead, for the #305 events.
+- The data card contains no statement without a source line.
+- Swapping the backend changes no file outside the adapter and the configuration.
+- Gauges that NWM nudges to are flagged; scores are reported with and without them.
+
+## Hard blockers
+Blocked by: #278.
+
+## Advisory
+NEW-N2 is the experiment that uses this.

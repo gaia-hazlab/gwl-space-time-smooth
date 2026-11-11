@@ -1,0 +1,58 @@
+# NEW-Q2: GAIA runner: proceed only on an explicit approve; write Refs, not Closes (runner items carried under #231)
+
+Milestone: Software. Labels: enhancement, P0, needs-human-decision.
+Split from #231 on 2026-11-11 on the PI's instruction. These two items are not in #231's text;
+PR #272's body lists them as "Still open in #231", and their source is the 2026-10-08 audit
+(`docs/reviews/2026-10-08-physics-backlog-audit/README.md`, section 9.1, items 1 and 7).
+
+## Purpose
+The GAIA runner (`scripts/gaia_run_queue.sh`, the script that plans, reviews, implements and opens
+one pull request per batch) still implements a plan the science panel asked to revise, and still
+closes every issue of a batch through "Closes #N". Both were accepted as defects in September and
+October 2026 and neither fix is on `main`.
+
+## Deliverable
+In `scripts/gaia_run_queue.sh`, with tests under `scripts/gaia-launch/tests/`:
+1. The science gate proceeds only when the panel verdict is `approve`. A `revise` re-enters the plan
+   loop with the panel's concerns and parks the issue under `needs-human-decision` once
+   `GAIA_PLAN_REVISIONS` is spent, with gate record `panel-revise`. This is the runner hunk of commit
+   `98d2c36` (branch `docs/soil-twin-audit-and-plan-revision-2026-09-10`, 18 lines), ported, not
+   the grouper hunk of that commit, which PR #272 replaces.
+2. Commit trailers and the pull-request body carry `Refs #N`. The guard that appends a missing
+   closing line becomes a guard that no closing keyword precedes an issue number.
+3. `docs/gaia-automation.md` states both behaviours.
+
+## Inputs and conventions
+- Read 2026-11-11 on `origin/main` and on PR #272's head `618fea9`:
+  `scripts/gaia_run_queue.sh:579` is `[ "$decision" != "block" ] && return 0`;
+  `GAIA_PLAN_REVISIONS` defaults to 1 (`:89`); closing lines are built at `:1148`, written at
+  `:1340` and enforced at `:1461-1473`.
+- Closing keywords are the set in the runner's own pattern at `:1468`: close, closes, closed, fix,
+  fixes, fixed, resolve, resolves, resolved.
+
+## Decision requested (reason for the hold)
+(a) Who closes an issue once the runner writes `Refs`. The grouper releases a dependent only when
+    its blocker is closed, so with `Refs` the queue advances at the rate a person closes issues.
+    Recommended: the PI closes; the runner posts one comment per issue listing each acceptance line
+    and where the pull request meets it.
+(b) Whether this change is made in a supervised session or by the queue. Recommended: supervised,
+    because the queue would otherwise rewrite its own approval gate under the gate being replaced.
+
+## Acceptance
+- Test with stand-in `gh` and model executables: verdict `revise` leads to no implementation
+  commit, one re-plan, then the `needs-human-decision` label and a `panel-revise` gate record; a
+  missing `panel.json` parks the same way; `approve` proceeds.
+- For a simulated two-issue batch, no commit message and no pull-request body matches the pattern
+  at `:1468` for either issue number; each contains `Refs #N` for both.
+- `bash -n scripts/gaia_run_queue.sh` passes and the existing automation tests pass; the count is stated.
+
+## Hard blockers
+Blocked by: none.
+
+## Advisory
+The audit's item 1 also names "the per-issue ledger, safe stop, trusted gates and provenance"
+(O1 to O5 of `docs/soil-twin-operational-plan.md`, a file present only on the September branch).
+A provenance ledger append exists on `main` (`scripts/gaia_run_queue.sh:690-736`); which of O1 to
+O5 are otherwise on `main` was not checked here, and no open issue has them in its title
+(title search 2026-11-11 for gaia, queue, runner, grouper, automation, auditor: only #231 and the
+unrelated #289). The audit asks for this issue's two fixes "before any unattended run".

@@ -1,0 +1,27 @@
+# NEW-M1 (amends #250): pore pressure u(z,t) and effective stress sigma'(z,t) as a hazard state product
+
+Milestone: Applied math: DA estimator correctness. Labels: geotech, P1 (proposed, from P2), needs-human-decision. PI decision needed on priority and blocker.
+
+## Purpose
+"Hydromechanical" has one P2 owner for its mechanical output (#250), blocked by the dv/v operator
+(#198). `src/models/soil_mechanics.py:56-67` raises NotImplementedError; vadose effective stress is a
+constant 10 kPa (`src/models/dvv_coupling.py:48`). Pore pressure from MODFLOW heads needs no seismic
+operator. Every hazard consumer needs u or sigma', none needs dv/v.
+
+## Deliverable
+`estimate_mechanics` split in two: (a) `stress_state(heads, layers, theta, unit_weights)` returning
+u(z,t) in kPa and sigma'(z,t) in kPa on `(member, time, depth, y, x)` at depths 0.5, 1, 2, 3, 5,
+10 m and at layer mid-points, with a `closure` tag per cell (hydrostatic within layer, interpolated
+between layer heads, perched); (b) the Vs(z,t) product of #250, unchanged, still behind #198.
+
+## Acceptance
+- Hydrostatic column: u = gamma_w (z - DTW) to 1e-6 kPa below the table, 0 above (suction is NEW-M2).
+- Two-layer column with a downward gradient across an aquitard: u at the aquitard base equals the
+  lower-layer head value, not the hydrostatic extrapolation of the upper one; the test fails on the
+  hydrostatic shortcut.
+- Total stress uses per-unit moist and saturated unit weights from NEW-S1; with placeholders the
+  product is labelled `unit_weights = placeholder`.
+- The damage state D is excluded from every pore-pressure output (kept from #250).
+
+## Hard blockers
+Blocked by: #187. (Removes #198 from part (a); part (b) keeps it.)
