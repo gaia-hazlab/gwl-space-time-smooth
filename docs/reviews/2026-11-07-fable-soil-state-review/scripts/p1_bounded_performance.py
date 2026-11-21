@@ -38,6 +38,29 @@ def peak_rss_gb():
     return r / 1024 ** 3 if platform.system() == "Darwin" else r / 1024 ** 2
 
 
+def host_info():
+    """CPU, RAM and free disk on macOS (sysctl) or Linux (/proc); a field that cannot be read is None."""
+    def sysctl(key):
+        try:
+            return subprocess.run(["sysctl", "-n", key], capture_output=True, text=True, check=True).stdout.strip() or None
+        except (OSError, subprocess.CalledProcessError):
+            return None
+    cpu = ram_gb = None
+    if platform.system() == "Darwin":
+        cpu = sysctl("machdep.cpu.brand_string")
+        mem = sysctl("hw.memsize")
+        ram_gb = int(mem) / 1e9 if mem and mem.isdigit() else None
+    else:
+        try:
+            cpu = next((l.split(":", 1)[1].strip() for l in Path("/proc/cpuinfo").read_text().splitlines() if l.startswith("model name")), None)
+            kb = next((int(l.split()[1]) for l in Path("/proc/meminfo").read_text().splitlines() if l.startswith("MemTotal:")), None)
+            ram_gb = kb * 1024 / 1e9 if kb else None
+        except OSError:
+            pass
+    return {"system": platform.system(), "machine": platform.machine(), "cpu": cpu or platform.processor() or None,
+            "ram_gb": ram_gb, "free_disk_gb": shutil.disk_usage("/").free / 1e9}
+
+
 def run_tile(n):
     rng = np.random.default_rng(3)
     liquid = rng.gamma(0.6, 6.0, size=(STEPS, n, n)) * (rng.random((STEPS, n, n)) < 0.45)
@@ -58,14 +81,16 @@ def main():
         rows.append({"tile": n, "cells": n * n, "preflight_gb": est / 1024 ** 3, "run": True, "wall_s": wall,
                      "peak_rss_gb_so_far": peak_rss_gb(), "cell_steps_per_s": n * n * STEPS / wall})
     ran = [r for r in rows if r["run"]]
+    if len(ran) < 2:
+        sys.exit(f"p1: only {len(ran)} tile(s) fit under the {CAP_BYTES / 1024**3:.0f} GB preflight cap; "
+                 "the scaling fit needs at least two. Lower the tile sizes or raise CAP_BYTES.")
     cells = np.array([r["cells"] for r in ran], float); walls = np.array([r["wall_s"] for r in ran])
     slope, intercept = np.polyfit(np.log(cells), np.log(walls), 1)
     fit_resid = float(np.max(np.abs(np.log(walls) - (slope * np.log(cells) + intercept))))
     proj_domain = float(np.exp(intercept) * DOMAIN_CELLS ** slope)
     est_domain, _ = preflight(DOMAIN_CELLS, STEPS)
     record = {"issue": "gaia-hazlab/gwl-space-time-smooth#301",
-              "host": {"machine": platform.machine(), "cpu": subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True).stdout.strip(),
-                       "ram_gb": int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True).stdout) / 1e9, "free_disk_gb": shutil.disk_usage("/").free / 1e9},
+              "host": host_info(),
               "preflight_rule": f"cells x steps x {FIELDS} fields x {BYTES_PER_CELLSTEP} B (+ forcing) must stay below {CAP_BYTES / 1024**3:.0f} GB",
               "tiles": rows, "scaling_fit": {"wall_s = a * cells^b": {"a": float(np.exp(intercept)), "b": float(slope)}, "max_log_residual": fit_resid},
               "measured_bucket_cost": {"label": "MEASURED: land-surface bucket, one member, 365 daily steps", "per_cell_step_ns": float(1e9 * np.mean(walls / (cells * STEPS)))},
