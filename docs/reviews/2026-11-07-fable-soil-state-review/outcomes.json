@@ -20,7 +20,7 @@
   "date": "2026-11-09"
  },
  "C1": {
-  "outcome": "confirmed: Landlab 2.10.1 LandslideProbability lists none of the exported fields; failure probability monotone in recharge mean (0.0071 at 20 mm/d to 0.0279 at 60 mm/d, then saturated); outputs bit-identical under x0.5 and x2 of exported DTW, saturation and recharge-rate fields",
+  "outcome": "confirmed: Landlab 2.10.1 LandslideProbability lists none of the exported fields; failure probability monotone in recharge mean (core-node mean 0.0103 at 20 mm/d to 0.0403 at 60 mm/d, then saturated); outputs bit-identical under x0.5 and x2 of exported DTW, saturation and recharge-rate fields",
   "evidence": "results/c1_landlab_causal.json; tests/test_landlab_consumer.py (skips without landlab)",
   "date": "2026-11-09"
  },
