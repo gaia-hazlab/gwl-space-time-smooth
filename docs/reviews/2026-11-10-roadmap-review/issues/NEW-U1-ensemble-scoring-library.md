@@ -1,0 +1,28 @@
+# NEW-U1: Ensemble scoring library (the roadmap asks for scores no code computes)
+
+Milestone: Applied math: DA estimator correctness. Labels: validation, uncertainty, P1.
+
+## Purpose
+`src/evaluation/coverage.py:44-57` has Gaussian closed forms only. #188, #194, #195, #241, #286,
+#305, #306 ask for rank histograms, CRPS from members, spread-skill and innovation statistics. A
+search of `src/` for those functions returns nothing.
+
+## Deliverable
+`src/evaluation/ensemble_scores.py`: fair CRPS, rank histogram with a flatness test, spread-skill
+ratio, normalised innovation squared, Desroziers diagnostics, Brier score and reliability at named
+thresholds, energy and variogram scores, threshold-weighted CRPS, and a space-time block bootstrap
+that reports effective sample size.
+
+## Acceptance
+- Each score reproduces a published or analytic value on a fixture (Gaussian ensemble against the
+  closed form within Monte Carlo error).
+- The variogram score ranks the coherent ensemble above the independent one in >= 95 % of bootstrap
+  draws on the 18 configurations of #299.
+- On an AR(1) synthetic the block-bootstrap 95 % interval covers the true score at its nominal rate
+  where the independent bootstrap does not.
+
+## Hard blockers
+Blocked by: none.
+
+## Advisory
+Amends #188, #306, #286 to restore numeric thresholds (see AMENDMENTS.md).

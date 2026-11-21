@@ -4,7 +4,10 @@ The durable plan. **This file, plus the linked GitHub issues, is the source of t
 agent's context. If a session loses its memory, start here.
 
 Everything below is measured, not asserted. Where a number appears, it came from data, and the
-command that produced it is named.
+command or record that produced it is named.
+
+*Last revised 2026-11-21, after the PI approved design record #265 (section A) and the pilot domain
+#269.*
 
 ---
 
@@ -23,13 +26,13 @@ consequence, not the spine). Derived from the codex editorial review and set out
 
 | Loop stage | Job | Milestones |
 |---|---|---|
-| **Represent** | state at the scale each hazard needs; prior uncertainty | v0.2 · v0.3 (Vs30) · v0.4/v0.5 (domain) |
-| **Advance** | evolve water & stiffness, conserving mass | Water budget · v0.6 (memory) |
-| **Observe** | predict each sensor at its native support | DA correctness (operators) |
-| **Correct** | data update the state, reduce uncertainty | DA correctness (estimator) |
+| **Represent** | state at the scale each hazard needs; prior uncertainty | v0.2 · v0.3 (Vs30) · v0.4/v0.5 (domain) · MODFLOW core (structure, layers) |
+| **Advance** | evolve water & stiffness, conserving mass | Water budget (land surface) · **MODFLOW 6 core** · v0.6 (memory) |
+| **Observe** | predict each sensor at its native support | Applied math (operators) |
+| **Correct** | data update the state, reduce uncertainty | Applied math (estimator) |
 | **Propagate** | posterior distribution → forecast | v0.7 |
-| **Evaluate** | score in observation space, held-out | v0.7 · DA correctness |
-| **Act** | state distribution → hazard probability, at the hazard's scale | Landslide (≤10 m) · Liquefaction (90 m screen) · **Flood (reach/link network)** |
+| **Evaluate** | score in observation space, held-out | v0.7 · Applied math |
+| **Act** | state distribution → hazard probability, at the hazard's scale | Landslide (≤10 m) · Liquefaction (90 m screen) · Flood (reach network) · Wildfire |
 
 *Cross-cutting:* Software (CI, tests, reproducibility, scale) underpins every stage.
 
@@ -37,182 +40,234 @@ Milestone descriptions carry a `[loop: …]` tag recording their stage.
 
 ---
 
-## Where we actually are
+## The model (approved 2026-11-21)
+
+The groundwater is modelled with physics: MODFLOW 6 solves groundwater flow below the root zone. The
+soil water above it stays in a 90 m land-surface model with a root-zone bucket. The PI chose this on
+2026-10-18 and approved the design record, section A of
+[#265](../../issues/265), on 2026-11-21. The plan text is
+[`docs/reviews/2026-10-18-modflow-groundwater-core/plan.md`](docs/reviews/2026-10-18-modflow-groundwater-core/plan.md),
+read with the amendments of 2026-11-09 (#296) and 2026-11-11 (#319); where they disagree, #265
+governs.
+
+```
+forcing (PRISM daily hindcast; HRRR / ACE2 forecast, decision #333)
+   │
+   ▼
+land-surface model, 90 m ── snow · canopy · root-zone bucket          (soil moisture)
+   │ drainage ↓        ↑ seepage, groundwater ET
+   ▼
+MODFLOW 6 ── UZF (unsaturated zone) · GWF (heads, by hydrostratigraphic unit) · SFR (streams)
+   │
+   ├── observation operators at native support: wells, gauges, soil-moisture probes,
+   │   SMAP / NISAR, SNOTEL, dv/v, GNSS
+   ▼
+ensemble Kalman filter through modflowapi (states)   +   PEST++ IES offline (parameters)
+   │
+   ▼
+diagnosed products: depth to water, θ(z), pore pressure, effective stress, Vs → hazard consumers
+```
+
+What section A fixes, in short: one owner per store and one water ledger (#232); a structured grid
+in EPSG:5070 with cells of k × 90 m, k set by the convergence study (#283); layers by
+hydrostratigraphic unit, with geometry uncertainty as realizations (#292); one groundwater model per
+watershed in a single simulation; daily stress periods from water year 2001; parameters estimated
+offline and states by the cycling filter, with one role per well-year and per gauge-year (#235);
+the posterior is the ensemble of members; only forward operators enter the filter, and depth to
+water is diagnosed from heads, never assimilated; hydrology drives mechanics one way (#338); and
+nothing scales out before the pilot passes held-out validation (#286).
+
+The legacy store model in `src/models/water_budget.py` is no longer the groundwater model. It
+survives as the land-surface and root-zone component and as a skill baseline the MODFLOW pilot
+must beat.
+
+### What approval did not settle
+
+Section B of #265 stays open. Each row is decided by a named test or a PI decision, and an issue
+that implements a row before its test is out of order. The ones on the critical path:
+
+| ID | Question | Decided by | Status |
+|---|---|---|---|
+| B1 | Where MODFLOW's top sits: at the root base, with the bucket above it (option B), or at land surface, with UZF owning the whole unsaturated column (option A) | column test against a Richards reference, [#302](../../issues/302) | waits on #275 |
+| B2 | Whether the root zone is refilled from below by capillary rise, and how residual PET is split | PI decision [#307](../../issues/307) | waits on #302 |
+| B3 | Cycling by pause and resume, or by cold restart | [#303](../../issues/303), then PI decision [#308](../../issues/308) | waits on #275 |
+| B4 | Which snow model and which root-zone bucket survive (the code has two of each) | PI decision [#309](../../issues/309) | **undecided**; draft on the issue; evidence in PR #315 |
+| B5 | Hydrostate: Richards reference column, or a regional back end | PI decision [#310](../../issues/310) | waits on #302 |
+| B6 | Constrained analysis update versus clip-and-book | [#304](../../issues/304) | waits on #289 |
+| B7 | Filter variant, ensemble size, localization | [#322](../../issues/322) | open |
+
+B1 matters most to the claim about partially saturated soil. Under option B the bucket keeps the
+root zone, UZF carries water from the root base to the water table, and UZF is a kinematic-wave
+model, not Richards. As #280 is written, option B never moves water from the aquifer back up into
+the root zone, so a shallow water table cannot wet the soil above it. #302 measures that error
+against Richards before anyone builds the exchange.
+
+---
+
+## The pilot (approved 2026-11-21)
+
+**Enumclaw plateau around Newaukum Creek** ([#269](../../issues/269)). The domain encloses the whole
+Newaukum Creek basin (gauge 12108500, 79 km², 21 NWIS wells, 11 with ≥12 months), bounded by the
+Green River and the White River as stream boundaries with gauged inflows; both rivers are regulated
+(Howard Hanson Dam, Mud Mountain Dam, the Buckley diversion). The Osceola lahar cap makes most plateau
+wells semiconfined, which tests the layer-aware well operator (#9). Benchmark and starting framework:
+the USGS southeast Puget Sound model, SIR 2024-5026, if #295 finds its footprint covers the pilot.
+
+Still owed: the overlay of the 12108500 basin on the DNR bedrock contact (#21). The decision did not
+wait for it; #281 reports the bedrock fraction when it builds the domain.
+
+**The Puyallup River is also a domain of interest.** Seismic stations recorded proxies for river stage
+and discharge during the December 2025 floods, an observation stream the other basins lack. Related
+work: the December 2025 atmospheric-river hindcast on the Rainier box (#224) and the seismic discharge
+proxy in [`docs/twin/05-state-evaluation.qmd`](docs/twin/05-state-evaluation.qmd). Two facts bound
+what it can do. The White River, a pilot boundary, is a Puyallup tributary. The Puyallup gauge basin
+at Electron (12092000, 238 km²) contains no NWIS wells, so there the seismic proxy would constrain
+flux, not heads. Clarks Creek (12102078, 16 wells), the alternative pilot, is spring-fed from the
+Puyallup valley wall.
+
+The observation operator and error model for the seismic river proxy, tested on the December 2025
+floods, are [#355](../../issues/355); it recommends whether the proxy enters the filter (through the
+admission contract, #324) or serves as held-out validation. Still open, with no issue: whether the
+Puyallup is an extension of the pilot or the second domain.
+
+---
+
+## Where we are (2026-11-21)
 
 | component | status |
 |---|---|
-| Static layers (terrain, soils, Vs30) at 90 m | **done** — **western Cascades**, 2.96 M cells (v0.4) |
+| Static layers (terrain, soils, Vs30) at 90 m | **done** — western Cascades, 2.96 M cells (v0.4) |
 | Vs30 from the SVM (Grant, Wirth & Stone 2025) | **done**, staged as Zarr on Kopah |
-| Daily water budget (θ, water table, Vs) | **done** — monthly path preserved bit-for-bit |
-| Saturated-area runoff + lateral interflow + river/baseflow sink | **done** — see caveat below |
+| Store-model water budget, daily, with snow | **done**, now the land-surface component and the baseline (see below) |
 | Petrophysical coupling (water → Vs, Hertz–Mindlin) | **done** — not a fitted correlation |
-| Zarr staging on Kopah (gaia-cli conventions) | **done** |
-| Observed forcing (PRISM daily), state (NWIS wells), flux (USGS gauges) | **done**, Fall–Winter 2025-26 |
-| FuXi 15-day AI forecast adapter | **written, never run on a GPU** |
-| Snow module (degree-day) | **done** — calibrated against 30 SNOTEL SWE stations |
-| **Water-table magnitude + phase** | **PASSES** — see below |
+| Observed forcing (PRISM daily), state (NWIS wells), flux (USGS gauges) | **done**, Fall–Winter 2025-26; multi-year forcing is #70 |
+| FuXi 15-day AI forecast adapter | **written, never run on a GPU**; forcing choice reopened in #333 |
+| **MODFLOW 6** | **design approved, no code.** Nothing in the repo builds or runs MF6; #275 is first |
+| Soil-state validation ladder (#296) | experiments recorded in review PRs #313–#318; PI review is #312 |
+| Roadmap coverage review (#319) | 61 requirements checked against the issues; record in PR #351 |
 
-### The water budget now closes against the observations
+### The store-model baseline
 
-v0.4 fixed it. The model is calibrated in **daily** mode against **gauges** (fluxes) and **wells**
-(state), with the snow clock on:
+The v0.4 calibration, in daily mode against gauges and wells, with the snow clock on:
 
 | | model | observed |
 |---|---|---|
-| **baseflow index** | **0.52** | 0.47 (Lyne–Hollick, 6 gauges) |
-| **runoff coefficient Q/P** | **0.71** | 0.57–0.73 (per-basin closure) |
-| **seasonal amplitude** | **1.02 m** | 1.06 m (26,816 shallow-well obs) |
+| baseflow index | 0.52 | 0.47 (Lyne–Hollick, 6 gauges) |
+| runoff coefficient Q/P | 0.71 | 0.57–0.73 (per-basin closure) |
+| seasonal amplitude | 1.02 m | 1.06 m (26,816 shallow-well obs) |
 | water-table peak month | 5 | 4 |
-| *before v0.4* | *BFI 0.00, Q/P 0.96, Nov→Dec rise **+3.24 m*** | *(obs +0.12 m)* |
 
-Each parameter is pinned by a **different** observation — `S_y` ← amplitude, `k_aniso` ← Q/P,
-`recharge_ref` ← BFI — so it is a constrained fit, not curve-fitting.
-
-**Two of the "errors" were mine, not the model's**, and both are worth remembering:
-
-1. **"Model BFI = 0.00" was largely an accounting artefact.** `WaterBudget` recorded recharge, runoff
-   and interflow but had **no baseflow field**: the river sink removed head and the flux was never
-   *recorded*. Scored properly, the *uncalibrated* model already had BFI 0.22.
-2. **The first calibration objective omitted the amplitude**, so `specific_yield` was unconstrained,
-   drifted to the grid edge, and gave a 5.4 m seasonal swing. Fluxes right, storage wrong.
-
-**What this closure is, read 2026-10-18:** a three-parameter store-model fit. The six mountain
-gauge basins that set BFI and Q/P contain **zero** NWIS wells; only Newaukum Creek (21) and Clarks
-Creek (16) have any (count in the MODFLOW plan, section 2). The amplitude match therefore compares a
-domain-wide model with lowland wells outside most of the calibration basins. Superseded as the
-groundwater model by MODFLOW 6; kept as a skill baseline.
-
-**Honest residuals:** the fitted `Ka = 2` is *below* the 10–100 literature range for forest-soil
-anisotropy (flagged in code). And the peak is one month **late** — note the direction: an unsaturated
-travel-time lag (#87) would make it **worse**, which independently confirms #87 was correctly demoted.
+It is a three-parameter fit (`S_y` ← amplitude, `k_aniso` ← Q/P, `recharge_ref` ← BFI). The six
+mountain gauge basins that set BFI and Q/P contain zero NWIS wells; only Newaukum Creek (21) and
+Clarks Creek (16) have any (plan, section 2). The amplitude match therefore compares a domain-wide
+model with lowland wells outside most of the calibration basins. The fitted `Ka = 2` is below the
+10–100 literature range for forest-soil anisotropy, and the peak is one month late. The 2026-10-08
+audit found capillary rise creating water and valley cells with no sink (#232, #233). These are the
+reasons the groundwater moved to MODFLOW.
 
 ---
 
 ## The plan, in order
 
-### Groundwater core: MODFLOW 6 ← **NEXT** (decided 2026-10-18)
+Milestones: *Groundwater model: MODFLOW 6 hydrogeologic core* (13), *Water budget: land surface and
+root zone* (10), *Applied math: DA estimator correctness* (9), *Groundwater model: scale-out* (14).
+The epic is [#274](../../issues/274). Each issue's body carries its own `Blocked by:` line, and the
+queue reads it; the order below follows those lines.
 
-The PI replaced the water-balance store model with MODFLOW 6 below the root zone. The record is
-[`docs/reviews/2026-10-18-modflow-groundwater-core/plan.md`](docs/reviews/2026-10-18-modflow-groundwater-core/plan.md)
-(design record = issue #265; review round 1 in the same folder). It supersedes the 2026-10-08
-decision to keep the light store model as the DA model.
-
-| | |
-|---|---|
-| Components | 90 m land-surface model (snow, canopy, root zone) over MODFLOW 6 GWF + UZF + SFR, one ledger |
-| Partition | MF6 top at the root base; drainage down, seepage and groundwater ET up |
-| Grid | DIS cells of k × 90 m nested in the ledger grid; k from a convergence study |
-| Layers | hydrostratigraphic units; geometry uncertainty as realizations |
-| Watersheds | one GWF model per watershed, GWF–GWF exchanges where aquifers cross divides |
-| Time | daily stress periods on the PRISM day, WY2001 onward |
-| DA | PEST++ IES for parameters; ensemble filter through modflowapi for states; one role per well-year |
-| Pilot | Enumclaw plateau around Newaukum Creek (12108500), pending #269 |
-
-Milestones: *Groundwater model: MODFLOW 6 hydrogeologic core* (A), *Groundwater model: scale-out to
-the western-Cascades watersheds* (B); DA issues stay in *Applied math*. Superseded bucket issues
-carry the `superseded` label and are held by the queue.
-
-### v0.4 — Domain extension: western Cascades ([milestone](../../milestone/3)) — **DONE**
-
-**Why (two reasons, both measured):**
-
-**(a) The recharge clock is snowmelt, and we have no snow.** Snowmelt release peaks in **April**; the
-observed water table peaks in **April**. The current lowland domain is rain-dominated, so the snow
-module never fires and the model cannot produce the observed phase at *any* parameter setting. Putting
-the Cascades in the domain is the fix ([#100](../../issues/100)).
-
-**(b) The gauged basins are not in our modelled domain.** Measured overlap with the current static
-footprint:
-
-| Nisqually | Puyallup | Green | Skykomish | Cedar | Snoqualmie | **Newaukum Ck** |
-|---|---|---|---|---|---|---|
-| 0% | 0% | 0% | 0% | 1.8% | 17.3% | **100%** |
-
-Exactly **one** gauged basin (79 km²) is inside. And it is a *lowland* creek — while interflow
-(`f_lat = Ka·tanβ/(1+Ka·tanβ)`) is **most active on steep ground**. So the only basin we can model is
-the one least able to constrain the parameter that matters. Calibrating there would be self-deception.
-
-**Target grid:** bbox `-123.0, 46.6, -121.0, 48.2` (EPSG:4326) → EPSG:5070, 90 m,
-≈1670 × 1980 = **~3.3 M cells** (2.8–3.6× current). Covers the **Puyallup and Nisqually headwaters
-(Mt Rainier)**, Green, Cedar, Snoqualmie, Skykomish.
-
-| | issue | outcome |
-|---|---|---|
-| D1 | [#92](../../issues/92) Freeze the grid | ✅ 1567×1890 = **2.96 M cells**. Defined in **EPSG:5070, not lat/lon** — Albers is conic, and defining it in lat/lon inflated the grid to 5.1 M and failed to round-trip the legacy one. 7 drifting bbox copies converged. `assert_on_grid()` **raises** on legacy products. |
-| D2 | [#93](../../issues/93) 3DEP terrain | ✅ **Download tiled; routing global** (flow crosses seams). Old HAND was a Python double loop (~1e11 ops here) → **pointer doubling, 831× faster**, r=0.9996. Slope median 2.6° → **13.3°**. |
-| D3 | [#94](../../issues/94) SOLUS soils | ✅ Old source **dead**; moved to the authoritative NRCS release. **Root depth is no longer a global 1 m** (steep 1.05 m, flat 1.49 m). Real organic matter, not a 2.5% constant. |
-| D4 | [#95](../../issues/95) Vs30 | ✅ 3.7 s from the Kopah Zarr. Surface-referencing **verified over high relief**. Valley 378 → ridge 528 m/s. |
-| D5 | [#96](../../issues/96) Baseline water table | ✅ **The RF would have put a 75 m water table on Cascade ridges.** Applicability-domain mask (covariate space, not distance) flags 44% of the domain; TOPMODEL prior blended in where wells cannot speak. |
-| D6 | [#97](../../issues/97) Basin coverage | ✅ **All 8 gauged basins 100% inside** (was 1) — met at D1. |
-| D8 | [#100](../../issues/100) Snow clock | ✅ Calibrated on **30 SNOTEL SWE stations**. Objective had to be **melt-out timing, not RMSE** — RMSE picked a melt factor so slow the pack lingered to June and pushed melt to May. |
-| D7 | [#98](../../issues/98) Flux calibration | ✅ **Closes #88 and #90.** BFI 0.52/0.47, Q/P 0.71, amplitude 1.02/1.06 m. |
-
-### v0.5 — Eastern Cascades: Stehekin ([milestone](../../milestone/4)) ← after the MODFLOW pilot
-
-Deliberately separate: **not a bigger bbox, different hydrology.** East of the crest it is
-rain-shadowed and **snowmelt-dominated** (spring/summer peak, not the western autumn/winter rain
-peak). FuXi's 0.25° grid **cannot resolve the crest**, so orographic downscaling stops being a nicety
-and becomes a blocker. Prerequisite: v0.4 calibrated. [#99](../../issues/99)
-
-### v0.3 — Vs30 densification ([milestone](../../milestone/2)) — *paused*
-
-SVM is 200 m native; on the 90 m grid it is an upsample carrying no new information, making Vs30 the
-**coarsest static layer** and the binding constraint on liquefaction. Paused by user until the
-water-budget work lands. [#81–#86](../../issues/81)
-
-### v0.6 — Memory & disturbance ([milestone](../../milestone/5)) ← **STARTED**
-
-The soil state is **memoryless exactly where the interesting physics lives.** Two processes are absent:
-**(1) capillary hysteresis** — the retention curve is single-valued, so drying and wetting are
-reciprocal when they are not (the source of soil-moisture memory, [Shi et al. 2026 *Science*,
-agroseismology](https://doi.org/10.1126/science.aec0970) — the Denolle-lab DAS paper); **(2)
-landscape disturbance** — earthquakes/liquefaction, landslides, wildfire, and **farming (tillage)**
-alter the hydromechanical response over weeks-to-years, and today they appear only as downstream
-hazard *consumers*, never as inputs that perturb the soil state. **dv/v is the shared observable**, so
-the real problem is **attribution** across three timescales.
+### 1. Foundation — no blockers, the queue can start now
 
 | issue | what |
 |---|---|
-| [#119](../../issues/119) | **[epic]** Soil-state memory and landscape disturbance |
-| [#120](../../issues/120) | Capillary hysteresis (Kool–Parker scanning curves) — [doi:10.1029/WR023i001p00105](https://doi.org/10.1029/WR023i001p00105) |
-| [#121](../../issues/121) | Coseismic damage + **log-linear healing** dv/v state — [Illien 2025](https://doi.org/10.1038/s41467-025-57151-8), [Wang 2021](https://doi.org/10.1038/s41467-021-21418-7) |
-| [#122](../../issues/122) | Surface disturbance: wildfire / **agricultural** / landslide |
-| [#123](../../issues/123) | dv/v **attribution** — augment the BLUE (generalize [Illien 2022](https://doi.org/10.1029/2021JB023402)) |
-| [#124](../../issues/124) | Disturbance event catalog on the data plane (ShakeMap, MTBS, landslide, liquefaction) |
-| [#125](../../issues/125) | Report chapter: Memory & disturbance |
+| [#275](../../issues/275) | **MF6 toolchain in pixi + a CI smoke model.** First on the critical path: #295, #278, #302, #303, #280, #281 and #289 all wait on it |
+| [#276](../../issues/276) | Hydrostratigraphic framework on the 90 m grid |
+| [#277](../../issues/277) | WA Ecology well logs: lithology and screen depths |
+| [#10](../../issues/10) | Puget Sound coastal head boundary |
+| [#279](../../issues/279) | Pumping and return flows, or a bounded omission |
+| [#232](../../issues/232) | Whole-system water ledger (land-surface slice now) |
+| [#235](../../issues/235) | Continuous recorders + frozen holdout manifest (pilot held-out years and wells go here) |
+| [#70](../../issues/70) | Multi-year daily PRISM forcing and spin-up |
+| [#21](../../issues/21) | DNR lithology crosswalk (the bedrock overlay for the pilot) |
 
-**Multi-scale principle:** each process is a state variable with its **own relaxation timescale**
-(operator-split); disturbances are **patchy fields at native scale** reprojected through the existing
-forward-operator data plane. The timescale + footprint separation is what makes attribution possible.
+### 2. The partition tests — decide how the bucket and MODFLOW meet
 
----
+#302 (option A vs B against Richards) → decisions #307 and #310. #303 (UZF restart memory) →
+decision #308. #309 (snow model and bucket owner) waits on the PI; its evidence is in PR #315.
+The exchange #280 is blocked by #302 and #307.
 
-## Validation ladder (review of 2026-11-07, epic #296)
+### 3. The pilot model
+
+#295 (USGS benchmark) · #278 (stream network) · #280 (land surface ↔ MF6 exchange) →
+#281 (builder + steady state) → #282 (transient, daily, UZF) → #283 (grid convergence),
+#292 (framework realizations), #130 (perched water on the till or lahar cap), #174 (upland lateral
+flow) → #284 (PEST++ IES setup) → #285 (history match on Hyak, `needs-compute`) → #236 and
+**#286, held-out validation against the store-model baseline.** #286 is the gate for everything in
+section 5.
+
+### 4. Assimilation on the pilot
+
+#187 (state contract with MF6 heads) · #289 (ensemble runner over modflowapi) · #9 (well operator) ·
+#237 (gauge operator on SFR) · #290 (soil-moisture operators) → #304 → #188 (cycling filter, exact
+case and OSSE) → #306 (pilot, wells only) → #327 (multi-sensor). Specification and error budget:
+#322, #323, #324. Retrospective product: #325.
+
+### 5. Scale-out, after #286 passes
+
+#287 (one model per watershed, joined by exchanges) · #288 (mountain basins with no wells,
+`needs-compute`) · #293 (lakes and reservoirs) · #294 (ParFlow-CLM benchmark, held for a PI
+decision). The Puyallup domain belongs here unless the PI makes it a pilot extension. Then v0.5
+(Stehekin, [#99](../../issues/99)): east of the crest the hydrology is snowmelt-dominated, and FuXi's
+0.25° grid cannot resolve the crest, so orographic downscaling becomes a blocker.
+
+### Parallel tracks
+
+- **Hazard consumers.** Landslide (milestone 6), liquefaction (7), flood (12; National Water Model
+  adapter #339 and the skill test #340), wildfire (15; epic #347). Each stays a static susceptibility
+  or antecedent-state product until a consumer is executed and validated on events (#265 A12).
+  Shared output schema: #335.
+- **Mechanics as state products.** Pore pressure and effective stress (#336), suction stress (#337),
+  one-way coupling bound (#338), geotechnical parameters per unit (#342).
+- **v0.6 Memory and disturbance** ([milestone](../../milestone/5)). Capillary hysteresis (#120),
+  coseismic damage and healing (#121), surface disturbance (#122), dv/v attribution (#123). dv/v is
+  the shared observable, so the problem is attribution across timescales.
+- **v0.3 Vs30 densification** ([milestone](../../milestone/2)), *paused* by the PI until the water
+  work lands. Vs30 is the coarsest static layer (SVM is 200 m native) and the binding constraint on
+  liquefaction.
+- **Forcing.** Forecast sources by lead range (#333), hourly precipitation (#332), near-surface
+  meteorology (#331, #334).
+
+### The validation ladder (review of 2026-11-07, epic #296)
 
 An independent adversarial review of the shared soil-state architecture (twin as host, MODFLOW 6
 core, Hydrostate as Richards reference, Mechanicalstate as material library) became a tracked
 ladder of experiments, amendments and decisions. Record:
 [`docs/reviews/2026-11-07-fable-soil-state-review/`](docs/reviews/2026-11-07-fable-soil-state-review/README.md);
 log: [`TRACKER.md`](docs/reviews/2026-11-07-fable-soil-state-review/TRACKER.md), regenerated by
-`pixi run python scripts/review_tracker.py`. Batch 0 (no blockers) is executed: #297 closed-column ledger,
-#298 reinitialisation, #299 dependence sensitivity, #300 Landlab causality, #301 bounded
-performance. Batch 1 (#302 option A vs B column, #303 UZF restart) waits on #275; decisions
-#307-#310 wait on their evidence; #312 is the human review. Amended issues carry an
-"Amended 2026-11-09" header with the previous scope archived.
+`pixi run python scripts/review_tracker.py`. Batch 0 (no blockers) has been run; its scripts and
+results are in the same folder (PRs #314–#318): #297 closed-column ledger, #298 reinitialisation,
+#299 dependence sensitivity, #300 Landlab causality, #301 bounded performance.
+Batch 1 (#302 option A vs B column, #303 UZF restart) waits on #275; decisions #307–#310 wait on
+their evidence; #312 is the human review. Amended issues carry an "Amended 2026-11-09" header with
+the previous scope archived.
 
-## Open physics debts (blocking the water table)
+---
 
-*As of 2026-10-18 the groundwater items below are superseded by the MODFLOW 6 core (#89 included);
-the table is kept as history.*
+## Decisions
 
-| issue | what | status |
+**Taken**
+
+| date | decision | where |
 |---|---|---|
-| ~~#88 / #90~~ | Water table 8–26× too high; BFI 0.00 | ✅ **CLOSED by D7.** BFI 0.52 vs 0.47; amplitude 1.02 vs 1.06 m. |
-| [#87](../../issues/87) | Unsaturated travel-time lag | **DEMOTED, and now doubly so.** I first blamed the 4-month lag on vadose transit; it is **snowmelt**. And the calibrated model peaks one month **late**, so a vadose lag would make it *worse*. |
-| [#89](../../issues/89) | **Daily and monthly drain 4.7× differently** | Open. A monthly calibration is **invalid** for the daily mode we forecast in — it already produced one false "perfect fit". D7 was done in daily mode. |
-| [#57](../../issues/57) | No infiltration-excess runoff | Open. Needs sub-daily rain — and we still *discard* FuXi's native 6-hourly steps. |
-| [#55](../../issues/55) | Runoff routing → hydrograph | **LandLab's job by design.** We generate the source term; we do not route. |
-| ~~#91~~ | Domain misses the gauged basins | ✅ superseded by v0.4 |
+| 2026-10-08 | Keep the store model as the DA model | #265 archive; **superseded 2026-10-18** |
+| 2026-10-18 | MODFLOW 6 replaces the store model below the root zone; watershed models; water table and soil moisture in the state; assimilate raw, proxy and satellite data | #265, plan.md |
+| 2026-11-10 | Wildfire is a fourth hazard consumer; flood work integrates the National Water Prediction Service | #265 |
+| 2026-11-21 | Design record section A approved | [#265](../../issues/265) |
+| 2026-11-21 | Pilot: Enumclaw plateau / Newaukum Creek; Puyallup River a domain of interest | [#269](../../issues/269) |
+
+**Waiting on the PI** (label `needs-human-decision`): #309 (snow model and bucket owner, evidence
+ready); #307, #308, #310 (each after its test); #311 (products made with the sign-inverted Stage-3
+water table); #333 (forecast forcing); #312 (review of the validation ladder); and the rest of the
+list on GitHub. Superseded store-model issues (#171 and its children, #266, #89, #137, #177) are
+held by the queue; closing them is the PI's call.
 
 ---
 
@@ -245,12 +300,11 @@ the table is kept as history.*
 11. **Fit the quantity the physics needs, not the convenient one.** Calibrating snow on SWE *RMSE*
     (dominated by accumulation) chose a melt factor so slow the pack lingered into June. Fitting
     **melt-out timing** recovered the April peak.
-
----
-
 12. **A calibration gauge with no wells cannot pin a water table.** The six mountain gauge basins
     contain zero NWIS wells. Count the observations inside the control volume before claiming a
     state is constrained.
+
+---
 
 ## Compute
 
@@ -259,5 +313,15 @@ the table is kept as history.*
   Slurm nodes **do not autostop** and `time` is a hard kill — size it for the whole init sweep.
 - **Kopah** (`s3://gaia/soil-twin/...`) is the staging layer. SkyPilot `file_mounts` **do not work**
   with Kopah's custom endpoint — write with the S3 API.
-- The soil physics is pure numpy and runs anywhere. The forecast Zarr is the interface between the
-  GPU and the physics; nothing is copied by hand.
+- **MODFLOW 6.** The conda-forge build is serial, without PETSc/MPI; the multi-model run (#287)
+  needs the parallel build compiled on Hyak. PEST++ includes GPL-3.0 code: call it as an external
+  program, never vendor it. History matches (#285, #288) run on Hyak and carry `needs-compute`.
+  CI never runs a real watershed model, only the synthetic fixture from #275. The ensemble's cost
+  is measured in #320, not projected.
+
+---
+
+*The 2026-11-21 revision was drafted by Claude Code (Opus 5.5) at the PI's direction, from the
+GitHub issues and the merged plan; the decisions recorded here are the PI's. Earlier versions of this
+file, including the v0.4 domain-extension record (D1–D8) and the store-model physics debts, are in
+git history.*

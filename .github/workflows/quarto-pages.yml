@@ -65,7 +65,7 @@ jobs:
           if [ -f docs/gwl_hybrid_framework.html ]; then cp docs/gwl_hybrid_framework.html _site/report.html; fi
           # Pre-rendered, self-contained pages (figures/GIFs come from gitignored real-data products,
           # so they are served as committed rather than re-rendered on CI).
-          for f in gwl_soil_moisture_demo gwl_audit_framework; do
+          for f in gwl_soil_moisture_demo gwl_audit_framework gaia-review-loop; do
             if [ -f "docs/$f.html" ]; then cp "docs/$f.html" "_site/$f.html"; fi
           done
           # Per-issue dashboards committed by scripts/gaia_run_queue.sh (docs/gaia-runs/issue-<n>/

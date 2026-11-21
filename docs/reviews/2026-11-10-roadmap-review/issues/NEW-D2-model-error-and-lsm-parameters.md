@@ -1,0 +1,24 @@
+# NEW-D2: Complete the error budget of the forecast step: additive head error, boundary error, land-surface parameters
+
+Milestone: Applied math: DA estimator correctness. Labels: stage-3, uncertainty, P1.
+
+## Purpose
+Spread comes from AR(1) forcing perturbations and the PEST++ posterior (#188). Nothing adds error
+to heads or boundary stages, no land-surface parameter (root zone, snow) is in any ensemble, and
+geometry realizations (#292) reach PEST++ only: #289's `Ensemble(members, param_sets,
+forcing_perturbations, seed)` has no geometry argument. The plan records that the iterative
+ensemble smoother absorbs structural error and leaves it unsolved (plan.md:198-199).
+
+## Deliverable
+Additive model-error term per layer with a stated covariance; boundary-stage and specified-inflow
+error; a land-surface parameter ensemble; a `framework_realization` argument on the ensemble.
+
+## Acceptance
+- OSSE whose nature run uses a #292 geometry realization absent from the forecast ensemble:
+  spread/RMSE within 0.8 to 1.2 per layer over 365 cycles with inflation inside its stated bound.
+- Same OSSE calibrated by the smoother with no model-error term: held-out 90 % coverage is
+  reported with and without the term (the under-coverage is the measured cost of the assumption).
+- Changing one member's geometry changes that member only.
+
+## Hard blockers
+Blocked by: #188, #285, #292, #309.

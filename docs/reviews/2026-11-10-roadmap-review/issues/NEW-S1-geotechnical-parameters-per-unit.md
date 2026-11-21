@@ -1,0 +1,29 @@
+# NEW-S1: One 3-D structural model: geotechnical parameters per hydrostratigraphic unit
+
+Milestone: Groundwater model: MODFLOW 6 hydrogeologic core. Labels: geotech, hydrogeology, P1, needs-human-decision (data access).
+
+## Purpose
+The hydrostratigraphic framework (#276, #292) carries elevation, thickness, mask and sigma. Vs(z)
+and geotechnical layering live in a paused milestone (#81 to #86). No unit carries a unit weight,
+strength, fines content or density state, so the "3-D structural model" cannot serve mechanics, and
+geometry realizations never reach a mechanical product. #276's top unit merges Holocene alluvium
+with Vashon recessional outwash, the split #84 calls first-order.
+
+## Deliverable
+A parameter table keyed by unit, with prior and sigma and a source per row: moist and saturated
+unit weight; phi' and c'; van Genuchten alpha and n; Vs(z) parameters; fines content; a penetration
+resistance summary; overconsolidation state; S_ske. Fill, peat, tideflat and deltaic deposits are
+separate units. Crosswalk to #84's classes.
+
+## Inputs and conventions
+Washington borehole and penetration-test archives; which ones, with access terms, is the human
+decision. #277 supplies lithology and screens.
+
+## Acceptance
+- Held-out boreholes fall inside the stated 90 % interval for unit weight and phi' at a rate >= 0.8
+  (count of boreholes stated; fewer than 20 per unit is reported as "prior only").
+- Every row cites its source; rows without data are labelled `literature_prior`.
+- #292 realizations index this table, so a member carries geometry and parameters together.
+
+## Hard blockers
+Blocked by: #276, #277.

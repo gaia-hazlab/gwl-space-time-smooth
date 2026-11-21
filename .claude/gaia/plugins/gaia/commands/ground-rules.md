@@ -39,7 +39,7 @@ The plugin ships 13 agents in its `agents/` directory. Dispatch through the
 3. **Design-review first.** Audit a plan **once** before resources are spent; address
    Critical/Major findings; optional capped second pass; then proceed. A flaw caught at
    the design stage costs one revision, not a field season or a 10k-core run.
-4. **Model tiering.** Opus for judgment/hard reasoning, Sonnet for building/writing,
+4. **Model tiering.** Fable 5.2 for judgment/hard reasoning, Opus 5.5 for building/writing,
    Haiku for mechanical work. Match the agent to the weight of the task.
 5. **Always log AI use.** Every record the **Provenance Keeper** writes — commits,
    method notes, release metadata — discloses that AI assistance was used, honestly and

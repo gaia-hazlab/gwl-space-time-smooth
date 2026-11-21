@@ -1,0 +1,1522 @@
+[
+ {
+  "number": 1,
+  "title": "EPIC: Hydrogeologist review \u2014 stratified, data-anchored validation, domain masking & calibrated uncertainty",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   21,
+   186
+  ]
+ },
+ {
+  "number": 3,
+  "title": "Per-domain validation gates + variogram-sized CV blocks (retire <8 m / 200 km)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   21
+  ]
+ },
+ {
+  "number": 6,
+  "title": "Temporal validation at continuous recorders (phase, recession, aliasing)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   21
+  ]
+ },
+ {
+  "number": 7,
+  "title": "Stage 3 nugget = representativeness variance (stay-close-to-data knob)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   186,
+   21
+  ]
+ },
+ {
+  "number": 8,
+  "title": "Stage 2 response time tau conditioned on aquifer type",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "merge",
+  "final_verdict": "merge",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   23,
+   21
+  ]
+ },
+ {
+  "number": 9,
+  "title": "Aquifer-aware deep/confined well screening (shallow-only target)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 10,
+  "title": "Coastal & stream boundary conditions (sea level, stream stage)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   21,
+   175
+  ]
+ },
+ {
+  "number": 12,
+  "title": "LandLab / geotech bridge: hillslope water table for landslide & road hazard",
+  "family": "landslide-flood",
+  "verdict": "close-superseded",
+  "final_verdict": "close-superseded",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 14,
+  "title": "Lithology data gap over Puget Sound blocks #2 acceptance (depends on downloader #10)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "close-superseded",
+  "final_verdict": "close-superseded",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   21
+  ]
+ },
+ {
+  "number": 18,
+  "title": "EPIC: gaia-soil-reanalysis coupled subsurface state",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 19,
+  "title": "[P1] dv/v coupling: seismic-constrained dynamic soil mechanics + reanalysis",
+  "family": "hydromech-dvv-memory",
+  "verdict": "close-superseded",
+  "final_verdict": "close-superseded",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   198,
+   30
+  ]
+ },
+ {
+  "number": 20,
+  "title": "Implement soil-moisture state module (theta static envelope + dynamic driver)",
+  "family": "water-budget-core",
+  "verdict": "close-done",
+  "final_verdict": "close-done",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 21,
+  "title": "Complete DNR lithology crosswalk + adopt local rasterizer (unblocks #14 / #2)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 22,
+  "title": "DataHub: confirm raw geology archive format (GeoParquet vector vs Zarr)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 23,
+  "title": "Prototype Rung-2 TFN dynamics (linear reservoir, Pastas) behind climate_response",
+  "family": "water-budget-core",
+  "verdict": "merge",
+  "final_verdict": "merge",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 24,
+  "title": "Rename repository to gaia-soil-reanalysis",
+  "family": "forecast-interop-software-docs",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 25,
+  "title": "Verify references.bib integrity (zero fabricated DOIs)",
+  "family": "forecast-interop-software-docs",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 28,
+  "title": "SNOTEL soil-moisture observation anchors + assimilation (obs-anchor SM like GWL)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "close-done",
+  "final_verdict": "close-done",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 29,
+  "title": "Native-scale calibration/validation vs SMAP, NISAR, NLDAS-v3, GRACE (upscale-then-compare)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 30,
+  "title": "Ingest real ambient-noise dv/v + calibrate coupling parameters (promote demo \u2192 operational)",
+  "family": "hydromech-dvv-memory",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   198,
+   164,
+   189
+  ]
+ },
+ {
+  "number": 31,
+  "title": "Data-informed / model-driven downscaler beyond the bilinear resampling baseline",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   197
+  ]
+ },
+ {
+  "number": 32,
+  "title": "GWL forcing/method ensemble \u2014 forcing-UQ parity",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   187,
+   186,
+   23
+  ]
+ },
+ {
+  "number": 40,
+  "title": "P0: Reconcile TerraClimate consistency r = 0.94 vs 0.98",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 45,
+  "title": "Bug: recalibrate S_THETA (=-2.0 implies ~20% dv/v per 0.1 theta; observed 0.1-1%)",
+  "family": "hydromech-dvv-memory",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 46,
+  "title": "P1: HAND is unconfined-only; screen wells by aquifer; add confined-glacial-drift / perched domain",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "merge",
+  "final_verdict": "merge",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 47,
+  "title": "P1: Report achieved per-domain valley-fill RMSE / bias / coverage (not just pooled 18.5 m)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   21,
+   9,
+   186
+  ]
+ },
+ {
+  "number": 49,
+  "title": "P1: Demote MERRA-2 to inter-model consistency; report a lowland USCRN/ISMN result",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 50,
+  "title": "P1: Per-hydrostratigraphic-unit k_sat (confined vs unconfined: Sy vs S, drained vs undrained)",
+  "family": "hydromech-dvv-memory",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   198
+  ]
+ },
+ {
+  "number": 51,
+  "title": "P1: Twin is truth-in/truth-out - inject dv/v measurement+inversion error; run separate_depth for Vs30",
+  "family": "hydromech-dvv-memory",
+  "verdict": "close-superseded",
+  "final_verdict": "close-superseded",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 52,
+  "title": "P1: Resolve the two-theta ambiguity; fix sigma math",
+  "family": "water-budget-core",
+  "verdict": "keep",
+  "final_verdict": "keep",
+  "verifier_upheld": null,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 54,
+  "title": "P1: Replace synthetic Vs30 with a real Vs30 model + real uncertainty",
+  "family": "liquefaction-vs30",
+  "verdict": "close-superseded",
+  "final_verdict": "close-superseded",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 56,
+  "title": "P2: Forcing-interface table (P, PET, SPI-3, dSWE, PDO; downscaling; bias correction)",
+  "family": "forecast-interop-software-docs",
+  "verdict": "close-superseded",
+  "final_verdict": "close-superseded",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 57,
+  "title": "P2: Re-derive the bucket at daily/hourly resolution; populate beta4/TFN for atmospheric rivers",
+  "family": "water-budget-core",
+  "verdict": "defer",
+  "final_verdict": "defer",
+  "verifier_upheld": false,
+  "agent_ready": false,
+  "missing_blockers": [],
+  "final_verdict_note": "rewrite the body before deferring"
+ },
+ {
+  "number": 58,
+  "title": "P2: Penman-Monteith PET path (AI-model radiation/humidity/wind)",
+  "family": "forecast-interop-software-docs",
+  "verdict": "defer",
+  "final_verdict": "defer",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   136
+  ]
+ },
+ {
+  "number": 59,
+  "title": "P2: Event-based validation \u2014 one PNW atmospheric-river hindcast",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   89,
+   172,
+   70
+  ]
+ },
+ {
+  "number": 60,
+  "title": "Epic: peer-review remediation (P0/P1/P2)",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 64,
+  "title": "LandLab export: wire dynamic bundle to real products + CLI + sigma + mask",
+  "family": "forecast-interop-software-docs",
+  "verdict": "close-done",
+  "final_verdict": "close-done",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 65,
+  "title": "Publish LandLab bundle as COG/Zarr + STAC (s3://cresst)",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 70,
+  "title": "Hindcast forcing: drive the coupled water budget from PRISM rainfall",
+  "family": "water-budget-core",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 71,
+  "title": "Forward forcing: GraphCast/ACE2 QPF via earth2studio -> 90 m downscaler -> antecedent ensemble",
+  "family": "forecast-interop-software-docs",
+  "verdict": "close-superseded",
+  "final_verdict": "rewrite",
+  "verifier_upheld": false,
+  "agent_ready": false,
+  "missing_blockers": [
+   187,
+   136
+  ],
+  "final_verdict_note": "repurpose #71 in place as the meteorological member-source / FuXi-ensemble issue, BLOCKED_BY 187 and 136"
+ },
+ {
+  "number": 72,
+  "title": "ERA5-Land as an independent gridded cross-validation product (upscale-then-compare)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "keep",
+  "final_verdict": "keep",
+  "verifier_upheld": null,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 73,
+  "title": "EPIC: Forecast forcing + downstream handoff",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 81,
+  "title": "Vs30 densification: source measured Vs profiles (the validation anchor \u2014 BLOCKER)",
+  "family": "liquefaction-vs30",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 82,
+  "title": "Vs30 densification: fetch the missing SOLUS soil covariates (bulk density, organic carbon, soil thickness)",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   81
+  ]
+ },
+ {
+  "number": 83,
+  "title": "Vs30 densification: two-layer travel-time model from soil thickness / depth-to-bedrock",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   81
+  ]
+ },
+ {
+  "number": 84,
+  "title": "Vs30 densification: stratify Vs(z) profiles by surficial geology (glacial overconsolidation)",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   81
+  ]
+ },
+ {
+  "number": 85,
+  "title": "Vs30 densification: effective-stress coupling to the water table (makes Vs dynamic)",
+  "family": "hydromech-dvv-memory",
+  "verdict": "merge",
+  "final_verdict": "merge",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   81,
+   82,
+   83,
+   198
+  ]
+ },
+ {
+  "number": 86,
+  "title": "Vs30 densification: mean-preserving block-constrained downscaling + block CV",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   81,
+   84
+  ]
+ },
+ {
+  "number": 87,
+  "title": "Forecast: recharge reaches the water table instantaneously (no unsaturated travel-time lag)",
+  "family": "water-budget-core",
+  "verdict": "close-superseded",
+  "final_verdict": "close-superseded",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 89,
+  "title": "Water budget: daily and monthly timesteps drain 4.7x differently",
+  "family": "water-budget-core",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 99,
+  "title": "S1: Stehekin \u2014 scope the eastern-Cascades extension (rain shadow + snowmelt regime)",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "defer",
+  "final_verdict": "defer",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   100
+  ]
+ },
+ {
+  "number": 100,
+  "title": "D8: Snow is the water-table clock \u2014 calibrate the snow module and verify the April peak emerges",
+  "family": "water-budget-core",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": false,
+  "agent_ready": false,
+  "missing_blockers": [
+   70
+  ],
+  "final_verdict_note": "blocker should be #70, not #137",
+  "correction_2026_10_09": "missing_blockers was [137], contradicting final_verdict; with 137:[...,100] that formed a cycle"
+ },
+ {
+  "number": 109,
+  "title": "Surface-water extent (Sentinel-2 optical) as a distributed flux / variable-source-area constraint",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "defer",
+  "final_verdict": "split",
+  "verifier_upheld": false,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 112,
+  "title": "Stream observation/forcing Zarr as earth2studio DataSources",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 119,
+  "title": "[epic] Soil-state memory and landscape disturbance",
+  "family": "hydromech-dvv-memory",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 121,
+  "title": "Coseismic damage + log-linear healing as a carried dv/v state",
+  "family": "hydromech-dvv-memory",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   198,
+   124
+  ]
+ },
+ {
+  "number": 122,
+  "title": "Surface-disturbance hydromechanics: wildfire, agricultural (tillage), landslide",
+  "family": "hydromech-dvv-memory",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   132,
+   198,
+   124
+  ]
+ },
+ {
+  "number": 123,
+  "title": "dv/v attribution: augment the BLUE to separate hydrology / damage / disturbance",
+  "family": "hydromech-dvv-memory",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   162,
+   169,
+   198,
+   121,
+   122,
+   164
+  ]
+ },
+ {
+  "number": 124,
+  "title": "Disturbance event catalog on the data plane (ShakeMap, fire, landslide, liquefaction)",
+  "family": "hydromech-dvv-memory",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 125,
+  "title": "Report chapter: Memory & disturbance",
+  "family": "hydromech-dvv-memory",
+  "verdict": "close-done",
+  "final_verdict": "close-done",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 127,
+  "title": "[epic] LandLab landslide handoff \u2014 from hydrology to a factor-of-safety",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 128,
+  "title": "Implement soil_mechanics: infinite-slope factor-of-safety + pore pressure (the MVP mechanics)",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 129,
+  "title": "Run LandLab LandslideProbability end-to-end on a pilot corridor and score vs a landslide inventory",
+  "family": "landslide-flood",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   128,
+   135,
+   134
+  ]
+ },
+ {
+  "number": 130,
+  "title": "Two subsurface stores (shallow perched + deep GWL) for fall-shallow vs spring-deep regimes",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   174,
+   137
+  ]
+ },
+ {
+  "number": 131,
+  "title": "Vadose transit lag: recharge must not teleport to the water table",
+  "family": "water-budget-core",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   172
+  ]
+ },
+ {
+  "number": 132,
+  "title": "Sub-daily rainfall intensity for Hortonian / post-fire triggering",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   89
+  ]
+ },
+ {
+  "number": 133,
+  "title": "Downslope-convergent interflow delivered as positive pore pressure, not a stream sink",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   130,
+   174
+  ]
+ },
+ {
+  "number": 134,
+  "title": "Root cohesion, colluvium thickness, and post-fire (Ks/cohesion) states for landslides",
+  "family": "landslide-flood",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   128,
+   121
+  ]
+ },
+ {
+  "number": 135,
+  "title": "<=10 m slope + explicit cut-slope layer for shallow failures",
+  "family": "landslide-flood",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 136,
+  "title": "Run the FuXi forecast engine and orographically bias-correct it",
+  "family": "landslide-flood",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 137,
+  "title": "Defensible specific yield + held-out water-budget validation (shared foundation)",
+  "family": "water-budget-core",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   172,
+   131,
+   173,
+   174,
+   175,
+   89,
+   70
+  ]
+ },
+ {
+  "number": 138,
+  "title": "Minor fixes (LandLab / landslide review)",
+  "family": "landslide-flood",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   30,
+   64
+  ]
+ },
+ {
+  "number": 139,
+  "title": "[epic] Sanger-Maurer liquefaction framework \u2014 a dynamic-water-table susceptibility product",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   137,
+   143,
+   144
+  ]
+ },
+ {
+  "number": 140,
+  "title": "Reframe Vs30 as site amplification / class, NOT a liquefaction triggering variable",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 141,
+  "title": "MVP: geospatial liquefaction GLM driven by the dynamic seasonal-high water table + scenario ShakeMap PGV",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   143,
+   144
+  ]
+ },
+ {
+  "number": 142,
+  "title": "Seasonal-high depth-to-water in liquefiable units: sub-1.5 m accuracy, uncertainty, non-TOPMODEL prior",
+  "family": "liquefaction-vs30",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   137
+  ]
+ },
+ {
+  "number": 143,
+  "title": "Ingest USGS ShakeMap ground motion (PGA / PGV / Mw) with epistemic uncertainty",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 144,
+  "title": "Per-cell Vs30 sigma field so P(NEHRP class) is not decorative",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 145,
+  "title": "Firewall the coseismic dv/v damage/healing state from liquefaction TRIGGERING (category error)",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 146,
+  "title": "Future: depth-resolved triggering (CPT/SPT + Vs(z) critical layer + CSR/CRR)",
+  "family": "liquefaction-vs30",
+  "verdict": "defer",
+  "final_verdict": "defer",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   141
+  ]
+ },
+ {
+  "number": 147,
+  "title": "Scope honestly: a susceptibility screen, not an LPI \u2014 90 m from a 200 m SVM cannot resolve facies",
+  "family": "liquefaction-vs30",
+  "verdict": "merge",
+  "final_verdict": "merge",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 148,
+  "title": "Wald-Allen Vs30 proxy is near-degenerate on flat liquefiable ground \u2014 document and guard",
+  "family": "liquefaction-vs30",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 149,
+  "title": "Minor fixes (liquefaction review)",
+  "family": "liquefaction-vs30",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 150,
+  "title": "[epic] Software hardening",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 152,
+  "title": "Real skips, not silent pass: pytest collection + importorskip",
+  "family": "forecast-interop-software-docs",
+  "verdict": "close-done",
+  "final_verdict": "close-done",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 153,
+  "title": "Reproducible from a clean checkout: pinned data snapshot + fixtures",
+  "family": "forecast-interop-software-docs",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 155,
+  "title": "RNG determinism: single seeded generator + per-frame streams",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 156,
+  "title": "Fetcher + assimilation tests (fixture-backed)",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": [
+   153
+  ]
+ },
+ {
+  "number": 157,
+  "title": "pixi: compatible-release bounds on the scientific core",
+  "family": "forecast-interop-software-docs",
+  "verdict": "keep",
+  "final_verdict": "keep",
+  "verifier_upheld": null,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 160,
+  "title": "[epic] DA estimator correctness \u2014 time, prior, operator, identifiability",
+  "family": "da-estimator",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 161,
+  "title": "Temporal model: proper space-time covariance or a Kalman propagation",
+  "family": "da-estimator",
+  "verdict": "close-superseded",
+  "final_verdict": "close-superseded",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   188
+  ]
+ },
+ {
+  "number": 162,
+  "title": "Static BLUE -> augmented space-time estimator (so attribution can run)",
+  "family": "da-estimator",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   169,
+   187,
+   188,
+   198,
+   124
+  ]
+ },
+ {
+  "number": 163,
+  "title": "Prior structure: scalable AND terrain-aware (GMRF/SPDE/Matern), not dense isotropic",
+  "family": "da-estimator",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 164,
+  "title": "Diagonal R for dv/v double-counts correlated coda errors",
+  "family": "da-estimator",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 165,
+  "title": "Petrophysical gain belongs in G (S_theta != 1), its uncertainty in R",
+  "family": "da-estimator",
+  "verdict": "merge",
+  "final_verdict": "merge",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   198
+  ]
+ },
+ {
+  "number": 166,
+  "title": "effective_observability is not a covariance diagonal \u2014 label or derive it",
+  "family": "da-estimator",
+  "verdict": "merge",
+  "final_verdict": "merge",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 167,
+  "title": "revisit_days is cadence, not datum age",
+  "family": "da-estimator",
+  "verdict": "merge",
+  "final_verdict": "merge",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 168,
+  "title": "Coda footprint operator bias into R; 3-D (not separable 2-D) kernel",
+  "family": "da-estimator",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   198
+  ]
+ },
+ {
+  "number": 169,
+  "title": "Attribution identifiability precondition (rank-deficiency)",
+  "family": "da-estimator",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": [
+   124
+  ]
+ },
+ {
+  "number": 170,
+  "title": "Minor fixes (DA review)",
+  "family": "da-estimator",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": true,
+  "missing_blockers": []
+ },
+ {
+  "number": 171,
+  "title": "[epic] Water budget: restore the unsaturated zone; validate the calibration",
+  "family": "water-budget-core",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 172,
+  "title": "Consistent storage account: close the massless vadose gap between the two reservoirs",
+  "family": "water-budget-core",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 173,
+  "title": "Saturation-excess runoff: no one-step fill to the water table; stop double-counting root-zone space",
+  "family": "water-budget-core",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   172
+  ]
+ },
+ {
+  "number": 174,
+  "title": "Interflow: give it a store and a defensible coefficient",
+  "family": "water-budget-core",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   172
+  ]
+ },
+ {
+  "number": 175,
+  "title": "Baseflow sink: break the near-circular BFI anchor; nonlinear recession",
+  "family": "water-budget-core",
+  "verdict": "keep",
+  "final_verdict": "rewrite",
+  "verifier_upheld": false,
+  "agent_ready": false,
+  "missing_blockers": [
+   172,
+   70
+  ]
+ },
+ {
+  "number": 176,
+  "title": "Route hysteresis into the soil-water DYNAMICS, not only the dv/v observable",
+  "family": "water-budget-core",
+  "verdict": "keep",
+  "final_verdict": "rewrite",
+  "verifier_upheld": false,
+  "agent_ready": false,
+  "missing_blockers": [
+   172
+  ]
+ },
+ {
+  "number": 177,
+  "title": "Minor fixes (groundwater / vadose review)",
+  "family": "water-budget-core",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 186,
+  "title": "P0: Back-transform Stage-3 kriging predictive variance before combining uncertainty",
+  "family": "da-estimator",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   153
+  ]
+ },
+ {
+  "number": 187,
+  "title": "P0: Define the canonical probabilistic state, parameter, forcing, and observation contract",
+  "family": "da-estimator",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 188,
+  "title": "P1: Implement a cycling, localized ensemble nowcast for coupled hydrologic storage",
+  "family": "da-estimator",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   155,
+   156
+  ]
+ },
+ {
+  "number": 189,
+  "title": "P1: Operationalize ground-sensor observation records, operators, QC, and holdouts",
+  "family": "da-estimator",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 190,
+  "title": "P2: Make mechanical damage, disturbance, and healing states probabilistic and conditionable",
+  "family": "hydromech-dvv-memory",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   198,
+   162,
+   169,
+   121,
+   122,
+   124
+  ]
+ },
+ {
+  "number": 191,
+  "title": "P1: Make SoilStateForecast ensemble-native and initialize from DA posterior",
+  "family": "forecast-interop-software-docs",
+  "verdict": "keep",
+  "final_verdict": "keep",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   136,
+   155
+  ]
+ },
+ {
+  "number": 192,
+  "title": "P1: Estimate and diagnose prior, process, and observation-error covariance (B/Q/R)",
+  "family": "da-estimator",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   164
+  ]
+ },
+ {
+  "number": 193,
+  "title": "P2: Propagate joint ensembles into hazards",
+  "family": "forecast-interop-software-docs",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   190,
+   129,
+   141,
+   128
+  ]
+ },
+ {
+  "number": 194,
+  "title": "P1: Quantify nowcast uncertainty reduction and value added with withheld sensors",
+  "family": "da-estimator",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 195,
+  "title": "P1: Calibrate and validate probabilistic nowcasts/forecasts by lead and native support",
+  "family": "forecast-interop-software-docs",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 197,
+  "title": "Ingest NISAR Beta Soil Moisture (V1, 200 m) as a soil-moisture validation/assimilation stream",
+  "family": "hydrogeo-realism-domain-validation",
+  "verdict": "keep",
+  "final_verdict": "keep",
+  "verifier_upheld": null,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 198,
+  "title": "P0: Use one depth-resolved hydromechanical operator for forward prediction and inversion",
+  "family": "hydromech-dvv-memory",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   187
+  ],
+  "correction_2026_10_09": "removed 176: the basic operator (198a) must not wait on hysteresis. Only the hysteretic mode (198b) is blocked by #176, and #176 is blocked by 198a"
+ },
+ {
+  "number": 199,
+  "title": "[epic] Flood/inundation handoff \u2014 from soil-state source terms to routed discharge",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 200,
+  "title": "Flood: soil-state source-term export contract (runoff/interflow/baseflow + uncertainty, member-preserving)",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   193
+  ]
+ },
+ {
+  "number": 201,
+  "title": "Flood: select and pilot a routing component (LandLab OverlandFlow/FlowAccumulator vs external HAND inundation)",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 202,
+  "title": "Flood: validate routed discharge against USGS gauge hydrographs (reuse D7 BFI/Q\u2013P calibration, #98)",
+  "family": "landslide-flood",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   137,
+   191
+  ]
+ },
+ {
+  "number": 203,
+  "title": "Earth2Studio model-structure & assimilation compatibility",
+  "family": "forecast-interop-software-docs",
+  "verdict": "defer",
+  "final_verdict": "defer",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   188,
+   191
+  ]
+ },
+ {
+  "number": 204,
+  "title": "[epic] Book/twin rewrite \u2014 codex editorial framework",
+  "family": "forecast-interop-software-docs",
+  "verdict": "hold-human",
+  "final_verdict": "hold-human",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 205,
+  "title": "Diagnostic-gated regime-switching \u03c4 for the OU temporal model (wet/dry-conditional; follow-on of #194)",
+  "family": "da-estimator",
+  "verdict": "defer",
+  "final_verdict": "defer",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   188
+  ]
+ },
+ {
+  "number": 223,
+  "title": "R1: rainier3d sub-domain adapter (release assets \u2192 90 m EPSG:5070)",
+  "family": "rainier-slices",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": []
+ },
+ {
+  "number": 224,
+  "title": "R2: event hindcasts on the Rainier box (Dec 2025 AR, Jan 2009 storm + S24 landslides)",
+  "family": "rainier-slices",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   128,
+   134,
+   70
+  ]
+ },
+ {
+  "number": 225,
+  "title": "R3: canopy interception store from rainier3d LAI/GEDI",
+  "family": "rainier-slices",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   172,
+   223
+  ]
+ },
+ {
+  "number": 226,
+  "title": "R4: GNSS elastic-loading observation operator for total water storage",
+  "family": "rainier-slices",
+  "verdict": "defer",
+  "final_verdict": "defer",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   187,
+   189,
+   172
+  ]
+ },
+ {
+  "number": 227,
+  "title": "R5: glacier mask and degree-day ice melt (IceBoost v2)",
+  "family": "rainier-slices",
+  "verdict": "rewrite",
+  "final_verdict": "rewrite",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   223,
+   172
+  ]
+ },
+ {
+  "number": 228,
+  "title": "R6: hydrothermal alteration as a control on water pathways (edifice and lowland lahar cap)",
+  "family": "rainier-slices",
+  "verdict": "split",
+  "final_verdict": "split",
+  "verifier_upheld": true,
+  "agent_ready": false,
+  "missing_blockers": [
+   223,
+   46,
+   21,
+   14
+  ]
+ }
+]

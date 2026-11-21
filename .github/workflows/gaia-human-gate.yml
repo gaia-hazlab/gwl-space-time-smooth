@@ -1,0 +1,198 @@
+# The human gate, on GitHub's side of the fence.
+#
+# The pipeline parks what it may not decide and labels the issue `needs-human-decision`. That
+# was the end of the mechanism: the decision then waited on a person happening to read the
+# tail of a console log on whichever box the queue ran on. A gate whose escalation path is
+# "someone remembers to look" is not an escalation path.
+#
+# This closes it, in the two tempos the design already argues for:
+#
+#   IMMEDIATE, once per park — the decision packet is posted on the issue and the issue is
+#   assigned. Assignment is the notification; GitHub already knows how to reach a person.
+#   Once per park, never once per day: re-notifying about a decision someone has already seen
+#   is how a gate becomes a pager, which is the failure this whole design exists to avoid.
+#
+#   PERIODIC, one sitting — a weekly rebuild of the queue page on the docs site and of ONE
+#   rolling digest issue, edited in place so it does not notify, plus an email if the queue is
+#   not empty. Parked issues are decisions to make; the digest is what makes them a sitting
+#   instead of a stream.
+#
+# Staleness is measured here, in CI, from the park stamp the queue writes into its own park
+# comment (`<!-- gaia-park:{…} -->`): the commit the plan was judged against and the files the
+# plan named. The repository is checked out at full depth, so `git` can answer how far the
+# tree has moved under a parked plan without CI ever seeing the box's `.gaia-runs/`.
+name: Gaia human gate
+
+on:
+  issues:
+    types: [labeled]
+  schedule:
+    # Monday 08:00 America/Los_Angeles. A weekly sitting, not a daily interruption.
+    - cron: "0 15 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: gaia-human-gate
+  cancel-in-progress: false
+
+env:
+  # Who gets assigned and emailed. Set the repository variables to change either; the
+  # fallbacks are the current maintainer rather than a hardcoded assumption in ten places.
+  GAIA_HUMAN: ${{ vars.GAIA_HUMAN || 'mdenolle' }}
+  GAIA_HUMAN_EMAIL: ${{ vars.GAIA_HUMAN_EMAIL || 'mdenolle@uw.edu' }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  # ── one park, one packet ───────────────────────────────────────────────────
+  packet:
+    if: github.event_name == 'issues' && github.event.label.name == 'needs-human-decision'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # staleness needs the history the park stamp points into
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # A re-park must produce a new packet; a re-label of something already escalated must
+      # not. Both are the same question — has every park stamp on this issue been answered by
+      # a packet? — so it is counted rather than guessed at.
+      - name: Has this park already been escalated?
+        id: check
+        run: |
+          n="${{ github.event.issue.number }}"
+          bodies="$(gh issue view "$n" --json comments -q '.comments[].body' || echo "")"
+          parks=$(printf '%s' "$bodies" | grep -c 'gaia-park:' || true)
+          packets=$(printf '%s' "$bodies" | grep -c 'gaia-human-gate-packet' || true)
+          echo "parks=$parks packets=$packets"
+          if [ "$packets" -ge "$parks" ] && [ "$packets" -gt 0 ]; then
+            echo "post=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "post=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post the decision packet and assign it
+        if: steps.check.outputs.post == 'yes'
+        run: |
+          n="${{ github.event.issue.number }}"
+          python3 scripts/gaia-launch/gaia_human_queue.py --from-github \
+            --repo "$GITHUB_REPOSITORY" --json /tmp/queue.json > /dev/null
+          if python3 scripts/gaia-launch/gaia_human_queue.py --from-json /tmp/queue.json \
+               --repo-dir . --packet "$n" > /tmp/packet.md; then
+            printf '\n<!-- gaia-human-gate-packet -->\n' >> /tmp/packet.md
+            gh issue comment "$n" --body-file /tmp/packet.md
+          else
+            echo "::warning::#$n carries the label but no park stamp; assigning without a packet"
+          fi
+          # Assignment IS the notification. Failing soft: an unassignable login must not turn
+          # an escalation into a workflow failure nobody reads either.
+          gh issue edit "$n" --add-assignee "$GAIA_HUMAN" \
+            || echo "::warning::could not assign $GAIA_HUMAN to #$n"
+
+  # ── the sitting ────────────────────────────────────────────────────────────
+  digest:
+    if: github.event_name != 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build the queue
+        id: build
+        run: |
+          python3 scripts/gaia-launch/gaia_human_queue.py --from-github \
+            --repo "$GITHUB_REPOSITORY" --repo-dir . \
+            --html docs/gaia-human-queue.html --json /tmp/queue.json
+          python3 scripts/gaia-launch/gaia_human_queue.py --from-json /tmp/queue.json \
+            --repo-dir . --markdown > /tmp/digest.md
+          echo "waiting=$(python3 -c 'import json;print(len(json.load(open("/tmp/queue.json"))))')" \
+            >> "$GITHUB_OUTPUT"
+          cat /tmp/digest.md >> "$GITHUB_STEP_SUMMARY"
+
+      # The page is committed rather than deployed directly: docs/** is what the Pages
+      # workflow builds from, so one push publishes it the same way every other doc is
+      # published. Soft on failure — a protected branch must not turn the digest into a
+      # failed run; the digest issue and the email do not depend on this step.
+      - name: Publish the queue page
+        continue-on-error: true
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- docs/gaia-human-queue.html; then
+            echo "queue page unchanged"; exit 0
+          fi
+          git add docs/gaia-human-queue.html
+          git commit -m "gaia: rebuild the human-decision queue page" \
+            -m "What is waiting on a person, rebuilt from GitHub state by the human gate." \
+            -m "Co-Authored-By: Claude <noreply@anthropic.com>"
+          git push || echo "::warning::could not push the queue page (protected branch?)"
+
+      # ONE issue, edited in place. Editing a body does not notify, which is the point: the
+      # digest is a document to read in one sitting, not a stream of pages. The email below is
+      # the only thing that reaches out, and only when something is actually waiting.
+      - name: Update the rolling digest issue
+        run: |
+          gh label create gaia-digest --color 'CC79A7' \
+            --description 'The rolling list of what needs a human' 2>/dev/null || true
+          num="$(gh issue list --label gaia-digest --state open --limit 1 --json number \
+                 -q '.[0].number' || echo "")"
+          title="Open decisions: what the gaia pipeline is waiting on a person for"
+          if [ -z "$num" ]; then
+            gh issue create --title "$title" --label gaia-digest --body-file /tmp/digest.md \
+              --assignee "$GAIA_HUMAN" || gh issue create --title "$title" \
+              --label gaia-digest --body-file /tmp/digest.md
+          else
+            gh issue edit "$num" --body-file /tmp/digest.md
+            echo "digest #$num updated in place (no notification, by design)"
+          fi
+
+      # Optional and self-disabling. With no SMTP secrets configured this prints one line and
+      # succeeds: GitHub's own assignment notification already reaches a person, and a
+      # half-configured mailer that fails loudly every Monday would train someone to ignore
+      # this workflow's failures.
+      - name: Email the sitting
+        if: steps.build.outputs.waiting != '0'
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+        run: |
+          python3 - <<'PY'
+          import os, smtplib, ssl
+          from email.message import EmailMessage
+          host = os.environ.get("SMTP_HOST", "").strip()
+          if not host:
+              print("no SMTP_HOST secret; skipping the email. Assignment on the issue is the "
+                    "notification that always works.")
+              raise SystemExit(0)
+          to = os.environ["GAIA_HUMAN_EMAIL"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          body = open("/tmp/digest.md", encoding="utf-8").read()
+          msg = EmailMessage()
+          msg["Subject"] = f"[gaia] decisions waiting on you — {repo}"
+          msg["From"] = os.environ.get("SMTP_USER") or to
+          msg["To"] = to
+          msg.set_content(
+              body
+              + f"\n\nThe queue page: https://{repo.split('/')[0]}.github.io/"
+                f"{repo.split('/')[1]}/gaia-human-queue.html\n")
+          port = int(os.environ.get("SMTP_PORT") or 587)
+          with smtplib.SMTP(host, port, timeout=60) as s:
+              s.starttls(context=ssl.create_default_context())
+              if os.environ.get("SMTP_USER"):
+                  s.login(os.environ["SMTP_USER"], os.environ.get("SMTP_PASS", ""))
+              s.send_message(msg)
+          print(f"emailed the sitting to {to}")
+          PY
