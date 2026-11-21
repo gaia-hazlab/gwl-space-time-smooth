@@ -99,6 +99,28 @@ class TheStampSurvivesGitHub(unittest.TestCase):
             self.assertEqual("::warning::" in err.getvalue(), warned)
         self.assertGreaterEqual(hq.FETCH_LIMIT, 1000)
 
+    def test_fetch_reads_comments_from_the_list_and_rereads_only_a_capped_issue(self):
+        from unittest import mock
+
+        import gaia_human_queue as hq
+        early = {"body": f"<!-- gaia-park:{json.dumps(stamp(sha='1' * 40))} -->"}
+        late = {"body": f"<!-- gaia-park:{json.dumps(stamp(sha='2' * 40))} -->"}
+        listed = [{"number": 1, "comments": [early]},
+                  {"number": 2, "comments": [early] * hq.COMMENT_PAGE}]       # at the cap
+        views = []
+
+        def fake_gh(args):
+            if args[:2] == ["issue", "list"]:
+                return listed
+            views.append(args[2])
+            return {"comments": [early] * hq.COMMENT_PAGE + [late]}
+
+        with mock.patch.object(hq, "gh_json", fake_gh):
+            rows = {r["issue"]: r for r in hq.fetch("o/r", limit=10)}
+        self.assertEqual(views, ["2"])                               # one extra call, for #2 only
+        self.assertEqual(rows[1]["stamp"]["sha"], "1" * 40)
+        self.assertEqual(rows[2]["stamp"]["sha"], "2" * 40)          # the newest stamp is found
+
     def test_braces_inside_a_string_value_do_not_truncate_the_stamp(self):
         # Free-text fields can carry code. The match ends only at a brace followed by -->.
         s = dict(stamp(), decisive_test="run f() { return {a: 1}; } and check }")
