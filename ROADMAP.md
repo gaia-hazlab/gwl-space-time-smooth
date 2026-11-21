@@ -125,9 +125,10 @@ at Electron (12092000, 238 km²) contains no NWIS wells, so there the seismic pr
 flux, not heads. Clarks Creek (12102078, 16 wells), the alternative pilot, is spring-fed from the
 Puyallup valley wall.
 
-Open, with no issue yet: whether the Puyallup is an extension of the pilot or the second domain; and
-the observation operator and error model for the seismic river proxy, including whether it enters the
-filter (through the admission contract, #324) or serves as held-out validation.
+The observation operator and error model for the seismic river proxy, tested on the December 2025
+floods, are [#355](../../issues/355); it recommends whether the proxy enters the filter (through the
+admission contract, #324) or serves as held-out validation. Still open, with no issue: whether the
+Puyallup is an extension of the pilot or the second domain.
 
 ---
 
