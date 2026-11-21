@@ -200,7 +200,7 @@ Data: rainier3d's gnss product does not include daily.parquet (rainier/scripts/2
 Rewrite the scope:
 - (a) A pure forward operator with no twin dependence: a load grid gives vertical displacement, using half-space disk and point-load (Farrell) Green's functions.
 - (b) Unit tests against the analytic disk-load centre and edge solutions, to 1%.
-- (c) A separate validation step that expose SWE plus theta*z_r plus S_y*h as a TWS state, adds a far-field complement and ATML/NTOL corrections, and compares station-pair differential seasonal amplitudes within the domain against UNR/PANGA vertical series. Exclude flagged and snow-affected site-winters; acceptance is a stated tolerance with CI, against a null of a domain-uniform load.
+- (c) A separate validation step that exposes SWE plus theta*z_r plus S_y*h as a TWS state, adds a far-field complement and ATML/NTOL corrections, and compares station-pair differential seasonal amplitudes within the domain against UNR/PANGA vertical series. Exclude flagged and snow-affected site-winters; acceptance is a stated tolerance with CI, against a null of a domain-uniform load.
 
 Drop the STREAMS bullet in favour of the #189 record schema. Inline the relevant poroelastic preset rather than pointing at an external repo.
 

@@ -6,7 +6,7 @@
 
 ## Verdict
 
-All seven Codex findings are correct. Each was checked by rerunning a probe or computing the cited quantity, not only by reading. The archive is corrected in place on this branch. Every changed recommendation carries a **[Corrected 2026-10-09, Cn]** marker, and the original text is struck through rather than deleted. The larger problem is that the flawed recommendations had already been copied into live issues #164, #176, #198, #232, #249, #251, #265, #266 and #267 before this review. Those issue edits are listed below as proposals. They have not been applied.
+All seven Codex review findings (C1–C7) are correct, and so are the two further items the review raises outside its findings section (C8, C9). Each was checked by rerunning a probe or computing the cited quantity, not only by reading. The archive is corrected in place on this branch. Every changed recommendation carries a **[Corrected 2026-10-09, Cn]** marker, and the original text is struck through rather than deleted. The larger problem is that the flawed recommendations had already been copied into live issues #164, #176, #198, #232, #249, #251, #265, #266 and #267 before this review. Those issue edits are listed below as proposals. They have not been applied.
 
 ## Finding-by-finding verification
 
