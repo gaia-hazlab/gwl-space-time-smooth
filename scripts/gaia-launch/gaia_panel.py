@@ -66,10 +66,12 @@ BY_LABEL = {
     "peer-review":     ["gaia-literature-scout"],
     "documentation":   ["gaia-lab-notebook"],
     "bug":             ["gaia-debugger"],
+    "modflow":         ["twin-hydrogeologist", "twin-da-methodologist"],
 }
 # Milestones are curated epics and carry more signal than any single label.
 BY_MILESTONE_KEYWORD = {
     "applied math":   ["twin-da-methodologist", "twin-geostatistician"],
+    "groundwater model": ["twin-hydrogeologist", "twin-geostatistician"],
     "water budget":   ["twin-hydrogeologist", "twin-atmospheric-scientist"],
     "liquefaction":   ["twin-geotech-engineer", "twin-hydrogeologist"],
     "landslide":      ["twin-geotech-engineer", "twin-hydrogeologist"],
@@ -112,7 +114,7 @@ def route(labels: list[str], milestone: str | None, plan_text: str = "") -> list
             if kw in ml:
                 add(names)
                 break
-    for lab in ("hydrogeology", "water-budget", "soil-reanalysis", "dv-v", "geotech",
+    for lab in ("modflow", "hydrogeology", "water-budget", "soil-reanalysis", "dv-v", "geotech",
                 "landlab", "atmospheric", "uncertainty", "validation",
                 "stage-3", "stage-2", "stage-1", "peer-review", "documentation"):
         if lab in low:
