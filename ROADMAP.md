@@ -86,7 +86,7 @@ must beat.
 Section B of #265 stays open. Each row is decided by a named test or a PI decision, and an issue
 that implements a row before its test is out of order. The ones on the critical path:
 
-| | Question | Decided by | Status |
+| ID | Question | Decided by | Status |
 |---|---|---|---|
 | B1 | Where MODFLOW's top sits: at the root base, with the bucket above it (option B), or at land surface, with UZF owning the whole unsaturated column (option A) | column test against a Richards reference, [#302](../../issues/302) | waits on #275 |
 | B2 | Whether the root zone is refilled from below by capillary rise, and how residual PET is split | PI decision [#307](../../issues/307) | waits on #302 |
