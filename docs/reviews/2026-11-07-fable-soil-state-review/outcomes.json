@@ -24,5 +24,10 @@
   "evidence": "results/c1_landlab_causal.json; tests/test_landlab_consumer.py (skips without landlab)",
   "date": "2026-11-09"
  },
+ "Q3": {
+  "outcome": "awaiting PI decision; draft record posted recommending option (a): forecast.liquid_input owns snow, coupled_water_budget owns the root zone, soil_moisture pair wrapped then deleted",
+  "evidence": "issues/Q3-decision-draft.md; https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/309#issuecomment-6746956342",
+  "date": "2026-11-09"
+ },
  "_decisions": []
 }
