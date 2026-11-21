@@ -42,7 +42,7 @@ def test_two_snow_models_disagree_on_one_winter():
     assert np.sum(np.abs(liq_fc - liq_sm) > 1e-9) > 30                     # different thresholds, different water
 
 
-@pytest.mark.xfail(strict=True, reason="SWE restarts at zero on every call (forecast.py:123); flips when #234 carries the snow state")
+@pytest.mark.xfail(strict=True, reason="forecast.liquid_input initialises SWE to zero on every call; flips when #234 carries the snow state")
 def test_segmented_snow_run_equals_continuous_run():
     t = np.r_[np.full(20, -5.0), np.full(10, 6.0)]
     full = fc.liquid_input(_forcing(30, t))[:, 0, 0]

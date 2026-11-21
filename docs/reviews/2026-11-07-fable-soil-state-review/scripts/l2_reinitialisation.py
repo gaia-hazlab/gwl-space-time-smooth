@@ -21,6 +21,14 @@ from src.models import forecast as fc, soil_moisture as sm, hysteresis as hy, wa
 from src.models.dvv_coupling import coupling_envelope  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "results" / "l2_reinitialisation.json"
+
+
+def git_commit():
+    """Commit of the checkout, or None outside a git checkout (the record still gets written)."""
+    try:
+        return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
 WP, FC, SAT = 0.10, 0.28, 0.45
 
 
@@ -109,7 +117,7 @@ def two_snow_models():
 
 def main():
     record = {"issue": "gaia-hazlab/gwl-space-time-smooth#298",
-              "commit": subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
+              "commit": git_commit(),
               "sources_sha256": {p: hashlib.sha256((ROOT / "src/models" / p).read_bytes()).hexdigest() for p in ("forecast.py", "water_budget.py", "hysteresis.py", "gwl_dynamic.py", "soil_moisture.py")},
               "snow_restart": snow_restart(), "theta_ref": theta_ref_after_first_step(), "budget_segmented": budget_segmented(),
               "hysteresis_branch": hysteresis_branch(), "centring_leakage": centring_leakage(), "two_snow_models": two_snow_models()}
