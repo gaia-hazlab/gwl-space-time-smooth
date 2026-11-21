@@ -1,0 +1,68 @@
+{
+ "issue": "gaia-hazlab/gwl-space-time-smooth#301",
+ "host": {
+  "machine": "arm64",
+  "cpu": "Apple M1 Max",
+  "ram_gb": 68.719476736,
+  "free_disk_gb": 25.154256896
+ },
+ "preflight_rule": "cells x steps x 8 fields x 12 B (+ forcing) must stay below 8 GB",
+ "tiles": [
+  {
+   "tile": 200,
+   "cells": 40000,
+   "preflight_gb": 1.5228986740112305,
+   "run": true,
+   "wall_s": 0.4642043749336153,
+   "peak_rss_gb_so_far": 1.5938873291015625,
+   "cell_steps_per_s": 31451663.940237332
+  },
+  {
+   "tile": 400,
+   "cells": 160000,
+   "preflight_gb": 6.091594696044922,
+   "run": true,
+   "wall_s": 2.1755302500678226,
+   "peak_rss_gb_so_far": 6.2175445556640625,
+   "cell_steps_per_s": 26844030.32234526
+  },
+  {
+   "tile": 800,
+   "cells": 640000,
+   "preflight_gb": 24.366378784179688,
+   "run": false
+  }
+ ],
+ "scaling_fit": {
+  "wall_s = a * cells^b": {
+   "a": 3.4576674917500026e-06,
+   "b": 1.11426752629004
+  },
+  "max_log_residual": 1.7763568394002505e-15
+ },
+ "measured_bucket_cost": {
+  "label": "MEASURED: land-surface bucket, one member, 365 daily steps",
+  "per_cell_step_ns": 34.52352525515654
+ },
+ "modflow_cost": {
+  "label": "NOT MEASURED HERE",
+  "where": "#283 measures MF6 runtime per member-year at each k"
+ },
+ "projection": {
+  "label": "PROJECTION from the tile fit, not a cycling benchmark",
+  "domain_cells": 2961630,
+  "one_member_year_wall_s": 56.208221431725015,
+  "full_domain_history_gb_if_allocated": 112.75655999779701,
+  "note": "a full-domain 365-step history would exceed the 8 GB cap by this factor and must be chunked in time",
+  "fifty_member_year_core_hours_if_linear": 0.7806697421072919
+ },
+ "dense_intermediate_not_allocated": {
+  "shape": [
+   2961630,
+   863
+  ],
+  "float64_gb": 19.042839780449867,
+  "source": "observability.py:140-144"
+ },
+ "peak_rss_gb": 6.2208251953125
+}
