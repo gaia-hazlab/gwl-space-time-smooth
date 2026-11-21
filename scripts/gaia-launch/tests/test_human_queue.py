@@ -76,6 +76,12 @@ class TheStampSurvivesGitHub(unittest.TestCase):
     def test_prose_with_no_stamp_is_simply_empty(self):
         self.assertEqual(parse_stamp("just a person talking about the issue"), {})
 
+    def test_braces_inside_a_string_value_do_not_truncate_the_stamp(self):
+        # Free-text fields can carry code. The match ends only at a brace followed by -->.
+        s = dict(stamp(), decisive_test="run f() { return {a: 1}; } and check }")
+        body = f"<!-- gaia-park:{json.dumps(s)} -->"
+        self.assertEqual(parse_stamp(body), s)
+
     def test_the_newest_stamped_comment_is_the_one_used(self):
         comments = [{"body": f"<!-- gaia-park:{json.dumps(stamp(cause='panel-stalemate'))} -->"},
                     {"body": "a human replying"},
