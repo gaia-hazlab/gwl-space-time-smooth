@@ -58,6 +58,7 @@ OVERDUE_DAYS = 7
 # `gh issue list` pages through the API itself up to this many issues. Reaching it means the
 # queue may be incomplete, and fetch() says so instead of dropping the remainder silently.
 FETCH_LIMIT = 1000
+COMMENT_PAGE = 100       # comments per issue that the list call is relied on to return in full
 
 
 def gh_json(args: list[str]) -> object | None:
@@ -97,7 +98,7 @@ def fetch(repo: str, label: str = LABEL, limit: int = FETCH_LIMIT) -> list[dict]
     """Open issues waiting on a person, each with its park stamp if it has one."""
     issues = gh_json(["issue", "list", "--repo", repo, "--label", label, "--state", "open",
                       "--limit", str(limit), "--json",
-                      "number,title,url,updatedAt,createdAt,assignees,milestone,labels"])
+                      "number,title,url,updatedAt,createdAt,assignees,milestone,labels,comments"])
     if issues and len(issues) >= limit:
         # The list may be cut short. Say so where a person sees it (an Actions annotation on
         # the run summary), rather than ship a digest that quietly drops decisions.
@@ -105,9 +106,14 @@ def fetch(repo: str, label: str = LABEL, limit: int = FETCH_LIMIT) -> list[dict]
               "the queue may be incomplete. Raise FETCH_LIMIT in gaia_human_queue.py.", file=sys.stderr)
     rows = []
     for it in issues or []:
-        detail = gh_json(["issue", "view", str(it["number"]), "--repo", repo,
-                          "--json", "comments"]) or {}
-        st = stamp_from_comments(detail.get("comments") or [])
+        # Comments come with the list call, so a large queue is one request rather than one per
+        # issue. The list may cap comments per issue (COMMENT_PAGE); an issue at the cap is
+        # re-read on its own so that its newest stamp is not missed.
+        comments = it.get("comments") or []
+        if len(comments) >= COMMENT_PAGE:
+            comments = (gh_json(["issue", "view", str(it["number"]), "--repo", repo,
+                                 "--json", "comments"]) or {}).get("comments") or comments
+        st = stamp_from_comments(comments)
         rows.append(dict(issue=it["number"], title=it.get("title", ""), url=it.get("url", ""),
                          updated=it.get("updatedAt", ""), created=it.get("createdAt", ""),
                          assignees=[a.get("login") for a in it.get("assignees") or []],
