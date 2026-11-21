@@ -19,6 +19,14 @@ sys.path.insert(0, str(ROOT))
 from src.models import observability as ob  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "results" / "u1_dependence_sensitivity.json"
+
+
+def git_commit():
+    """Commit of the checkout, or None outside a git checkout (the record still gets written)."""
+    try:
+        return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
 N, DX_KM, SIGMA = 200, 0.09, 0.5
 WELLS, OBS_DTW, PRIOR_DTW = [20, 60, 100, 140, 180], 1.2, 1.5
 REACH = slice(90, 110)
@@ -75,9 +83,10 @@ def main():
                              "posterior_sigma_reach_mean_m": float(np.sqrt(np.diag(C_a))[REACH].mean()),
                              "posterior_corr_reach_ends": float(C_a[90, 109] / np.sqrt(C_a[90, 90] * C_a[109, 109]))})
     record = {"issue": "gaia-hazlab/gwl-space-time-smooth#299", "scope": "synthetic Matern prior, linear point operator, no model error; sensitivity of a compound statistic to sampling dependence, not a calibration claim",
-              "commit": subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
+              "commit": git_commit(),
               "observability_sha256": hashlib.sha256((ROOT / "src/models/observability.py").read_bytes()).hexdigest(),
               "setup": {"cells": N, "dx_km": DX_KM, "sigma_prior_m": SIGMA, "wells": WELLS, "obs_dtw_m": OBS_DTW, "prior_dtw_m": PRIOR_DTW, "reach_cells": [90, 109], "thresholds_m": {"min": THRESH_MIN, "mean": THRESH_MEAN}, "draws": NDRAW, "seed": SEED},
+              "statistics_note": "#299 names P(min DTW over the reach < 1 m) and P(any cell in the reach < 1 m); these are the same event, so it is reported once (P_min_reach_below_1m). The second statistic is P(reach-mean DTW < 1.25 m), a compound statistic that differs from the first.",
               "repo_matern_cross_check_max_abs_diff": checks, "rows": rows,
               "production_path_note": "src/models/observability.py:151-153 states the matrix-free path yields only diag(C_post): no samples and no cross-cell covariance; the coherent column above is therefore unavailable at domain scale today"}
     OUT.parent.mkdir(parents=True, exist_ok=True)

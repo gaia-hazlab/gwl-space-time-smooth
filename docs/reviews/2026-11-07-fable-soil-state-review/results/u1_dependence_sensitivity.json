@@ -1,7 +1,7 @@
 {
  "issue": "gaia-hazlab/gwl-space-time-smooth#299",
  "scope": "synthetic Matern prior, linear point operator, no model error; sensitivity of a compound statistic to sampling dependence, not a calibration claim",
- "commit": "be670b253f9f94891f5853b87dba562861c9bbc3",
+ "commit": "39f0a83af2aabe76d325ceee86d6b7731fad67cc",
  "observability_sha256": "661dd36a40946de80d8596542069e92edd02bb85a219d0b849b8371309ad2ff7",
  "setup": {
   "cells": 200,
@@ -27,14 +27,15 @@
   "draws": 10000,
   "seed": 11
  },
+ "statistics_note": "#299 names P(min DTW over the reach < 1 m) and P(any cell in the reach < 1 m); these are the same event, so it is reported once (P_min_reach_below_1m). The second statistic is P(reach-mean DTW < 1.25 m), a compound statistic that differs from the first.",
  "repo_matern_cross_check_max_abs_diff": {
   "L4.0_nu0.5": 3.3306690738754696e-16,
   "L4.0_nu1.5": 5.551115123125783e-16,
-  "L4.0_nu2.5": 5.551115123125783e-16,
-  "L12.0_nu0.5": 5.551115123125783e-16,
+  "L4.0_nu2.5": 6.661338147750939e-16,
+  "L12.0_nu0.5": 4.440892098500626e-16,
   "L12.0_nu1.5": 5.551115123125783e-16,
   "L12.0_nu2.5": 6.661338147750939e-16,
-  "L24.0_nu0.5": 5.551115123125783e-16,
+  "L24.0_nu0.5": 4.440892098500626e-16,
   "L24.0_nu1.5": 5.551115123125783e-16,
   "L24.0_nu2.5": 6.661338147750939e-16
  },
@@ -56,7 +57,7 @@
     "ratio_ind_over_coh": 0.9732793522267207
    },
    "posterior_sigma_reach_mean_m": 0.30921363654824957,
-   "posterior_corr_reach_ends": 0.3155987022537991
+   "posterior_corr_reach_ends": 0.31559870225379905
   },
   {
    "L_km": 4.0,
@@ -75,7 +76,7 @@
     "ratio_ind_over_coh": 0.5602294455066922
    },
    "posterior_sigma_reach_mean_m": 0.37861372755534833,
-   "posterior_corr_reach_ends": 0.4716149504272811
+   "posterior_corr_reach_ends": 0.4716149504272812
   },
   {
    "L_km": 4.0,
@@ -132,7 +133,7 @@
     "ratio_ind_over_coh": 1.1203793303657827
    },
    "posterior_sigma_reach_mean_m": 0.24457698503227202,
-   "posterior_corr_reach_ends": 0.6858595703512722
+   "posterior_corr_reach_ends": 0.6858595703512731
   },
   {
    "L_km": 4.0,
@@ -151,7 +152,7 @@
     "ratio_ind_over_coh": 0.648545003383713
    },
    "posterior_sigma_reach_mean_m": 0.3354689915512004,
-   "posterior_corr_reach_ends": 0.7851758826691634
+   "posterior_corr_reach_ends": 0.7851758826691639
   },
   {
    "L_km": 12.0,
@@ -169,8 +170,8 @@
     "se": 0.004663602791833798,
     "ratio_ind_over_coh": 1.240291704649043
    },
-   "posterior_sigma_reach_mean_m": 0.24200855189828832,
-   "posterior_corr_reach_ends": 0.5414323036534485
+   "posterior_sigma_reach_mean_m": 0.2420085518982884,
+   "posterior_corr_reach_ends": 0.5414323036534486
   },
   {
    "L_km": 12.0,
@@ -189,7 +190,7 @@
     "ratio_ind_over_coh": 0.8216148549968704
    },
    "posterior_sigma_reach_mean_m": 0.3137671054168711,
-   "posterior_corr_reach_ends": 0.6957803705094038
+   "posterior_corr_reach_ends": 0.6957803705094042
   },
   {
    "L_km": 12.0,
@@ -208,7 +209,7 @@
     "ratio_ind_over_coh": 1.3943781942078366
    },
    "posterior_sigma_reach_mean_m": 0.18324888555853264,
-   "posterior_corr_reach_ends": 0.8931205341133513
+   "posterior_corr_reach_ends": 0.8931205341133515
   },
   {
    "L_km": 12.0,
@@ -226,8 +227,8 @@
     "se": 0.004999437468355815,
     "ratio_ind_over_coh": 0.962233502538071
    },
-   "posterior_sigma_reach_mean_m": 0.2633418002694825,
-   "posterior_corr_reach_ends": 0.9316543949036121
+   "posterior_sigma_reach_mean_m": 0.2633418002694824,
+   "posterior_corr_reach_ends": 0.9316543949036119
   },
   {
    "L_km": 12.0,
@@ -246,7 +247,7 @@
     "ratio_ind_over_coh": 1.4559426229508197
    },
    "posterior_sigma_reach_mean_m": 0.17040915488338365,
-   "posterior_corr_reach_ends": 0.9387431068527161
+   "posterior_corr_reach_ends": 0.938743106852718
   },
   {
    "L_km": 12.0,
@@ -265,7 +266,7 @@
     "ratio_ind_over_coh": 0.9813477737665464
    },
    "posterior_sigma_reach_mean_m": 0.25222534434007604,
-   "posterior_corr_reach_ends": 0.9571819798951534
+   "posterior_corr_reach_ends": 0.9571819798951545
   },
   {
    "L_km": 24.0,
@@ -283,8 +284,8 @@
     "se": 0.004375339986789598,
     "ratio_ind_over_coh": 1.311417462000707
    },
-   "posterior_sigma_reach_mean_m": 0.20737072444952592,
-   "posterior_corr_reach_ends": 0.6598081741830929
+   "posterior_sigma_reach_mean_m": 0.20737072444952598,
+   "posterior_corr_reach_ends": 0.6598081741830928
   },
   {
    "L_km": 24.0,
@@ -303,7 +304,7 @@
     "ratio_ind_over_coh": 0.8832146490335707
    },
    "posterior_sigma_reach_mean_m": 0.2785843717903843,
-   "posterior_corr_reach_ends": 0.7947042162307453
+   "posterior_corr_reach_ends": 0.7947042162307454
   },
   {
    "L_km": 24.0,
@@ -322,7 +323,7 @@
     "ratio_ind_over_coh": 1.4425813008130082
    },
    "posterior_sigma_reach_mean_m": 0.15181403702041163,
-   "posterior_corr_reach_ends": 0.9532416293534705
+   "posterior_corr_reach_ends": 0.9532416293534699
   },
   {
    "L_km": 24.0,
@@ -340,8 +341,8 @@
     "se": 0.004999615585222528,
     "ratio_ind_over_coh": 0.952814904819765
    },
-   "posterior_sigma_reach_mean_m": 0.23370459121851153,
-   "posterior_corr_reach_ends": 0.9739715254139396
+   "posterior_sigma_reach_mean_m": 0.23370459121851148,
+   "posterior_corr_reach_ends": 0.9739715254139393
   },
   {
    "L_km": 24.0,
@@ -359,8 +360,8 @@
     "se": 0.0035199998579545427,
     "ratio_ind_over_coh": 1.4500593522129896
    },
-   "posterior_sigma_reach_mean_m": 0.14434828075709003,
-   "posterior_corr_reach_ends": 0.9705106078134151
+   "posterior_sigma_reach_mean_m": 0.1443482807570902,
+   "posterior_corr_reach_ends": 0.9705106078134093
   },
   {
    "L_km": 24.0,
@@ -378,8 +379,8 @@
     "se": 0.004999995099997599,
     "ratio_ind_over_coh": 0.9400838825644098
    },
-   "posterior_sigma_reach_mean_m": 0.2281438907263814,
-   "posterior_corr_reach_ends": 0.9837308113801494
+   "posterior_sigma_reach_mean_m": 0.22814389072638147,
+   "posterior_corr_reach_ends": 0.9837308113801475
   }
  ],
  "production_path_note": "src/models/observability.py:151-153 states the matrix-free path yields only diag(C_post): no samples and no cross-cell covariance; the coherent column above is therefore unavailable at domain scale today"
