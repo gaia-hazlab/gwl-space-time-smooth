@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What needs a person</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ink:#1a1a2e; --muted:#5a5a6e; --line:#e4e4ec; --bg:#f7f7fb; --card:#ffffff; --sunk:#eeeef4;
+  --proceed:#009E73; --defer:#0072B2; --block:#D55E00; --human:#CC79A7;
+  --proceed-wash:#e2f3ed; --defer-wash:#dfecf6; --block-wash:#fbe8dc; --human-wash:#f7e8f0;
+  --serif:"Source Serif 4",Georgia,serif;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ink:#e8e8f0; --muted:#a0a0b4; --line:#2a2a3a; --bg:#141420; --card:#1c1c2a; --sunk:#181824;
+  --proceed:#4cc4a0; --defer:#5aa9db; --block:#f0854a; --human:#dc9cc0;
+  --proceed-wash:#152a25; --defer-wash:#13232f; --block-wash:#2d1d13; --human-wash:#2a1c25;}}
+:root[data-theme="dark"]{
+  --ink:#e8e8f0; --muted:#a0a0b4; --line:#2a2a3a; --bg:#141420; --card:#1c1c2a; --sunk:#181824;
+  --proceed:#4cc4a0; --defer:#5aa9db; --block:#f0854a; --human:#dc9cc0;
+  --proceed-wash:#152a25; --defer-wash:#13232f; --block-wash:#2d1d13; --human-wash:#2a1c25;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:16.5px;line-height:1.6;-webkit-font-smoothing:antialiased}
+main{max-width:min(1040px,100%);margin:0 auto;padding:clamp(1.5rem,4vw,3.5rem) clamp(1rem,4vw,2rem) 5rem;
+  display:grid;gap:2rem}
+h1,h2,h3{font-family:var(--serif);margin:0;text-wrap:balance;letter-spacing:-.012em}
+h1{font-size:clamp(2rem,5vw,2.9rem);line-height:1.07;font-weight:700}
+h3{font-size:1.08rem;font-weight:600}
+p{margin:0}
+.eyebrow{font-family:var(--mono);font-size:.7rem;font-weight:600;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--human);margin:0}
+.lede{color:var(--muted);max-width:64ch}
+.meta{font-family:var(--mono);font-size:.74rem;color:var(--muted);
+  border-top:1px solid var(--line);padding-top:.8rem;display:flex;gap:1.4rem;flex-wrap:wrap}
+.queue{display:grid;gap:1rem}
+.card{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--human);
+  border-radius:8px;padding:1.1rem 1.2rem;display:grid;gap:.7rem}
+.card header{display:grid;gap:.45rem}
+.num{font-family:var(--mono);font-size:.78rem;font-weight:600;color:var(--human);
+  text-decoration:none}
+.num:hover{text-decoration:underline}
+.tags{display:flex;gap:.4rem;flex-wrap:wrap}
+.pill{font-family:var(--mono);font-size:.66rem;font-weight:600;letter-spacing:.05em;
+  padding:.2rem .5rem;border-radius:999px;background:var(--w,var(--sunk));
+  color:var(--c,var(--muted));border:1px solid color-mix(in srgb,var(--c,var(--line)) 30%,transparent)}
+.s-wait{--w:var(--defer-wash);--c:var(--defer)}
+.s-over{--w:var(--block-wash);--c:var(--block)}
+.s-stale{--w:var(--block-wash);--c:var(--block)}
+.s-aging{--w:var(--human-wash);--c:var(--human)}
+.s-fresh{--w:var(--proceed-wash);--c:var(--proceed)}
+.s-unknown{--w:var(--sunk);--c:var(--muted)}
+.s-ms{--w:var(--sunk);--c:var(--muted)}
+.concerns{margin:0;padding-left:1.1rem;display:grid;gap:.5rem}
+.concerns li{font-size:.94rem}
+.dt{font-family:var(--mono);font-size:.76rem;color:var(--muted);margin-top:.2rem}
+.who{font-size:.78rem;color:var(--muted)}
+.why{font-size:.8rem;color:var(--muted);font-style:italic}
+.empty{background:var(--proceed-wash);border:1px solid var(--line);border-left:3px solid var(--proceed);
+  border-radius:8px;padding:1.4rem;display:grid;gap:.5rem}
+.note{background:var(--sunk);border-left:3px solid var(--defer);border-radius:6px;
+  padding:1rem 1.1rem;display:grid;gap:.5rem;font-size:.92rem}
+code{font-family:var(--mono);font-size:.86em;background:var(--sunk);padding:.08em .34em;
+  border-radius:4px;border:1px solid var(--line)}
+a{color:var(--defer)}
+</style></head><body><main>
+<header>
+  <p class="eyebrow">The gaia human gate</p>
+  <h1>What needs a person</h1>
+  <p class="lede">Everything below is a plan the science panel would not pass on a scope that
+    reaches past its own issue — a breaking change for the rest of the project, or physics
+    that is wrong as stated. That is the <b>only</b> class of question this pipeline is
+    supposed to bring to a human. Everything it could decide, it decided.</p>
+  <div class="meta"><span>1 waiting</span>
+    <span>0 over 7 days</span>
+    <span>0 stale</span>
+    <span>rebuilt 2026-08-22 14:22 UTC</span></div>
+</header>
+<div class="queue">
+    <article class="card">
+      <header>
+        <a class="num" href="https://github.com/gaia-hazlab/gwl-space-time-smooth/issues/186">#186</a>
+        <h3>P0: Back-transform Stage-3 kriging predictive variance before combining uncertainty</h3>
+        <div class="tags">
+          <span class="pill s-wait">waiting 2 days</span>
+          <span class="pill s-unknown">plan vs. tree: unknown</span>
+          <span class="pill s-ms">v0.2 — Hydrogeologic realism</span>
+        </div>
+      </header>
+      <ul class="concerns"><li><i>No park stamp on this issue — parked before the stamp existed, or labelled by hand. What stopped it is in the panel comments on the issue.</i></li></ul>
+      <p class="why">no park stamp on the issue</p>
+    </article></div>
+<div class="note">
+  <p><b>Ruling takes it off this list.</b> Each issue carries its pre-registered plan, every
+     persona's verdict and a decisive test per concern — posted before any code was written,
+     at the one moment the objection could still have changed the answer. Rule on the issue
+     and remove the <code>needs-human-decision</code> label.</p>
+  <p><b>"Plan vs. tree" is not how old the issue is.</b> It is how far the repository has moved
+     under the parked plan — commits rewriting the very files the plan named. <code>stale</code>
+     means re-planning is probably now cheaper than resuming; the panel's verdicts are still
+     worth reading either way.</p>
+</div>
+</main></body></html>
