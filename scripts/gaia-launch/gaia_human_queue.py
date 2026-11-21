@@ -55,6 +55,10 @@ STAMP = re.compile(r"<!--\s*gaia-park:(\{.*?\})\s*-->", re.S)
 # turns "waiting" into "waiting too long", which is a different sentence.
 OVERDUE_DAYS = 7
 
+# `gh issue list` pages through the API itself up to this many issues. Reaching it means the
+# queue may be incomplete, and fetch() says so instead of dropping the remainder silently.
+FETCH_LIMIT = 1000
+
 
 def gh_json(args: list[str]) -> object | None:
     """`gh` or nothing. Every caller degrades to a smaller report rather than to an error:
@@ -89,11 +93,16 @@ def stamp_from_comments(comments: list[dict]) -> dict:
     return {}
 
 
-def fetch(repo: str, label: str = LABEL) -> list[dict]:
+def fetch(repo: str, label: str = LABEL, limit: int = FETCH_LIMIT) -> list[dict]:
     """Open issues waiting on a person, each with its park stamp if it has one."""
     issues = gh_json(["issue", "list", "--repo", repo, "--label", label, "--state", "open",
-                      "--limit", "100", "--json",
+                      "--limit", str(limit), "--json",
                       "number,title,url,updatedAt,createdAt,assignees,milestone,labels"])
+    if issues and len(issues) >= limit:
+        # The list may be cut short. Say so where a person sees it (an Actions annotation on
+        # the run summary), rather than ship a digest that quietly drops decisions.
+        print(f"::warning::{len(issues)} open '{label}' issues reached the fetch limit of {limit}; "
+              "the queue may be incomplete. Raise FETCH_LIMIT in gaia_human_queue.py.", file=sys.stderr)
     rows = []
     for it in issues or []:
         detail = gh_json(["issue", "view", str(it["number"]), "--repo", repo,

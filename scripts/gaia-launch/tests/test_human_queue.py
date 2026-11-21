@@ -76,6 +76,29 @@ class TheStampSurvivesGitHub(unittest.TestCase):
     def test_prose_with_no_stamp_is_simply_empty(self):
         self.assertEqual(parse_stamp("just a person talking about the issue"), {})
 
+    def test_fetch_asks_for_the_limit_and_warns_when_it_is_reached(self):
+        import contextlib
+        import io
+        from unittest import mock
+
+        import gaia_human_queue as hq
+        listed = [{"number": n, "title": f"#{n}"} for n in range(3)]
+        calls = []
+
+        def fake_gh(args):
+            calls.append(args)
+            return listed if args[:2] == ["issue", "list"] else {"comments": []}
+
+        for limit, warned in ((10, False), (3, True)):
+            calls.clear()
+            err = io.StringIO()
+            with mock.patch.object(hq, "gh_json", fake_gh), contextlib.redirect_stderr(err):
+                rows = hq.fetch("o/r", limit=limit)
+            self.assertEqual(len(rows), 3)
+            self.assertEqual(calls[0][calls[0].index("--limit") + 1], str(limit))
+            self.assertEqual("::warning::" in err.getvalue(), warned)
+        self.assertGreaterEqual(hq.FETCH_LIMIT, 1000)
+
     def test_braces_inside_a_string_value_do_not_truncate_the_stamp(self):
         # Free-text fields can carry code. The match ends only at a brace followed by -->.
         s = dict(stamp(), decisive_test="run f() { return {a: 1}; } and check }")
