@@ -1,0 +1,15 @@
+{
+ "issue": "#230",
+ "source": "src/models/interpolate_residuals.py",
+ "source_sha256": "a0979ceb12c406abec13e2c61b3c24cd9f4cc04b57791fa90e283627ac631f2c",
+ "commit": "be670b253f9f94891f5853b87dba562861c9bbc3",
+ "code_block": "dtw_final = (\n        baseline_dtw[np.newaxis, :, :]     # broadcast over time\n        + cr_cube\n        + residual_cube\n    )\n    wte_final = dem_arr[np.newaxis, :, :] - dtw_final\n\n    _writ",
+ "anomaly_convention_source": "src/models/interpolate_anomalies.py:115 anomaly_wte_m = wte_m - median_wte_m (elevation, positive up)",
+ "input_wte_anomaly_m": 1.0,
+ "baseline_dtw_m": 5.0,
+ "dtw_final_as_coded_m": 6.0,
+ "dtw_final_expected_m": 4.0,
+ "wte_final_as_coded_m": 94.0,
+ "wte_final_expected_m": 96.0,
+ "verdict": "sign inverted: a +1 m water-table rise is written as a 1 m deeper table; wte_final inherits the error"
+}

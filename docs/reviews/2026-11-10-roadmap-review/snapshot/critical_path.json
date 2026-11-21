@@ -1,0 +1,425 @@
+{
+ "n_open": 194,
+ "held_by_label": {
+  "needs-human-decision": 28,
+  "needs-compute": 2,
+  "superseded": 9
+ },
+ "n_blocked": 146,
+ "runnable_now": [
+  10,
+  52,
+  72,
+  157,
+  197,
+  230,
+  231,
+  232,
+  234,
+  235,
+  244,
+  245,
+  246,
+  247,
+  256,
+  262,
+  263,
+  267,
+  268,
+  275,
+  276,
+  277,
+  279,
+  297,
+  298,
+  299,
+  300,
+  301
+ ],
+ "directly_blocked_by_231": [
+  3,
+  21,
+  22,
+  23,
+  24,
+  25,
+  29,
+  31,
+  32,
+  40,
+  49,
+  57,
+  58,
+  59,
+  65,
+  70,
+  71,
+  81,
+  109,
+  112,
+  124,
+  128,
+  134,
+  135,
+  136,
+  138,
+  140,
+  143,
+  144,
+  145,
+  146,
+  148,
+  149,
+  153,
+  155,
+  156,
+  163,
+  164,
+  166,
+  168,
+  169,
+  170,
+  177,
+  186
+ ],
+ "targets": [
+  {
+   "issue": 306,
+   "product": "cycling nowcast, pilot",
+   "own_hold": null,
+   "chain_depth": 7,
+   "open_ancestors": 25,
+   "held_ancestors": [
+    265,
+    269,
+    285,
+    307
+   ],
+   "runnable_ancestors": [
+    10,
+    52,
+    231,
+    232,
+    234,
+    235,
+    275,
+    276,
+    277
+   ]
+  },
+  {
+   "issue": 191,
+   "product": "ensemble forecast from posterior",
+   "own_hold": null,
+   "chain_depth": 6,
+   "open_ancestors": 12,
+   "held_ancestors": [
+    265,
+    307
+   ],
+   "runnable_ancestors": [
+    52,
+    231,
+    232,
+    275
+   ]
+  },
+  {
+   "issue": 195,
+   "product": "forecast calibration",
+   "own_hold": null,
+   "chain_depth": 8,
+   "open_ancestors": 15,
+   "held_ancestors": [
+    265,
+    307
+   ],
+   "runnable_ancestors": [
+    52,
+    231,
+    232,
+    275
+   ]
+  },
+  {
+   "issue": 193,
+   "product": "joint hazard ensemble",
+   "own_hold": null,
+   "chain_depth": 2,
+   "open_ancestors": 3,
+   "held_ancestors": [
+    265
+   ],
+   "runnable_ancestors": [
+    52
+   ]
+  },
+  {
+   "issue": 250,
+   "product": "sigma'(z,t), Vs(z,t) product",
+   "own_hold": null,
+   "chain_depth": 3,
+   "open_ancestors": 5,
+   "held_ancestors": [
+    265
+   ],
+   "runnable_ancestors": [
+    52,
+    247
+   ]
+  },
+  {
+   "issue": 261,
+   "product": "seasonal-high DTW product",
+   "own_hold": null,
+   "chain_depth": 8,
+   "open_ancestors": 22,
+   "held_ancestors": [
+    265,
+    269,
+    285,
+    307
+   ],
+   "runnable_ancestors": [
+    10,
+    231,
+    232,
+    234,
+    235,
+    275,
+    276,
+    277
+   ]
+  },
+  {
+   "issue": 142,
+   "product": "sub-1.5 m DTW in liquefiable units",
+   "own_hold": null,
+   "chain_depth": 8,
+   "open_ancestors": 22,
+   "held_ancestors": [
+    265,
+    269,
+    285,
+    307
+   ],
+   "runnable_ancestors": [
+    10,
+    231,
+    232,
+    234,
+    235,
+    275,
+    276,
+    277
+   ]
+  },
+  {
+   "issue": 141,
+   "product": "liquefaction MVP",
+   "own_hold": null,
+   "chain_depth": 3,
+   "open_ancestors": 5,
+   "held_ancestors": [
+    260
+   ],
+   "runnable_ancestors": [
+    231
+   ]
+  },
+  {
+   "issue": 129,
+   "product": "Landlab corridor run",
+   "own_hold": "needs-human-decision",
+   "chain_depth": 2,
+   "open_ancestors": 2,
+   "held_ancestors": [],
+   "runnable_ancestors": [
+    231
+   ]
+  },
+  {
+   "issue": 200,
+   "product": "flood source-term contract",
+   "own_hold": null,
+   "chain_depth": 2,
+   "open_ancestors": 3,
+   "held_ancestors": [
+    265
+   ],
+   "runnable_ancestors": [
+    52
+   ]
+  },
+  {
+   "issue": 202,
+   "product": "routed discharge vs gauges",
+   "own_hold": null,
+   "chain_depth": 4,
+   "open_ancestors": 5,
+   "held_ancestors": [],
+   "runnable_ancestors": [
+    232,
+    275
+   ]
+  },
+  {
+   "issue": 286,
+   "product": "pilot held-out validation",
+   "own_hold": null,
+   "chain_depth": 7,
+   "open_ancestors": 21,
+   "held_ancestors": [
+    265,
+    269,
+    285,
+    307
+   ],
+   "runnable_ancestors": [
+    10,
+    231,
+    232,
+    234,
+    235,
+    275,
+    276,
+    277
+   ]
+  },
+  {
+   "issue": 288,
+   "product": "regional history match",
+   "own_hold": "needs-compute",
+   "chain_depth": 9,
+   "open_ancestors": 24,
+   "held_ancestors": [
+    265,
+    269,
+    285,
+    307
+   ],
+   "runnable_ancestors": [
+    10,
+    231,
+    232,
+    234,
+    235,
+    275,
+    276,
+    277
+   ]
+  }
+ ],
+ "downstream_of_held": [
+  [
+   265,
+   "needs-human-decision",
+   52
+  ],
+  [
+   307,
+   "needs-human-decision",
+   31
+  ],
+  [
+   269,
+   "needs-human-decision",
+   18
+  ],
+  [
+   285,
+   "needs-compute",
+   7
+  ],
+  [
+   81,
+   "needs-human-decision",
+   4
+  ],
+  [
+   260,
+   "needs-human-decision",
+   3
+  ],
+  [
+   233,
+   "superseded",
+   3
+  ],
+  [
+   136,
+   "needs-human-decision",
+   3
+  ],
+  [
+   172,
+   "superseded",
+   3
+  ],
+  [
+   308,
+   "needs-human-decision",
+   1
+  ],
+  [
+   309,
+   "needs-human-decision",
+   1
+  ],
+  [
+   310,
+   "needs-human-decision",
+   1
+  ]
+ ],
+ "downstream_of_runnable": [
+  [
+   231,
+   100
+  ],
+  [
+   275,
+   46
+  ],
+  [
+   232,
+   43
+  ],
+  [
+   52,
+   28
+  ],
+  [
+   276,
+   25
+  ],
+  [
+   234,
+   20
+  ],
+  [
+   10,
+   18
+  ],
+  [
+   235,
+   16
+  ],
+  [
+   277,
+   15
+  ],
+  [
+   247,
+   10
+  ],
+  [
+   268,
+   6
+  ],
+  [
+   230,
+   2
+  ]
+ ]
+}
