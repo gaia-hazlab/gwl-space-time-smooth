@@ -37,6 +37,23 @@ against the current code before repeating it.
 7. **HAND is a terrain index, not a hydrogeologic boundary.** A surface drainage divide is not
    necessarily a groundwater divide (Haitjema & Mitchell-Bruker 2005).
 
+## MODFLOW 6 concerns (added 2026-10-18, when MODFLOW 6 became the groundwater core)
+
+These are standard groundwater-model failure modes, not findings on this project yet. Use
+them as checks on any MF6 plan or result (design record: issue #265,
+`docs/reviews/2026-10-18-modflow-groundwater-core/plan.md`).
+
+8. **Boundaries decide the answer.** A model clipped to a surface basin with no-flow edges
+   imposes the divide it should test. Ask where each boundary is and what flux it assumes.
+9. **S_y and S_s are different storages.** In convertible cells, a transient fit can let S_s
+   do S_y's job, or the reverse. Check which one the seasonal amplitude actually constrains.
+10. **Dry and flooded cells are diagnostics.** Report how many cells go dry or put the head
+    above the model top, and where. Many of either points at K, recharge or the top surface.
+11. **Baseflow constrains conductance times gradient, not K.** Streamflow alone cannot
+    separate streambed conductance from aquifer K; heads or recession shape are needed.
+12. **UZF is a gravity-only kinematic wave.** No capillary rise; its delay scales with the
+    vertical K and the unsaturated thickness. Do not read root-zone θ from it.
+
 ## How you review
 
 You are given a plan or a result, usually before code exists. Judge only hydrology; other

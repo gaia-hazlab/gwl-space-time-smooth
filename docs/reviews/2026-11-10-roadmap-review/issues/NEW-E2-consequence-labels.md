@@ -1,0 +1,30 @@
+# NEW-E2: Consequence labels for hazard validation from reported incidents, with reporting bias stated
+
+Milestone: Hazard: LandLab landslide handoff (cross-listed flood). Labels: P1, validation, landlab.
+
+## Purpose
+Landslide validation rests on inventories (#253) with coarse dates; flood validation rests on gauges
+(#202). Reported incidents (road closures for slides and water over roadway, sewer overflows,
+outages) are dated to the hour and tied to consequence, which is what a hazard product is for. They
+are also biased toward roads and population. Used without that stated, they will flatter any model
+that predicts "near a highway".
+
+## Deliverable
+`src/evaluation/consequence_labels.py` and a memo: a mapping from Earthnote incident categories
+(NEW-E1) to validation targets per hazard, an exposure mask, and a scoring protocol.
+
+## Acceptance
+- Category map is a reviewed table: each WSDOT/DriveBC category is assigned to shallow landslide,
+  flood, wind, other, or excluded, with 30 hand-checked rows per assigned category and the
+  agreement rate reported.
+- Exposure mask: scores are computed only over cells within a stated distance of a monitored road
+  (or served outfall, or utility territory); the memo reports how much of the domain that is.
+- Baselines of #256 (rainfall threshold, slope only) are scored on the same labels; a product is
+  reported as adding value only if it beats both with a block-bootstrap interval that excludes zero.
+- Labels from the November 2026 event are held out of every calibration by entry in the #235 manifest.
+
+## Hard blockers
+Blocked by: NEW-E1, #256.
+
+## Advisory
+One event gives timing and co-occurrence, not frequency. See NEW-E3.
