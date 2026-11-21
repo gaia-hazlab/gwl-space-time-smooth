@@ -21,6 +21,14 @@ sys.path.insert(0, str(ROOT))
 from src.models import water_budget as wb  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "results" / "l1_closed_column.json"
+
+
+def git_commit():
+    """Commit of the checkout, or None outside a git checkout (the record still gets written)."""
+    try:
+        return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
 WP, FC, SAT, ROOT_M, SY = 0.10, 0.28, 0.45, 1.0, 0.30
 F32_BOUND_MM = float(np.spacing(np.float32(SAT))) * ROOT_M * 1000.0   # theta resolution -> mm of root water
 
@@ -121,7 +129,7 @@ def main():
     src = ROOT / "src/models/water_budget.py"
     record = {
         "issue": "gaia-hazlab/gwl-space-time-smooth#297", "scope": "legacy store model diagnostic; not an MF6 acceptance test",
-        "commit": subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
+        "commit": git_commit(),
         "source_sha256": hashlib.sha256(src.read_bytes()).hexdigest(),
         "parameters": {"theta_wp": WP, "theta_fc": FC, "theta_sat": SAT, "root_depth_m": ROOT_M, "specific_yield": SY,
                        "cap_max_mm_per_month": wb.CAP_MAX_MM, "cap_fringe_m": wb.CAP_FRINGE_M, "init": "wp"},
