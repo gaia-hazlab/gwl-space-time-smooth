@@ -50,11 +50,13 @@ def main():
     exported = ("water_table__depth", "soil_moisture__saturation_fraction", "soil_water__recharge_rate")
     rec["exported_fields_among_inputs"] = [f for f in exported if f in LandslideProbability.input_var_names]
     # positive control: recognised input
+    core = make_grid().core_nodes                  # interior nodes; boundary nodes carry no failure calculation
+    rec["averaged_over"] = {"nodes": "RasterModelGrid.core_nodes", "count": int(core.size)}
     pos = []
     for rm in (20.0, 60.0, 120.0, 240.0):
         out = run(make_grid(), rm, seed=0)
-        pos.append({"recharge_mean_mm_day": rm, "p_fail_core_mean": float(out["landslide__probability_of_failure"][6:19].mean()),
-                    "mean_rel_wetness": float(out["soil__mean_relative_wetness"][6:19].mean())})
+        pos.append({"recharge_mean_mm_day": rm, "p_fail_core_mean": float(out["landslide__probability_of_failure"][core].mean()),
+                    "mean_rel_wetness": float(out["soil__mean_relative_wetness"][core].mean())})
     rec["positive_control"] = pos
     rec["positive_control_monotone"] = bool(np.all(np.diff([p["p_fail_core_mean"] for p in pos]) >= 0)) and pos[-1]["p_fail_core_mean"] > pos[0]["p_fail_core_mean"]
     # causal test: exported fields present and scaled, same seed

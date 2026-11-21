@@ -20,26 +20,30 @@
   "soil__probability_of_saturation"
  ],
  "exported_fields_among_inputs": [],
+ "averaged_over": {
+  "nodes": "RasterModelGrid.core_nodes",
+  "count": 9
+ },
  "positive_control": [
   {
    "recharge_mean_mm_day": 20.0,
-   "p_fail_core_mean": 0.007115384492163475,
-   "mean_rel_wetness": 0.5802111445370528
+   "p_fail_core_mean": 0.010277777599791685,
+   "mean_rel_wetness": 0.8380827643312982
   },
   {
    "recharge_mean_mm_day": 60.0,
-   "p_fail_core_mean": 0.02788461587176873,
-   "mean_rel_wetness": 0.6923076923076923
+   "p_fail_core_mean": 0.040277778481443725,
+   "mean_rel_wetness": 1.0
   },
   {
    "recharge_mean_mm_day": 120.0,
-   "p_fail_core_mean": 0.02788461587176873,
-   "mean_rel_wetness": 0.6923076923076923
+   "p_fail_core_mean": 0.040277778481443725,
+   "mean_rel_wetness": 1.0
   },
   {
    "recharge_mean_mm_day": 240.0,
-   "p_fail_core_mean": 0.02788461587176873,
-   "mean_rel_wetness": 0.6923076923076923
+   "p_fail_core_mean": 0.040277778481443725,
+   "mean_rel_wetness": 1.0
   }
  ],
  "positive_control_monotone": true,
