@@ -405,10 +405,15 @@ Three credentials it does **not** set up for you, on purpose:
   ```bash
   echo "$GH_TOKEN" | gh auth login --with-token   # needs repo + workflow scopes
   ```
-- **`ANTHROPIC_API_KEY`** — put it in a mode-600 file, a systemd `EnvironmentFile`, or a
-  secret manager. **Never in the repo, and never typed inline on the command line**: an
-  inline `export` is written verbatim to `~/.bash_history`, where it persists in plaintext
-  long after the run and is trivial to leak in a screen share or a pasted terminal log.
+- **Claude billing** — set by `GAIA_BILLING`. The default, `subscription`, bills a claude.ai
+  plan: log the CLI in once with `claude auth login` and check that `claude auth status`
+  shows `"authMethod": "claude.ai"` and the right `orgName`. The script then unsets
+  `ANTHROPIC_API_KEY` for the run, because `claude -p` bills an API key whenever one is set,
+  even with a subscription login present. `GAIA_BILLING=api` bills an API key instead. Keep
+  that key in a mode-600 file, a systemd `EnvironmentFile`, or a secret manager. **Never in
+  the repo, and never typed inline on the command line**: an inline `export` is written
+  verbatim to `~/.bash_history`, where it persists in plaintext long after the run and is
+  trivial to leak in a screen share or a pasted terminal log.
 
   ```bash
   install -m 600 /dev/null "$HOME/.config/gaia/env"
@@ -486,8 +491,15 @@ python3 scripts/gaia_group_issues.py 2>&1 >/dev/null   # dependency diagnostics 
 
 ```bash
 cd "$REPO_DIR"
+GAIA_MAX_BATCHES=1 scripts/gaia_run_queue.sh   # bills the claude.ai plan the CLI is logged in to
+```
+
+The first line it prints names the account it is billing, for example
+`gaia: billing -> subscription: denolle-lab (team)`. To bill an API key instead:
+
+```bash
 set -a; . "$HOME/.config/gaia/env"; set +a     # ANTHROPIC_API_KEY, mode-600 file — never inline
-GAIA_MAX_BATCHES=1 scripts/gaia_run_queue.sh
+GAIA_BILLING=api GAIA_MAX_BATCHES=1 scripts/gaia_run_queue.sh
 ```
 
 Do **not** type `export ANTHROPIC_API_KEY=sk-ant-...` on the command line: it lands in
@@ -514,6 +526,7 @@ a batch has already done its work.
 | `GAIA_MAX_FILES` | `40` | Blast radius: files one issue may touch before the batch is parked |
 | `GAIA_MAX_DIFF_LINES` | `4000` | Blast radius: added + removed lines |
 | `GAIA_MAX_COST_USD` | `0` | `0` = uncapped; otherwise halt the queue between issues past this |
+| `GAIA_BILLING` | `subscription` | `subscription` bills the CLI's claude.ai login and ignores any API key; `api` bills `ANTHROPIC_API_KEY`. On a subscription the cost figures are API-price estimates, not charges |
 | `GAIA_SCIENCE_GATE` | `1` | `0` skips plan pre-registration and the science panel (not recommended) |
 | `GAIA_PLAN_REVISIONS` | `1` | Plan revisions allowed after a panel block, before parking |
 | `GAIA_PANEL_BLOCK_ON` | `breaking,wrong-physics` | Which concern **scopes** stop implementation at `critical`. An unrecognised value falls back to the default; the gate cannot be closed to nothing |

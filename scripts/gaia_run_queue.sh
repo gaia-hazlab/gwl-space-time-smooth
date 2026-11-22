@@ -148,7 +148,30 @@ GAIA_VCS_DENY=(
 # so without this the sandbox stops at the subagent boundary and never covers the wrapper.
 GAIA_READONLY_DENY=( "Edit" "Write" "NotebookEdit" "${GAIA_VCS_DENY[@]}" )
 
-: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}"
+# Who pays. `claude -p` bills ANTHROPIC_API_KEY whenever it is set, even when the CLI is also
+# logged in to a claude.ai subscription, so the choice has to be made here, not left to
+# whatever the launching shell happens to export.
+#   subscription (default): drop any API key; requires `claude auth login` to a claude.ai plan.
+#   api: require ANTHROPIC_API_KEY and bill it.
+GAIA_BILLING="${GAIA_BILLING:-subscription}"
+case "$GAIA_BILLING" in
+  subscription)
+    unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+    GAIA_AUTH_JSON="$(claude auth status 2>/dev/null || true)"
+    if [ "$(jq -r '.authMethod // "none"' <<<"$GAIA_AUTH_JSON" 2>/dev/null)" != "claude.ai" ]; then
+      echo "GAIA_BILLING=subscription but this CLI is not logged in to a claude.ai plan." >&2
+      echo "  Fix: claude auth login   (or run with GAIA_BILLING=api and ANTHROPIC_API_KEY set)" >&2
+      exit 1
+    fi
+    GAIA_BILLED_TO="subscription: $(jq -r '"\(.orgName // "unknown org") (\(.subscriptionType // "?"))"' <<<"$GAIA_AUTH_JSON")"
+    ;;
+  api)
+    : "${ANTHROPIC_API_KEY:?GAIA_BILLING=api needs ANTHROPIC_API_KEY}"
+    GAIA_BILLED_TO="API key (usage credits)"
+    ;;
+  *) echo "GAIA_BILLING must be 'subscription' or 'api', not '$GAIA_BILLING'" >&2; exit 1 ;;
+esac
+echo "gaia: billing -> ${GAIA_BILLED_TO}"
 
 cd "$REPO_DIR"
 mkdir -p "$LOG_DIR"
