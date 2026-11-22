@@ -459,8 +459,9 @@ gh api user --jq '.id'   # numeric actor_id for the account gaia_run_queue.sh au
 
 The bypass only applies when the merge asks for it, so the queue merges with
 `gh pr merge --admin --match-head-commit <sha>`. `--admin` also skips the required `test`
-check; the queue has already waited for every check to pass (`gh pr checks --watch`), and
-`--match-head-commit` refuses the merge if the branch moved after that.
+check. The queue reads the PR's head commit, waits for every check to pass on it
+(`gh pr checks --watch`), and reads the head again; if it moved, nothing merges.
+`--match-head-commit` then refuses the merge if the branch moves after that.
 
 Confirm the merge step actually works end-to-end once — if the bypass isn't configured, or a
 CODEOWNERS file later makes `require_code_owner_review` bite, the merge fails loudly, which
