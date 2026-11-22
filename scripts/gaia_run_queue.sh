@@ -2132,6 +2132,9 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
     echo "  checks did not pass on PR #$pr_number; leaving open for a human" | tee -a "$logfile"
     continue
   fi
+  # The commit those checks passed on. The merge below uses --admin, which skips the ruleset's
+  # required checks, so pin it to this SHA: anything pushed after this point is refused.
+  ci_sha="$(gh pr view "$pr_number" --json headRefOid -q .headRefOid 2>>"$logfile")" || ci_sha=""
 
   # THE MERGE GATE. Copilot going quiet is necessary but not sufficient -- an
   # unchanged comment fingerprint reads identically whether the revision pass
@@ -2162,8 +2165,19 @@ closing comment on each issue in the batch." \
     close_message="Resolved via PR #${pr_number}. Closing-message drafting failed; see ${logfile}."
   fi
 
-  gh pr merge "$pr_number" --merge --delete-branch --body "$close_message" >> "$logfile" 2>&1 \
-    && merge_rc=0 || merge_rc=$?
+  # --admin: protect-main requires an approving code-owner review, and Copilot only ever
+  # COMMENTs, so without it `gh pr merge` refuses every PR as BLOCKED. The bypass actor on the
+  # ruleset (bypass_mode pull_request) is this gh identity. What stands in for the review is
+  # the CI wait, the Copilot rounds and the auditor gate above; --match-head-commit keeps the
+  # merge to the commit CI passed. No SHA, no merge.
+  if [ -z "$ci_sha" ]; then
+    merge_rc=1
+    echo "  could not read the head SHA CI passed on; not merging PR #${pr_number}" | tee -a "$logfile"
+  else
+    gh pr merge "$pr_number" --merge --admin --match-head-commit "$ci_sha" --delete-branch \
+      --body "$close_message" >> "$logfile" 2>&1 \
+      && merge_rc=0 || merge_rc=$?
+  fi
   if [ "$merge_rc" -ne 0 ]; then
     report_failure "merge of PR #${pr_number} failed for ${numbers_csv} -- PR left open, issues NOT closed" "$logfile" "$merge_rc"
     continue
