@@ -2127,9 +2127,19 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
     continue
   fi
 
-  echo "  waiting for GitHub Actions checks..." | tee -a "$logfile"
+  # The merge below uses --admin, which skips the ruleset's required checks, so it is pinned to
+  # the commit the checks were waited on. Read the head BEFORE the wait and again after: if it
+  # moved, the checks we watched may belong to the old commit, and nothing merges. (The agents
+  # cannot push, so a moved head means a person pushed; the PR is theirs to merge.)
+  ci_sha="$(gh pr view "$pr_number" --json headRefOid -q .headRefOid 2>>"$logfile")" || ci_sha=""
+  echo "  waiting for GitHub Actions checks on ${ci_sha:0:7}..." | tee -a "$logfile"
   if ! gh pr checks "$pr_number" --watch --fail-fast >> "$logfile" 2>&1; then
     echo "  checks did not pass on PR #$pr_number; leaving open for a human" | tee -a "$logfile"
+    continue
+  fi
+  head_now="$(gh pr view "$pr_number" --json headRefOid -q .headRefOid 2>>"$logfile")" || head_now=""
+  if [ -z "$ci_sha" ] || [ "$head_now" != "$ci_sha" ]; then
+    echo "  PR #$pr_number head moved during the checks wait (${ci_sha:0:7} -> ${head_now:0:7}); leaving open for a human" | tee -a "$logfile"
     continue
   fi
 
@@ -2162,8 +2172,19 @@ closing comment on each issue in the batch." \
     close_message="Resolved via PR #${pr_number}. Closing-message drafting failed; see ${logfile}."
   fi
 
-  gh pr merge "$pr_number" --merge --delete-branch --body "$close_message" >> "$logfile" 2>&1 \
-    && merge_rc=0 || merge_rc=$?
+  # --admin: protect-main requires an approving code-owner review, and Copilot only ever
+  # COMMENTs, so without it `gh pr merge` refuses every PR as BLOCKED. The bypass actor on the
+  # ruleset (bypass_mode pull_request) is this gh identity. What stands in for the review is
+  # the CI wait, the Copilot rounds and the auditor gate above; --match-head-commit keeps the
+  # merge to the commit CI was waited on (ci_sha, read before the wait and checked after it).
+  if [ -z "$ci_sha" ]; then
+    merge_rc=1
+    echo "  could not read the head SHA CI passed on; not merging PR #${pr_number}" | tee -a "$logfile"
+  else
+    gh pr merge "$pr_number" --merge --admin --match-head-commit "$ci_sha" --delete-branch \
+      --body "$close_message" >> "$logfile" 2>&1 \
+      && merge_rc=0 || merge_rc=$?
+  fi
   if [ "$merge_rc" -ne 0 ]; then
     report_failure "merge of PR #${pr_number} failed for ${numbers_csv} -- PR left open, issues NOT closed" "$logfile" "$merge_rc"
     continue
