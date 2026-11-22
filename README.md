@@ -224,8 +224,10 @@ Notes:
 - It deliberately does **not** set up two credentials (never put these in the repo):
   ```bash
   echo "$GH_TOKEN" | gh auth login --with-token   # needs repo + workflow scopes
-  export ANTHROPIC_API_KEY="sk-ant-..."            # shell profile or a systemd EnvironmentFile
+  claude auth login                                # claude.ai plan; the queue bills it by default
   ```
+  To bill an API key instead, run the queue with `GAIA_BILLING=api` and `ANTHROPIC_API_KEY` set
+  from a mode-600 file (see [docs/gaia-automation.md](docs/gaia-automation.md)).
   If the repo is cloned over SSH (the default `REPO_URL` above), the box also needs a private key
   that can push to it — copy one over, or add a fresh deploy key under repo → Settings → Deploy keys.
 - Sanity-check before doing anything real: `ssh -T git@github.com`, `gh auth status`, and
