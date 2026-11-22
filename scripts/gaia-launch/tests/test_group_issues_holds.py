@@ -4,6 +4,7 @@ import io
 import json
 import os
 import pathlib
+import re
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
@@ -103,6 +104,29 @@ class Queue(unittest.TestCase):
     def test_oldest_first_within_group(self):
         batches, _ = run([issue(175, ["P1"], "M"), issue(172, ["P1"], "M"), issue(173, ["P1"], "M")])
         self.assertEqual(batches, [[172, 173, 175]])
+
+
+class EpicWithHoldLabel(unittest.TestCase):
+    """#231 criterion 3: every label-held issue is named on stderr, epics included."""
+
+    def test_epic_with_hold_label_is_named_once_and_not_dispatched(self):
+        # #100 is held too, so its line contains the substring "#10": only an anchored match counts.
+        batches, err = run([issue(10, ["epic", "needs-human-decision"], "M"),
+                            issue(100, ["P1", "needs-compute"], "M"), issue(11, ["P1"], "M")])
+        self.assertRegex(err, re.compile(r"^holding back #10 \(.*\): labelled needs-human-decision$", re.M))
+        self.assertEqual(err.count("holding back #10 "), 1)
+        self.assertEqual(batches, [[11]])
+
+    def test_epic_without_hold_label_stays_silent(self):
+        batches, err = run([issue(12, ["epic"], "M"), issue(13, ["P1"], "M")])
+        self.assertNotIn("holding back #12 ", err)
+        self.assertEqual(batches, [[13]])
+
+    def test_epic_hold_survives_explicit_selection(self):
+        with mock.patch.dict(os.environ, {"GAIA_ONLY_ISSUES": "10"}):
+            batches, err = run([issue(10, ["epic", "needs-human-decision"], "M"), issue(11, ["P1"], "M")])
+        self.assertRegex(err, re.compile(r"^holding back #10 \(.*\): labelled needs-human-decision$", re.M))
+        self.assertEqual(batches, [])
 
 
 if __name__ == "__main__":

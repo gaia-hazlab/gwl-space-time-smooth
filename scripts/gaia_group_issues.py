@@ -230,12 +230,14 @@ def main():
 
     for issue in issues:
         labels = [l["name"] for l in issue["labels"]]
-        if "epic" in labels:
-            continue
+        # Hold labels are logged before the epic skip, so an epic that also carries one is
+        # still named on stderr. An epic without a hold label is skipped silently.
         held = sorted(HOLD_LABELS.intersection(labels))
         if held:
             print(f"holding back #{issue['number']} ({issue['title']}): labelled {', '.join(held)}",
                   file=sys.stderr)
+            continue
+        if "epic" in labels:
             continue
 
         declared = set(BLOCKED_BY.get(issue["number"], [])) | set(body_blockers(issue.get("body")))
